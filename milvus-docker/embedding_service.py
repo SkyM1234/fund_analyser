@@ -19,14 +19,153 @@ import uvicorn
 from hybrid_search import rrf_fusion, deduplicate_results
 
 
+# 限制同时占用GPU模型（encode/rerank）的并发数，避免显存峰值叠加导致OOM。
+# 6G显存下两个fp16模型常驻已占用较多空间，默认串行执行；可通过环境变量调优。
+GPU_SEMAPHORE = asyncio.Semaphore(int(os.getenv("GPU_CONCURRENCY", "1")))
+
+
+class BatchEncoder:
+    """动态批处理：收集短时间窗口内的查询，合并为 batch 推理。
+
+    多个并发请求在 max_wait_ms 内到达时，自动合并为一个 batch 调用 model.encode()，
+    GPU 一次推理处理多条，避免逐个推理造成的 GPU 利用率低下。
+
+    使用方式：
+        encoded = await batch_encoder.encode(query)
+        dense = encoded["dense"]   # 稠密向量 (list[float])
+        sparse = encoded["sparse"] # 神经稀疏向量 (dict)
+    """
+
+    def __init__(self, model, max_wait_ms: float = 50, max_batch: int = 16):
+        self.model = model
+        self.max_wait = max_wait_ms / 1000
+        self.max_batch = max_batch
+        self._queue: list = []  # [(query, future), ...]
+        self._lock = asyncio.Lock()
+        self._flush_event = asyncio.Event()
+        self._task: asyncio.Task | None = None
+
+    async def encode(self, query: str) -> dict:
+        """提交一个查询，返回 encode 结果（可能被 delay 最多 max_wait 等待拼 batch）。"""
+        future = asyncio.get_event_loop().create_future()
+        async with self._lock:
+            self._queue.append((query, future))
+            if len(self._queue) >= self.max_batch:
+                self._flush_event.set()  # 满 batch 立刻触发
+            elif self._task is None:
+                self._task = asyncio.create_task(self._delayed_flush())
+        return await future
+
+    async def _delayed_flush(self):
+        try:
+            await asyncio.wait_for(self._flush_event.wait(), timeout=self.max_wait)
+        except asyncio.TimeoutError:
+            pass
+        await self._do_flush()
+
+    async def _do_flush(self):
+        async with self._lock:
+            if not self._queue:
+                self._task = None
+                self._flush_event.clear()
+                return
+            batch = self._queue[:]
+            self._queue.clear()
+            self._task = None
+            self._flush_event.clear()
+
+        queries = [q for q, _ in batch]
+        # 一次 batch encode，GPU 利用率最大化；信号量限制并发防止显存 OOM
+        async with GPU_SEMAPHORE:
+            result = await asyncio.to_thread(
+                self.model.encode, queries, return_dense=True, return_sparse=True, return_colbert_vecs=False
+            )
+        # 分发结果到各自的 future
+        dense_list = result["dense_vecs"]
+        sparse_list = result.get("lexical_weights", [])
+        for i, (_, future) in enumerate(batch):
+            future.set_result({
+                "dense": dense_list[i].tolist() if i < len(dense_list) else None,
+                "sparse": sparse_list[i] if i < len(sparse_list) else None,
+            })
+
+
+class BatchReranker:
+    """Reranker 动态批处理：合并多个并发请求的 pairs，一次 compute_score 调用处理。
+
+    使用方式：
+        scores = await batch_reranker.compute(pairs)
+        # pairs: [[query, passage], ...] → scores: [float, ...]
+    """
+
+    def __init__(self, reranker, max_wait_ms: float = 50, max_batch: int = 128):
+        self.reranker = reranker
+        self.max_wait = max_wait_ms / 1000
+        self.max_batch = max_batch
+        self._queue: list = []  # [(pairs, future), ...]
+        self._lock = asyncio.Lock()
+        self._flush_event = asyncio.Event()
+        self._task: asyncio.Task | None = None
+
+    async def compute(self, pairs: list) -> list:
+        """提交一批 pairs，返回对应的 scores 列表。"""
+        future = asyncio.get_event_loop().create_future()
+        async with self._lock:
+            self._queue.append((pairs, future))
+            total_pairs = sum(len(p) for p, _ in self._queue)
+            if total_pairs >= self.max_batch:
+                self._flush_event.set()
+            elif self._task is None:
+                self._task = asyncio.create_task(self._delayed_flush())
+        return await future
+
+    async def _delayed_flush(self):
+        try:
+            await asyncio.wait_for(self._flush_event.wait(), timeout=self.max_wait)
+        except asyncio.TimeoutError:
+            pass
+        await self._do_flush()
+
+    async def _do_flush(self):
+        async with self._lock:
+            if not self._queue:
+                self._task = None
+                self._flush_event.clear()
+                return
+            batch = self._queue[:]
+            self._queue.clear()
+            self._task = None
+            self._flush_event.clear()
+
+        # 合并所有请求的 pairs 为一个大的 pairs 列表
+        all_pairs = []
+        split_points = []  # 记录每个请求的 pairs 数量，用于拆分结果
+        for pairs, _ in batch:
+            split_points.append(len(pairs))
+            all_pairs.extend(pairs)
+
+        # 一次 batch compute_score，信号量限制并发防止显存 OOM
+        async with GPU_SEMAPHORE:
+            scores = await asyncio.to_thread(
+                self.reranker.compute_score, all_pairs, normalize=True
+            )
+        if not isinstance(scores, list):
+            scores = [scores]
+
+        # 按原始请求拆分结果
+        offset = 0
+        for i, (_, future) in enumerate(batch):
+            n = split_points[i]
+            future.set_result([float(s) for s in scores[offset:offset + n]])
+            offset += n
+
+
 # 全局对象
 model = None
 reranker = None
 milvus_client = None
-
-# 限制同时占用GPU模型（encode/rerank）的并发数，避免显存峰值叠加导致OOM。
-# 6G显存下两个fp16模型常驻已占用较多空间，默认串行执行；可通过环境变量调优。
-GPU_SEMAPHORE = asyncio.Semaphore(int(os.getenv("GPU_CONCURRENCY", "1")))
+batch_encoder: BatchEncoder | None = None
+batch_reranker: BatchReranker | None = None
 
 
 def _wait_for_collection_loaded(client: MilvusClient, collection_name: str,
@@ -49,7 +188,7 @@ def _wait_for_collection_loaded(client: MilvusClient, collection_name: str,
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
-    global model, reranker, milvus_client
+    global model, reranker, milvus_client, batch_encoder, batch_reranker
 
     # 启动时加载Embedding模型
     model_path = os.getenv("EMBEDDING_MODEL_PATH", "./embedding_model/bge-m3")
@@ -57,11 +196,27 @@ async def lifespan(app: FastAPI):
     model = BGEM3FlagModel(model_path, use_fp16=True)
     print("✓ BGE-M3模型加载完成")
 
+    # 初始化动态批处理编码器
+    batch_encoder = BatchEncoder(
+        model,
+        max_wait_ms=float(os.getenv("BATCH_ENCODE_WAIT_MS", "50")),
+        max_batch=int(os.getenv("BATCH_ENCODE_MAX", "16")),
+    )
+    print(f"✓ BatchEncoder 初始化完成 (max_wait={batch_encoder.max_wait*1000:.0f}ms, max_batch={batch_encoder.max_batch})")
+
     # 加载Reranker模型
     reranker_path = os.getenv("RERANKER_MODEL_PATH", "./embedding_model/bge-reranker-v2-m3")
     print(f"加载BGE-Reranker-v2-m3模型: {reranker_path}")
     reranker = FlagReranker(reranker_path, use_fp16=True)
     print("✓ Reranker模型加载完成")
+
+    # 初始化动态批处理重排器
+    batch_reranker = BatchReranker(
+        reranker,
+        max_wait_ms=float(os.getenv("BATCH_RERANK_WAIT_MS", "50")),
+        max_batch=int(os.getenv("BATCH_RERANK_MAX", "128")),
+    )
+    print(f"✓ BatchReranker 初始化完成 (max_wait={batch_reranker.max_wait*1000:.0f}ms, max_batch={batch_reranker.max_batch})")
 
     # 连接Milvus（Docker内使用 milvus-standalone:19530，裸机运行时仍用 localhost）
     milvus_url = os.getenv("MILVUS_URL", "http://localhost:19595")
@@ -213,12 +368,9 @@ async def _search_dense(request: SearchRequest, filter_expr: Optional[str], top_
     if top_k is None:
         top_k = request.top_k
 
-    # 生成稠密向量（CPU/GPU推理，丢线程池避免阻塞事件循环；信号量限制GPU并发防止显存OOM）
-    async with GPU_SEMAPHORE:
-        encoded = await asyncio.to_thread(
-            model.encode, [request.query], return_dense=True, return_sparse=False
-        )
-    query_embedding = encoded['dense_vecs'][0].tolist()
+    # 生成稠密向量（走动态批处理，多个并发请求自动合并为一次 GPU 推理）
+    encoded = await batch_encoder.encode(request.query)
+    query_embedding = encoded["dense"]
 
     # 搜索
     search_results = await asyncio.to_thread(
@@ -240,12 +392,9 @@ async def _search_sparse(request: SearchRequest, filter_expr: Optional[str], top
     if top_k is None:
         top_k = request.top_k
 
-    # 生成稀疏向量（信号量限制GPU并发防止显存OOM）
-    async with GPU_SEMAPHORE:
-        encoded = await asyncio.to_thread(
-            model.encode, [request.query], return_dense=False, return_sparse=True
-        )
-    query_sparse = encoded['lexical_weights'][0]
+    # 生成稀疏向量（走动态批处理，多个并发请求自动合并为一次 GPU 推理）
+    encoded = await batch_encoder.encode(request.query)
+    query_sparse = encoded["sparse"]
 
     # 搜索
     search_results = await asyncio.to_thread(
@@ -267,13 +416,10 @@ async def _search_hybrid(request: SearchRequest, filter_expr: Optional[str], top
     if top_k is None:
         top_k = request.top_k
 
-    # 同时生成稠密和神经稀疏向量（信号量限制GPU并发防止显存OOM）
-    async with GPU_SEMAPHORE:
-        encoded = await asyncio.to_thread(
-            model.encode, [request.query], return_dense=True, return_sparse=True, return_colbert_vecs=False
-        )
-    query_dense = encoded['dense_vecs'][0].tolist()
-    query_sparse = encoded['lexical_weights'][0]
+    # 同时生成稠密和神经稀疏向量（走动态批处理，多个并发请求自动合并为一次 GPU 推理）
+    encoded = await batch_encoder.encode(request.query)
+    query_dense = encoded["dense"]
+    query_sparse = encoded["sparse"]
 
     # 获取2倍结果用于融合
     top_k_expanded = top_k * 2
@@ -357,13 +503,8 @@ async def _rerank_results(query: str, results: List[SearchResult], top_k: int) -
     # 准备reranker输入：[[query, passage], ...]
     pairs = [[query, result.content] for result in results]
 
-    # 调用reranker计算分数（CPU/GPU推理，丢线程池避免阻塞事件循环；信号量限制GPU并发防止显存OOM）
-    async with GPU_SEMAPHORE:
-        scores = await asyncio.to_thread(reranker.compute_score, pairs, normalize=True)
-
-    # 确保scores是列表
-    if not isinstance(scores, list):
-        scores = [scores]
+    # 调用reranker计算分数（走动态批处理，多个并发请求的 pairs 自动合并为一次 GPU 推理）
+    scores = await batch_reranker.compute(pairs)
 
     # 将新分数附加到结果上
     for result, score in zip(results, scores):
@@ -487,12 +628,9 @@ async def identify_funds(request: FundIdentifyRequest):
                 ]
                 return FundIdentifyResponse(results=results, query=request.query, total=len(results))
 
-        # 用稠密向量做语义检索（fund_index 条目短，dense 已够用；信号量限制GPU并发防止显存OOM）
-        async with GPU_SEMAPHORE:
-            encoded = await asyncio.to_thread(
-                model.encode, [request.query], return_dense=True, return_sparse=False
-            )
-        query_embedding = encoded["dense_vecs"][0].tolist()
+        # 用稠密向量做语义检索（走动态批处理）
+        encoded = await batch_encoder.encode(request.query)
+        query_embedding = encoded["dense"]
 
         search_results = await asyncio.to_thread(
             milvus_client.search,
