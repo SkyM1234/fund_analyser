@@ -1,0 +1,25 @@
+# ============================================================================
+# Fund Analyser — Frontend（Vite Dev Server）
+# ============================================================================
+# 启动:  docker compose up -d
+# 停止:  docker compose down
+# ============================================================================
+
+services:
+  frontend:
+    build: .
+    container_name: fund-frontend
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    volumes:
+      # 源码挂载（修改后只需 docker compose restart）
+      - ../frontend:/app
+      # 匿名卷：防止宿主机 node_modules 覆盖容器内的
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+
+networks:
+  default:
+    name: milvus
