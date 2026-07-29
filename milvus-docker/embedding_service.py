@@ -20,8 +20,8 @@ from hybrid_search import rrf_fusion, deduplicate_results
 
 
 # 限制同时占用GPU模型（encode/rerank）的并发数，避免显存峰值叠加导致OOM。
-# 6G显存下两个fp16模型常驻已占用较多空间，默认串行执行；可通过环境变量调优。
-GPU_SEMAPHORE = asyncio.Semaphore(int(os.getenv("GPU_CONCURRENCY", "1")))
+# 6G显存下两个fp16模型常驻已占用较多空间，可通过环境变量调优。
+GPU_SEMAPHORE = asyncio.Semaphore(int(os.getenv("GPU_CONCURRENCY", "4")))
 
 
 class BatchEncoder:
