@@ -1,0 +1,653 @@
+"""
+GPU电脑上的一体化查询服务
+提供embedding + Milvus检索 + Reranker重排的完整查询接口
+"""
+import asyncio
+import os
+import re
+import time
+
+from FlagEmbedding import BGEM3FlagModel, FlagReranker
+from pymilvus import MilvusClient
+from pymilvus.client.types import LoadState
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from typing import List, Optional
+from contextlib import asynccontextmanager
+import uvicorn
+
+from hybrid_search import rrf_fusion, deduplicate_results
+
+
+# 全局对象
+model = None
+reranker = None
+milvus_client = None
+
+# 限制同时占用GPU模型（encode/rerank）的并发数，避免显存峰值叠加导致OOM。
+# 6G显存下两个fp16模型常驻已占用较多空间，默认串行执行；可通过环境变量调优。
+GPU_SEMAPHORE = asyncio.Semaphore(int(os.getenv("GPU_CONCURRENCY", "1")))
+
+
+def _wait_for_collection_loaded(client: MilvusClient, collection_name: str,
+                                 timeout: float = 60.0, poll_interval: float = 0.5) -> None:
+    """轮询collection加载状态，直到完全加载或超时。
+
+    load_collection() 只是发起加载请求，不保证返回时数据已全部载入内存；
+    Milvus 加载是异步的，在此期间 search 可能命中不完整索引，返回极低分数。
+    """
+    start = time.monotonic()
+    while True:
+        state = client.get_load_state(collection_name)
+        if state.get("state") == LoadState.Loaded:
+            return
+        if time.monotonic() - start > timeout:
+            raise TimeoutError(f"collection {collection_name} 加载超时（{timeout}s），当前状态: {state}")
+        time.sleep(poll_interval)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """应用生命周期管理"""
+    global model, reranker, milvus_client
+
+    # 启动时加载Embedding模型
+    model_path = os.getenv("EMBEDDING_MODEL_PATH", "./embedding_model/bge-m3")
+    print(f"加载BGE-M3模型: {model_path}")
+    model = BGEM3FlagModel(model_path, use_fp16=True)
+    print("✓ BGE-M3模型加载完成")
+
+    # 加载Reranker模型
+    reranker_path = os.getenv("RERANKER_MODEL_PATH", "./embedding_model/bge-reranker-v2-m3")
+    print(f"加载BGE-Reranker-v2-m3模型: {reranker_path}")
+    reranker = FlagReranker(reranker_path, use_fp16=True)
+    print("✓ Reranker模型加载完成")
+
+    # 连接Milvus（Docker内使用 milvus-standalone:19530，裸机运行时仍用 localhost）
+    milvus_url = os.getenv("MILVUS_URL", "http://localhost:19595")
+    print(f"连接Milvus: {milvus_url}")
+    milvus_client = MilvusClient(uri=milvus_url)
+    print("✓ Milvus连接成功")
+
+    # 显式加载collection并等待完成，避免collection仍在loading（未完全加载进内存）时
+    # search请求命中不完整索引返回异常低分（这是导致偶发性"检索失效"的根因）
+    for collection_name in ("fund_reports_mineru", "fund_index"):
+        if milvus_client.has_collection(collection_name):
+            print(f"加载collection: {collection_name}")
+            milvus_client.load_collection(collection_name)
+            _wait_for_collection_loaded(milvus_client, collection_name)
+            print(f"✓ {collection_name} 加载完成")
+
+    yield
+
+    # 关闭时清理
+    print("服务关闭")
+
+
+app = FastAPI(title="Fund Query Service", lifespan=lifespan)
+
+
+class SearchRequest(BaseModel):
+    query: str
+    top_k: int = 10
+    # 只接受单基金代码字符串或 None（全局检索）
+    filter_fund_code: Optional[str] = None
+    collection_name: str = "fund_reports_mineru"
+    search_type: str = "hybrid"  # "dense", "sparse", "hybrid"
+    use_reranker: bool = True
+    rerank_top_k: int = 20
+    min_score: Optional[float] = None
+
+
+class SearchResult(BaseModel):
+    id: str
+    fund_code: str
+    fund_name: str
+    content: str
+    chunk_index: int
+    header_1: str = ""
+    header_2: str = ""
+    header_3: str = ""
+    header_4: str = ""
+    header_5: str = ""
+    header_6: str = ""
+    score: float
+
+
+class SearchResponse(BaseModel):
+    results: List[SearchResult]
+    query: str
+    total: int
+
+
+@app.post("/fund_reports/search", response_model=SearchResponse)
+async def search_funds(request: SearchRequest):
+    """
+    搜索基金报告内容（支持混合检索+Reranker重排）
+
+    完整检索流程：
+    1. 使用BGE-M3模型生成查询向量（稠密+神经稀疏）
+    2. 根据search_type执行不同检索策略：
+       - dense: 仅稠密向量检索（语义相似）
+       - sparse: 仅神经稀疏向量检索（学习型关键词匹配，类似SPLADE）
+       - hybrid: 混合检索+RRF融合（推荐）
+    3. [可选] 使用BGE-Reranker-v2-m3对候选结果重排（推荐）
+    4. 返回top_k个最相关结果
+
+    技术说明：
+    - 稀疏向量使用BGE-M3的lexical_weights（learned sparse）
+    - 非传统BM25统计方法，而是神经网络端到端训练
+    - Reranker使用交叉注意力机制，能够更精确地评估相关性
+    - 重排可提升5-15%的排序准确性
+
+    本机只需发送查询文本，无需任何模型或向量处理
+    """
+    if model is None or milvus_client is None:
+        raise HTTPException(status_code=503, detail="服务未就绪")
+
+    try:
+        # 构建过滤条件：兼容单值/列表/None
+        filter_expr = _build_fund_code_filter(request.filter_fund_code)
+
+        # 第一阶段：初步检索
+        # 如果使用reranker，先获取更多候选结果
+        initial_top_k = request.rerank_top_k if request.use_reranker else request.top_k
+
+        if request.search_type == "dense":
+            results = await _search_dense(request, filter_expr, initial_top_k)
+        elif request.search_type == "sparse":
+            results = await _search_sparse(request, filter_expr, initial_top_k)
+        elif request.search_type == "hybrid":
+            results = await _search_hybrid(request, filter_expr, initial_top_k)
+        else:
+            raise HTTPException(status_code=400, detail=f"不支持的搜索类型: {request.search_type}")
+
+        # 第二阶段：Reranker重排（可选）
+        if request.use_reranker and reranker is not None and len(results) > 0:
+            results = await _rerank_results(request.query, results, request.top_k)
+        else:
+            # 不使用reranker时，截取top_k
+            results = results[:request.top_k]
+
+        # 第三阶段：分数阈值过滤（避免凑数低质量结果）
+        if request.min_score is not None:
+            results = [r for r in results if r.score >= request.min_score]
+
+        return SearchResponse(
+            results=results,
+            query=request.query,
+            total=len(results)
+        )
+
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"查询失败: {str(e)}")
+
+
+def _build_fund_code_filter(filter_fund_code: Optional[str]) -> Optional[str]:
+    """构建 Milvus 标量过滤表达式
+
+    - None / 空字符串 → 不过滤（全局检索）
+    - 字符串 → fund_code == "xxx"
+
+    code 必须严格匹配 6 位数字，否则视为非法输入直接拒绝，
+    避免恶意输入拼接出任意 Milvus 过滤表达式（filter expression injection）。
+    """
+    if not filter_fund_code:
+        return None
+    code = filter_fund_code.strip()
+    if not code:
+        return None
+    if not re.fullmatch(r"\d{6}", code):
+        raise ValueError(f"Invalid fund code: {code!r}")
+    return f'fund_code == "{code}"'
+
+
+async def _search_dense(request: SearchRequest, filter_expr: Optional[str], top_k: int = None) -> List[SearchResult]:
+    """稠密向量检索"""
+    if top_k is None:
+        top_k = request.top_k
+
+    # 生成稠密向量（CPU/GPU推理，丢线程池避免阻塞事件循环；信号量限制GPU并发防止显存OOM）
+    async with GPU_SEMAPHORE:
+        encoded = await asyncio.to_thread(
+            model.encode, [request.query], return_dense=True, return_sparse=False
+        )
+    query_embedding = encoded['dense_vecs'][0].tolist()
+
+    # 搜索
+    search_results = await asyncio.to_thread(
+        milvus_client.search,
+        collection_name=request.collection_name,
+        data=[query_embedding],
+        anns_field="embedding",
+        limit=top_k,
+        output_fields=["id", "fund_code", "fund_name", "content", "chunk_index",
+                      "header_1", "header_2", "header_3", "header_4", "header_5", "header_6"],
+        filter=filter_expr
+    )
+
+    return _format_results(search_results)
+
+
+async def _search_sparse(request: SearchRequest, filter_expr: Optional[str], top_k: int = None) -> List[SearchResult]:
+    """神经稀疏向量检索 (Learned Sparse Retrieval)"""
+    if top_k is None:
+        top_k = request.top_k
+
+    # 生成稀疏向量（信号量限制GPU并发防止显存OOM）
+    async with GPU_SEMAPHORE:
+        encoded = await asyncio.to_thread(
+            model.encode, [request.query], return_dense=False, return_sparse=True
+        )
+    query_sparse = encoded['lexical_weights'][0]
+
+    # 搜索
+    search_results = await asyncio.to_thread(
+        milvus_client.search,
+        collection_name=request.collection_name,
+        data=[query_sparse],
+        anns_field="sparse_embedding",
+        limit=top_k,
+        output_fields=["id", "fund_code", "fund_name", "content", "chunk_index",
+                      "header_1", "header_2", "header_3", "header_4", "header_5", "header_6"],
+        filter=filter_expr
+    )
+
+    return _format_results(search_results)
+
+
+async def _search_hybrid(request: SearchRequest, filter_expr: Optional[str], top_k: int = None) -> List[SearchResult]:
+    """混合检索：稠密+神经稀疏 RRF融合"""
+    if top_k is None:
+        top_k = request.top_k
+
+    # 同时生成稠密和神经稀疏向量（信号量限制GPU并发防止显存OOM）
+    async with GPU_SEMAPHORE:
+        encoded = await asyncio.to_thread(
+            model.encode, [request.query], return_dense=True, return_sparse=True, return_colbert_vecs=False
+        )
+    query_dense = encoded['dense_vecs'][0].tolist()
+    query_sparse = encoded['lexical_weights'][0]
+
+    # 获取2倍结果用于融合
+    top_k_expanded = top_k * 2
+    output_fields = ["id", "fund_code", "fund_name", "content", "chunk_index",
+                      "header_1", "header_2", "header_3", "header_4", "header_5", "header_6"]
+
+    # 稠密+稀疏检索真正并发执行（各自丢线程池，避免阻塞事件循环）
+    dense_results, sparse_results = await asyncio.gather(
+        asyncio.to_thread(
+            milvus_client.search,
+            collection_name=request.collection_name,
+            data=[query_dense],
+            anns_field="embedding",
+            limit=top_k_expanded,
+            output_fields=output_fields,
+            filter=filter_expr
+        ),
+        asyncio.to_thread(
+            milvus_client.search,
+            collection_name=request.collection_name,
+            data=[query_sparse],
+            anns_field="sparse_embedding",
+            limit=top_k_expanded,
+            output_fields=output_fields,
+            filter=filter_expr
+        ),
+    )
+
+    # 格式化为字典列表
+    dense_list = _format_results_to_dicts(dense_results)
+    sparse_list = _format_results_to_dicts(sparse_results)
+
+    # RRF融合
+    fused_results = rrf_fusion(
+        dense_results=dense_list,
+        sparse_results=sparse_list,
+        k=60,
+        dense_weight=0.5,
+        sparse_weight=0.5
+    )
+
+    # 去重
+    dedup_results = deduplicate_results(fused_results)
+
+    # 转换为SearchResult对象
+    final_results = []
+    for item in dedup_results[:top_k]:
+        final_results.append(SearchResult(
+            id=item.get("id", ""),
+            fund_code=item.get("fund_code", ""),
+            fund_name=item.get("fund_name", ""),
+            content=item.get("content", ""),
+            chunk_index=item.get("chunk_index", 0),
+            header_1=item.get("header_1", ""),
+            header_2=item.get("header_2", ""),
+            header_3=item.get("header_3", ""),
+            header_4=item.get("header_4", ""),
+            header_5=item.get("header_5", ""),
+            header_6=item.get("header_6", ""),
+            score=item.get("score", 0.0)
+        ))
+
+    return final_results
+
+
+async def _rerank_results(query: str, results: List[SearchResult], top_k: int) -> List[SearchResult]:
+    """
+    使用BGE-Reranker-v2-m3对候选结果重排
+
+    Args:
+        query: 查询文本
+        results: 候选结果列表（通常是初步检索的top 20-40）
+        top_k: 最终返回的数量
+
+    Returns:
+        重排后的top_k结果
+    """
+    if not results:
+        return results
+
+    # 准备reranker输入：[[query, passage], ...]
+    pairs = [[query, result.content] for result in results]
+
+    # 调用reranker计算分数（CPU/GPU推理，丢线程池避免阻塞事件循环；信号量限制GPU并发防止显存OOM）
+    async with GPU_SEMAPHORE:
+        scores = await asyncio.to_thread(reranker.compute_score, pairs, normalize=True)
+
+    # 确保scores是列表
+    if not isinstance(scores, list):
+        scores = [scores]
+
+    # 将新分数附加到结果上
+    for result, score in zip(results, scores):
+        result.score = float(score)
+
+    # 按新分数排序
+    results.sort(key=lambda x: x.score, reverse=True)
+
+    # 返回top_k
+    return results[:top_k]
+
+
+def _format_results(search_results) -> List[SearchResult]:
+    """格式化Milvus搜索结果为SearchResult对象"""
+    formatted_results = []
+    for hits in search_results:
+        for hit in hits:
+            entity = hit.get("entity", hit)
+            formatted_results.append(SearchResult(
+                id=entity.get("id", ""),
+                fund_code=entity.get("fund_code", ""),
+                fund_name=entity.get("fund_name", ""),
+                content=entity.get("content", ""),
+                chunk_index=entity.get("chunk_index", 0),
+                header_1=entity.get("header_1", ""),
+                header_2=entity.get("header_2", ""),
+                header_3=entity.get("header_3", ""),
+                header_4=entity.get("header_4", ""),
+                header_5=entity.get("header_5", ""),
+                header_6=entity.get("header_6", ""),
+                score=hit.get("distance", 0.0)
+            ))
+    return formatted_results
+
+
+def _format_results_to_dicts(search_results) -> List[dict]:
+    """格式化Milvus搜索结果为字典列表（用于RRF融合）"""
+    formatted_results = []
+    for hits in search_results:
+        for hit in hits:
+            entity = hit.get("entity", hit)
+            formatted_results.append({
+                "id": entity.get("id", ""),
+                "fund_code": entity.get("fund_code", ""),
+                "fund_name": entity.get("fund_name", ""),
+                "content": entity.get("content", ""),
+                "chunk_index": entity.get("chunk_index", 0),
+                "header_1": entity.get("header_1", ""),
+                "header_2": entity.get("header_2", ""),
+                "header_3": entity.get("header_3", ""),
+                "header_4": entity.get("header_4", ""),
+                "header_5": entity.get("header_5", ""),
+                "header_6": entity.get("header_6", ""),
+                "score": hit.get("distance", 0.0)
+            })
+    return formatted_results
+
+
+class FundIdentifyRequest(BaseModel):
+    query: str
+    top_k: int = 5
+    collection_name: str = "fund_index"
+    min_score: Optional[float] = 0.5  # 识别置信度阈值，低于此值的不返回
+
+
+class FundIdentifyResult(BaseModel):
+    fund_code: str
+    full_name: str
+    short_name: str
+    score: float
+
+
+class FundIdentifyResponse(BaseModel):
+    results: List[FundIdentifyResult]
+    query: str
+    total: int
+
+
+@app.post("/fund_index/search", response_model=FundIdentifyResponse)
+async def identify_funds(request: FundIdentifyRequest):
+    """
+    两级RAG第一级：从用户问题中语义识别基金代码。
+
+    与 /fund_reports/search 不同，这里检索的是 fund_index collection（每只基金一条记录），
+    返回的是基金代码，而非年报内容。
+
+    典型用法：
+      query="汇添富金融科技ETF的持仓" → 返回 [{"fund_code":"159103", score:0.92}]
+      然后用 fund_code 作为 filter 去调用 /fund_reports/search 做第二级年报内容检索。
+
+    注意：
+      - 6位数字代码（如"159103"）会先尝试精确匹配（Milvus query，等值过滤），
+        命中则直接返回 score=1.0，不受语义检索的召回率影响
+      - 精确匹配未命中时（或非纯数字查询），走稠密向量语义检索，
+        处理模糊称呼、别名、不带代码的语义匹配场景
+    """
+    if model is None or milvus_client is None:
+        raise HTTPException(status_code=503, detail="服务未就绪")
+
+    try:
+        query_stripped = request.query.strip()
+
+        # 纯6位数字代码：先尝试精确匹配，保证必中，不依赖语义相似度
+        if re.fullmatch(r"\d{6}", query_stripped):
+            exact_hits = await asyncio.to_thread(
+                milvus_client.query,
+                collection_name=request.collection_name,
+                filter=f'fund_code == "{query_stripped}"',
+                output_fields=["fund_code", "full_name", "short_name"],
+                limit=request.top_k,
+            )
+            if exact_hits:
+                results = [
+                    FundIdentifyResult(
+                        fund_code=hit.get("fund_code", ""),
+                        full_name=hit.get("full_name", ""),
+                        short_name=hit.get("short_name", ""),
+                        score=1.0,
+                    )
+                    for hit in exact_hits
+                ]
+                return FundIdentifyResponse(results=results, query=request.query, total=len(results))
+
+        # 用稠密向量做语义检索（fund_index 条目短，dense 已够用；信号量限制GPU并发防止显存OOM）
+        async with GPU_SEMAPHORE:
+            encoded = await asyncio.to_thread(
+                model.encode, [request.query], return_dense=True, return_sparse=False
+            )
+        query_embedding = encoded["dense_vecs"][0].tolist()
+
+        search_results = await asyncio.to_thread(
+            milvus_client.search,
+            collection_name=request.collection_name,
+            data=[query_embedding],
+            anns_field="embedding",
+            limit=request.top_k,
+            output_fields=["fund_code", "full_name", "short_name"],
+        )
+
+        results = []
+        for hits in search_results:
+            for hit in hits:
+                score = float(hit.get("distance", 0.0))
+                if request.min_score is not None and score < request.min_score:
+                    continue
+                entity = hit.get("entity", hit)
+                results.append(FundIdentifyResult(
+                    fund_code=entity.get("fund_code", ""),
+                    full_name=entity.get("full_name", ""),
+                    short_name=entity.get("short_name", ""),
+                    score=score,
+                ))
+
+        return FundIdentifyResponse(results=results, query=request.query, total=len(results))
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"基金识别失败: {str(e)}")
+
+
+@app.get("/fund_index/list")
+async def list_fund_index(collection_name: str = "fund_index"):
+    """列出 fund_index 中所有基金（代码+名称）"""
+    if milvus_client is None:
+        raise HTTPException(status_code=503, detail="Milvus未连接")
+    try:
+        results = await asyncio.to_thread(
+            milvus_client.query,
+            collection_name=collection_name,
+            filter="fund_code != ''",
+            output_fields=["fund_code", "full_name", "short_name"],
+            limit=10000,
+        )
+        funds = [
+            {"code": r["fund_code"], "full_name": r["full_name"], "short_name": r["short_name"]}
+            for r in results
+        ]
+        funds.sort(key=lambda x: x["code"])
+        return {"funds": funds, "total": len(funds)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"查询失败: {str(e)}")
+
+
+@app.get("/stats")
+async def collection_stats(collection_name: str = "fund_reports_mineru"):
+    """获取集合统计信息"""
+    if milvus_client is None:
+        raise HTTPException(status_code=503, detail="Milvus未连接")
+
+    try:
+        stats = await asyncio.to_thread(milvus_client.get_collection_stats, collection_name)
+        return stats
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取统计失败: {str(e)}")
+
+
+@app.get("/funds")
+async def list_funds(collection_name: str = "fund_reports_mineru"):
+    """
+    获取所有已索引的基金清单（代码 + 名称）
+
+    返回示例：
+    {
+        "funds": [
+            {"code": "159103", "name": "金融科技ETF汇添富"},
+            ...
+        ],
+        "total": 100
+    }
+    """
+    if milvus_client is None:
+        raise HTTPException(status_code=503, detail="Milvus未连接")
+
+    try:
+        # 查询所有 fund_code 和 fund_name（去重）
+        results = await asyncio.to_thread(
+            milvus_client.query,
+            collection_name=collection_name,
+            filter="fund_code != ''",
+            output_fields=["fund_code", "fund_name"],
+            limit=10000,  # 足够覆盖所有基金
+        )
+
+        # 去重：按 fund_code 聚合（一只基金有多个 chunk，只取一条）
+        seen = {}
+        for r in results:
+            code = r.get("fund_code", "").strip()
+            name = r.get("fund_name", "").strip()
+            if code and code not in seen:
+                seen[code] = name
+
+        funds = [{"code": k, "name": v} for k, v in sorted(seen.items())]
+        return {"funds": funds, "total": len(funds)}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"查询基金列表失败: {str(e)}")
+
+
+@app.get("/health")
+async def health_check():
+    """健康检查"""
+    return {
+        "status": "ok",
+        "model_loaded": model is not None,
+        "reranker_loaded": reranker is not None,
+        "milvus_connected": milvus_client is not None
+    }
+
+
+@app.get("/")
+async def root():
+    """根路径"""
+    return {
+        "service": "Fund Query Service (一体化查询服务)",
+        "description": "在GPU服务器上完成embedding+向量检索+Reranker重排，本机只需发送查询文本",
+        "models": {
+            "embedding": "BGE-M3 (稠密+神经稀疏向量)",
+            "reranker": "BGE-Reranker-v2-m3"
+        },
+        "endpoints": {
+            "/fund_reports/search": "POST - 查询基金报告（推荐）",
+            "/fund_index/search": "POST - 从名称/别名/模糊描述识别基金代码",
+            "/stats": "GET - 获取集合统计信息",
+            "/health": "GET - 健康检查",
+            "/docs": "GET - API交互文档"
+        }
+    }
+
+
+if __name__ == "__main__":
+    print("="*50)
+    print("正在启动 Fund Query Service...")
+    print("="*50)
+
+    try:
+        # 监听所有网络接口，允许远程访问
+        uvicorn.run(
+            app,
+            host="0.0.0.0",  # 允许外部访问
+            port=8001,
+            log_level="info"
+        )
+    except Exception as e:
+        print(f"启动失败: {e}")
+        import traceback
+        traceback.print_exc()

@@ -1,0 +1,63 @@
+services:
+  mineru-api:
+    image: mineru:latest
+    container_name: mineru-api
+    restart: unless-stopped
+    profiles: ["api", "full", "gradio"]
+    ports:
+      - "8000:8000"
+    environment:
+      MINERU_MODEL_SOURCE: local
+    entrypoint: mineru-api
+    command: >
+      --host 0.0.0.0
+      --port 8000
+      --gpu-memory-utilization 0.55
+      --max-num-seqs 1
+      --max-model-len 4160
+    ulimits:
+      memlock: -1
+      stack: 67108864
+    ipc: host
+    shm_size: "3gb"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      retries: 3
+    volumes:
+      - ./mineru.json:/root/mineru.json
+      - ./llm_aided.py:/usr/local/lib/python3.12/dist-packages/mineru/utils/llm_aided.py
+      - ./vlm_middle_json_mkcontent.py:/usr/local/lib/python3.12/dist-packages/mineru/backend/vlm/vlm_middle_json_mkcontent.py
+    deploy:
+      resources:
+        limits:
+          memory: 12G
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["0"]
+              capabilities: [gpu]
+
+  # mineru-gradio:
+  #   image: mineru:latest
+  #   container_name: mineru-gradio
+  #   restart: unless-stopped
+  #   profiles: ["gradio", "full"]
+  #   ports:
+  #     - "7860:7860"
+  #   environment:
+  #     MINERU_MODEL_SOURCE: local
+  #   entrypoint: mineru-gradio
+  #   command: >
+  #     --server-name 0.0.0.0
+  #     --server-port 7860
+  #     --api-url http://mineru-api:8000
+  #   ulimits:
+  #     memlock: -1
+  #     stack: 67108864
+  #   ipc: host
+  #   volumes:
+  #     - ./data:/data
+  #   depends_on:
+  #     mineru-api:
+  #       condition: service_healthy
