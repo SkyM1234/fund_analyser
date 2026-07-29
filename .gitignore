@@ -1,0 +1,104 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+.env/
+
+# Python packaging and test tools
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+*.egg-info/
+dist/
+build/
+pip-wheel-metadata/
+*.egg
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Node.js / Vue / Vite
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.npm/
+.yarn/
+.pnpm-store/
+.vite/
+frontend/dist/
+frontend-docker/dist/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+/mineru-docker/mineru.json
+
+# IDE and editor files
+.idea/
+/.claude/settings.local.json
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/tasks.json
+!.vscode/launch.json
+*.code-workspace
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Logs and runtime files
+*.log
+*.pid
+*.pid.lock
+*.seed
+*.sqlite
+*.sqlite3
+*.db
+
+# Local caches, generated outputs, and model/vector data
+cache/
+caches/
+tmp/
+temp/
+outputs/
+checkpoints/
+logs/
+/backend/eval/reports/
+/milvus-docker/volumes/
+*.faiss
+*.index
+
+# Large local datasets and archives
+/embedding_model/
+/annual_reports_2025_funds/
+/markdown_mineru/
+/annual_reports_2025_funds.zip
+/markdown_mineru.zip
+*.zip
+*.tar
+*.tar.gz
+*.7z
+*.rar
+
+# Docker local overrides
+docker-compose.override.yml
+docker-compose.local.yml
