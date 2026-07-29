@@ -1,0 +1,2 @@
+# 评测框架专用依赖（核心后端已含 langchain/langgraph）
+langsmith>=0.1.140

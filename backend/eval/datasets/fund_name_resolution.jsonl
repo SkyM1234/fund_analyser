@@ -1,0 +1,10 @@
+{"id": "name-res-001", "query": "159103", "expected_fund_code": "159103", "category": "exact_code", "note": "直接给代码，应无条件识别"}
+{"id": "name-res-002", "query": "汇添富中证金融科技主题ETF", "expected_fund_code": "159103", "category": "exact_name", "note": "全称精确匹配"}
+{"id": "name-res-003", "query": "汇添富金融科技ETF", "expected_fund_code": "159103", "category": "alias", "note": "简称/别名匹配"}
+{"id": "name-res-004", "query": "那只跟踪中证金融科技主题指数、汇添富家的基金", "expected_fund_code": "159103", "category": "vague_description", "note": "模糊描述，需语义识别"}
+{"id": "name-res-005", "query": "159299", "expected_fund_code": "159299", "category": "exact_code", "note": "直接给代码，应无条件识别"}
+{"id": "name-res-006", "query": "易方达中证金融科技主题ETF", "expected_fund_code": "159299", "category": "exact_name", "note": "全称精确匹配"}
+{"id": "name-res-007", "query": "易方达金融科技ETF", "expected_fund_code": "159299", "category": "alias", "note": "简称/别名匹配"}
+{"id": "name-res-008", "query": "易方达那只金融科技主题的基金", "expected_fund_code": "159299", "category": "vague_description", "note": "模糊描述，需语义识别"}
+{"id": "name-res-009", "query": "帮我查一下今天天气怎么样", "expected_fund_code": null, "category": "no_match", "note": "与基金无关，应不命中任何基金"}
+{"id": "name-res-010", "query": "那个很有名的科技基金", "expected_fund_code": null, "category": "no_match", "note": "描述过于宽泛，不应强行匹配到具体基金"}
