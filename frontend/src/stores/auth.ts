@@ -42,10 +42,26 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function fetchMe() {
-    if (!accessToken.value) return
-    const resp = await fetch('/api/auth/me', {
-      headers: { Authorization: `Bearer ${accessToken.value}` },
-    })
+    const requestMe = (token: string) =>
+      fetch('/api/auth/me', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+
+    let requestToken = accessToken.value
+    if (!requestToken) return
+
+    let resp = await requestMe(requestToken)
+    if (resp.status === 401 && refreshToken.value) {
+      if (accessToken.value === requestToken) {
+        const refreshed = await refreshAccessToken()
+        if (!refreshed) return
+      }
+
+      requestToken = accessToken.value
+      if (!requestToken) return
+      resp = await requestMe(requestToken)
+    }
+
     if (resp.ok) user.value = await resp.json()
   }
 

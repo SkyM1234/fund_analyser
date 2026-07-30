@@ -15,7 +15,7 @@ const chat = useChatStore()
 
 async function onLogout() {
   await auth.logout()
-  chat.clear()
+  chat.reset()
 }
 </script>
 

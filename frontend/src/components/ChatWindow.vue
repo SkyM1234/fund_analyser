@@ -10,7 +10,7 @@ const scroller = ref<HTMLDivElement | null>(null)
 
 const onSubmit = async () => {
   const text = input.value.trim()
-  if (!text || store.streaming) return
+  if (!text || store.streaming || store.loadingSession) return
   input.value = ''
   await store.send(text)
 }
@@ -50,7 +50,7 @@ watch(
         v-for="(m, idx) in store.messages"
         :key="m.id"
         :msg="m"
-        :canEdit="m.role === 'user' && !store.streaming"
+        :canEdit="m.role === 'user' && !store.streaming && !store.loadingSession"
         @edit="onEdit"
       />
     </div>
@@ -61,7 +61,7 @@ watch(
         :rows="2"
         resize="none"
         placeholder="输入问题，Enter 发送 / Shift+Enter 换行"
-        :disabled="store.streaming"
+        :disabled="store.streaming || store.loadingSession"
         @keydown="onKeydown"
       />
       <div class="actions">
@@ -70,7 +70,7 @@ watch(
           type="primary"
           :icon="Promotion"
           :loading="store.streaming"
-          :disabled="store.streaming || !input.trim()"
+          :disabled="store.streaming || store.loadingSession || !input.trim()"
           @click="onSubmit"
         >
           {{ store.streaming ? '生成中…' : '发送' }}

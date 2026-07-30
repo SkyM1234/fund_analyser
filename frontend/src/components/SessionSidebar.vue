@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
-import { Plus, Delete, ChatDotRound, Close } from '@element-plus/icons-vue'
+import { computed, ref, onMounted, watch } from 'vue'
+import { Plus, Delete, ChatDotRound, Close, Loading } from '@element-plus/icons-vue'
 import { listSessions, deleteSession, type SessionItem } from '../api/session'
 import { useChatStore } from '../stores/chat'
 
@@ -17,6 +17,22 @@ const sessions = ref<SessionItem[]>([])
 const loading = ref(false)
 let loadSeq = 0
 
+const visibleSessions = computed<SessionItem[]>(() => {
+  const merged = [...sessions.value]
+  const knownIds = new Set(merged.map((session) => session.thread_id))
+
+  for (const running of store.runningSessions) {
+    if (knownIds.has(running.thread_id)) continue
+    merged.unshift({
+      ...running,
+      last_checkpoint: '',
+      created_at: null,
+    })
+  }
+
+  return merged
+})
+
 async function load() {
   const seq = ++loadSeq
   loading.value = true
@@ -32,6 +48,7 @@ async function load() {
 }
 
 async function onDelete(threadId: string) {
+  if (store.isSessionStreaming(threadId)) return
   try {
     await deleteSession(threadId)
     sessions.value = sessions.value.filter((s) => s.thread_id !== threadId)
@@ -83,22 +100,39 @@ onMounted(() => {
     <div v-if="loading" class="loading">
       <el-skeleton :rows="4" animated />
     </div>
-    <el-empty v-else-if="!sessions.length" description="暂无会话" :image-size="72" class="empty" />
+    <el-empty v-else-if="!visibleSessions.length" description="暂无会话" :image-size="72" class="empty" />
     <div v-else class="list">
       <div
-        v-for="s in sessions"
+        v-for="s in visibleSessions"
         :key="s.thread_id"
-        :class="['item', { active: s.thread_id === store.sessionId }]"
+        :class="[
+          'item',
+          {
+            active: s.thread_id === store.sessionId,
+            running: store.isSessionStreaming(s.thread_id),
+          },
+        ]"
         @click="onSelect(s.thread_id)"
       >
-        <el-icon class="item-icon"><ChatDotRound /></el-icon>
+        <el-icon v-if="store.isSessionStreaming(s.thread_id)" class="item-icon is-loading">
+          <Loading />
+        </el-icon>
+        <el-icon v-else class="item-icon"><ChatDotRound /></el-icon>
         <div class="item-body">
           <div class="title">{{ s.first_message || '新会话' }}</div>
-          <div class="meta">{{ s.checkpoint_count }} 条消息</div>
+          <div class="meta">
+            {{ store.isSessionStreaming(s.thread_id) ? '生成中...' : `${s.checkpoint_count} 条消息` }}
+          </div>
         </div>
         <el-popconfirm title="确定删除该会话？" @confirm="onDelete(s.thread_id)">
           <template #reference>
-            <el-button class="del" text :icon="Delete" @click.stop />
+            <el-button
+              class="del"
+              text
+              :icon="Delete"
+              :disabled="store.isSessionStreaming(s.thread_id)"
+              @click.stop
+            />
           </template>
         </el-popconfirm>
       </div>

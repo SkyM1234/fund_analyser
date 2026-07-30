@@ -15,12 +15,17 @@ export async function authFetch(url: string, init: RequestInit = {}): Promise<Re
     },
   })
 
-  let resp = await fetch(url, withToken(auth.accessToken))
+  const requestToken = auth.accessToken
+  let resp = await fetch(url, withToken(requestToken))
 
   if (resp.status === 401 && auth.refreshToken) {
-    const ok = await auth.refreshAccessToken()
-    if (ok) {
+    if (auth.accessToken !== requestToken) {
       resp = await fetch(url, withToken(auth.accessToken))
+    } else {
+      const ok = await auth.refreshAccessToken()
+      if (ok) {
+        resp = await fetch(url, withToken(auth.accessToken))
+      }
     }
   }
 
