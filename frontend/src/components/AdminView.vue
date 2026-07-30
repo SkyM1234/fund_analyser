@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowLeft, ChatDotRound, SwitchButton, User } from '@element-plus/icons-vue'
+import { ArrowLeft, ChatDotRound, DataAnalysis, SwitchButton, User } from '@element-plus/icons-vue'
 import { useAdminStore } from '../stores/admin'
 import { useAuthStore } from '../stores/auth'
 import { getAnySession, listUserTokens, revokeToken, type AdminTokenItem } from '../api/admin'
@@ -17,6 +17,13 @@ const admin = useAdminStore()
 const auth = useAuthStore()
 
 const activeMenu = ref<'users' | 'sessions'>('users')
+const userInitial = computed(() => auth.user?.username?.trim().charAt(0).toUpperCase() || 'A')
+const pageTitle = computed(() => activeMenu.value === 'users' ? '用户管理' : '会话管理')
+const pageDescription = computed(() =>
+  activeMenu.value === 'users'
+    ? `共 ${admin.users.length} 个用户账号`
+    : `共 ${admin.sessions.length} 个会话记录`
+)
 
 // ---- 登录设备对话框 ----
 const tokenDialogVisible = ref(false)
@@ -124,18 +131,34 @@ async function onDeleteUser(userId: number, username: string) {
 
 <template>
   <div class="admin-layout">
-    <!-- 管理后台专用顶栏 -->
     <header class="admin-topbar">
-      <el-button text :icon="ArrowLeft" @click="emit('back')">返回首页</el-button>
-      <h1>管理后台</h1>
+      <el-button class="back-btn" text :icon="ArrowLeft" @click="emit('back')">返回</el-button>
+      <div class="admin-brand">
+        <span class="brand-mark"><el-icon><DataAnalysis /></el-icon></span>
+        <div>
+          <h1>基金问答助手</h1>
+          <span>管理后台</span>
+        </div>
+      </div>
       <div class="spacer" />
-      <span v-if="auth.user" class="username">{{ auth.user.username }}</span>
-      <el-button text :icon="SwitchButton" @click="emit('logout')" title="登出">登出</el-button>
+      <div v-if="auth.user" class="user-block">
+        <span class="avatar">{{ userInitial }}</span>
+        <span class="username">{{ auth.user.username }}</span>
+      </div>
+      <el-tooltip content="退出登录" placement="bottom">
+        <el-button
+          class="logout-btn"
+          text
+          :icon="SwitchButton"
+          aria-label="退出登录"
+          @click="emit('logout')"
+        />
+      </el-tooltip>
     </header>
 
-    <!-- 主体：侧边栏 + 内容 -->
     <el-container class="admin-body">
-      <el-aside class="admin-sidebar" width="220px">
+      <el-aside class="admin-sidebar" width="204px">
+        <div class="nav-label">管理功能</div>
         <el-menu
           :default-active="activeMenu"
           class="admin-menu"
@@ -153,27 +176,32 @@ async function onDeleteUser(userId: number, username: string) {
       </el-aside>
 
       <el-main class="admin-content">
-        <AdminUsersTable
-          v-if="activeMenu === 'users'"
-          :users="admin.users"
-          :loading="admin.loadingUsers"
-          @toggle-active="onToggleActive"
-          @reset-password="onResetPassword"
-          @show-tokens="onShowTokens"
-          @delete-user="onDeleteUser"
-        />
-        <AdminSessionsTable
-          v-else-if="activeMenu === 'sessions'"
-          :sessions="admin.sessions"
-          :loading="admin.loadingSessions"
-          @view-session="onViewSession"
-          @delete-session="onDeleteSession"
-        />
+        <div class="content-inner">
+          <div class="page-heading">
+            <h2>{{ pageTitle }}</h2>
+            <p>{{ pageDescription }}</p>
+          </div>
+          <AdminUsersTable
+            v-if="activeMenu === 'users'"
+            :users="admin.users"
+            :loading="admin.loadingUsers"
+            @toggle-active="onToggleActive"
+            @reset-password="onResetPassword"
+            @show-tokens="onShowTokens"
+            @delete-user="onDeleteUser"
+          />
+          <AdminSessionsTable
+            v-else-if="activeMenu === 'sessions'"
+            :sessions="admin.sessions"
+            :loading="admin.loadingSessions"
+            @view-session="onViewSession"
+            @delete-session="onDeleteSession"
+          />
+        </div>
       </el-main>
     </el-container>
 
-    <!-- 登录设备对话框 -->
-    <el-dialog v-model="tokenDialogVisible" title="登录设备（未过期的 refresh token）" width="500">
+    <el-dialog v-model="tokenDialogVisible" title="登录设备" width="500">
       <el-table :data="tokens" v-loading="tokensLoading" size="small">
         <el-table-column prop="id" label="ID" width="60" />
         <el-table-column prop="created_at" label="创建时间" />
@@ -187,7 +215,6 @@ async function onDeleteUser(userId: number, username: string) {
       <el-empty v-if="!tokensLoading && tokens.length === 0" description="没有有效的登录设备" />
     </el-dialog>
 
-    <!-- 会话详情对话框 -->
     <el-dialog v-model="sessionDialogVisible" title="会话详情" width="600">
       <div v-loading="sessionDetailLoading" class="session-messages">
         <div v-for="(m, i) in sessionDetail?.messages || []" :key="i" class="msg" :class="m.role">
@@ -207,70 +234,198 @@ async function onDeleteUser(userId: number, username: string) {
   background: var(--bg);
 }
 
-/* ---- 顶栏 ---- */
 .admin-topbar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 20px;
-  background: var(--panel);
+  min-height: 58px;
+  gap: 10px;
+  padding: 8px 18px;
+  background: var(--surface);
   border-bottom: 1px solid var(--border);
   box-shadow: var(--shadow-sm);
   flex-shrink: 0;
 }
-.admin-topbar h1 {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text);
+.back-btn {
+  margin-right: 4px;
+  color: var(--text-secondary);
 }
-.admin-topbar .el-button { font-size: 15px; color: var(--muted); }
-.spacer { flex: 1; }
-.username { font-size: 13px; color: var(--muted); }
+.admin-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  background: var(--primary);
+  color: #fff;
+  font-size: 17px;
+}
+.admin-brand h1 {
+  margin: 0;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 650;
+}
+.admin-brand span {
+  display: block;
+  margin-top: 1px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.spacer {
+  flex: 1;
+}
+.user-block {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--success-soft);
+  color: var(--success);
+  font-size: 12px;
+  font-weight: 700;
+}
+.username {
+  max-width: 130px;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.logout-btn {
+  width: 36px;
+  height: 36px;
+  margin: 0;
+  padding: 0;
+  color: var(--text-secondary);
+  font-size: 17px;
+}
+.logout-btn:hover {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
 
-/* ---- 主体 ---- */
 .admin-body {
   flex: 1;
   min-height: 0;
 }
 
-/* ---- 侧边栏 ---- */
 .admin-sidebar {
-  background: var(--panel);
+  background: var(--surface);
   border-right: 1px solid var(--border);
   overflow-y: auto;
 }
+.nav-label {
+  padding: 20px 18px 8px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
 .admin-menu {
   border-right: none;
-  background: var(--panel);
+  background: var(--surface);
 }
 .admin-menu :deep(.el-menu-item) {
+  height: 44px;
+  margin: 3px 8px;
+  border-radius: var(--radius-sm);
   color: var(--text);
 }
 .admin-menu :deep(.el-menu-item.is-active) {
   color: var(--primary);
-  background: var(--tool-bg);
+  background: var(--primary-soft);
+  font-weight: 600;
 }
 .admin-menu :deep(.el-menu-item:hover) {
-  background: var(--bg);
+  background: var(--surface-hover);
 }
 
-/* ---- 内容区 ---- */
 .admin-content {
   background: var(--bg);
-  padding: 20px;
+  padding: 28px;
   overflow: auto;
 }
+.content-inner {
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+}
+.page-heading {
+  margin-bottom: 18px;
+}
+.page-heading h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 20px;
+  font-weight: 650;
+}
+.page-heading p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
 
-/* ---- 会话详情 ---- */
 .session-messages {
   max-height: 400px;
   overflow: auto;
 }
 .msg {
-  padding: 8px 0;
+  padding: 10px 0;
   border-bottom: 1px solid var(--border);
   font-size: 13px;
+  line-height: 1.6;
 }
-.msg.user strong { color: var(--primary); }
+.msg.user strong {
+  color: var(--primary);
+}
+
+@media (max-width: 720px) {
+  .admin-topbar {
+    min-height: 54px;
+    padding: 7px 10px;
+  }
+  .brand-mark,
+  .admin-brand span,
+  .username {
+    display: none;
+  }
+  .admin-body {
+    display: flex;
+    flex-direction: column;
+  }
+  .admin-sidebar {
+    width: 100% !important;
+    overflow: visible;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .nav-label {
+    display: none;
+  }
+  .admin-menu {
+    display: flex;
+    padding: 4px 6px;
+  }
+  .admin-menu :deep(.el-menu-item) {
+    flex: 1;
+    justify-content: center;
+    margin: 0 2px;
+  }
+  .admin-content {
+    padding: 20px 12px;
+  }
+}
 </style>

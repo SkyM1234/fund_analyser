@@ -41,54 +41,100 @@ const isRetry = computed(() => (props.step.retry_attempt ?? 0) > 0)
 
 <style scoped>
 .tool {
-  border: 1px solid var(--tool-border);
+  margin: 0 0 8px 31px;
+  overflow: hidden;
+  border-left: 3px solid var(--tool-border);
   background: var(--tool-bg);
   border-radius: var(--radius-sm);
-  margin-bottom: 8px;
   font-size: 13px;
-  overflow: hidden;
 }
 .tool.retry {
-  border-style: dashed;
-  border-color: #fbbf24;
-  background: #fffbeb;
+  border-color: var(--warning);
+  background: var(--warning-soft);
 }
 .head {
-  display: flex; align-items: center; gap: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
   padding: 7px 10px;
-  cursor: pointer; user-select: none;
+  cursor: pointer;
+  user-select: none;
 }
 .tag-icon {
   color: var(--primary);
   font-size: 14px;
 }
-.name { font-weight: 600; color: var(--primary); }
-.status { color: var(--muted); margin-left: auto; display: flex; align-items: center; gap: 4px; }
+.name {
+  color: var(--text);
+  font-weight: 600;
+}
+.status {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 11px;
+}
 .retry-tag {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  padding: 0 5px;
-  border-radius: 999px;
+  gap: 3px;
   font-size: 10px;
-  color: #92400e;
-  background: #fef3c7;
+  color: var(--warning);
   white-space: nowrap;
 }
-.retry-icon { font-size: 11px; }
-.spin { animation: spin 1s linear infinite; }
-.arrow { color: var(--muted); transition: transform 0.2s; font-size: 12px; }
-.arrow.open { transform: rotate(90deg); }
-.body { padding: 8px 10px 10px; border-top: 1px solid var(--tool-border); }
-.label { font-size: 12px; color: var(--muted); margin: 4px 0 2px; }
+.retry-icon {
+  font-size: 11px;
+}
+.spin {
+  animation: spin 1s linear infinite;
+}
+.arrow {
+  color: var(--muted);
+  font-size: 12px;
+  transition: transform 0.2s;
+}
+.arrow.open {
+  transform: rotate(90deg);
+}
+.body {
+  padding: 10px;
+  border-top: 1px solid var(--tool-border);
+}
+.label {
+  margin: 4px 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
 .block {
-  background: #fff; border: 1px solid var(--tool-border);
-  margin: 0; max-height: 240px; overflow: auto;
+  max-height: 240px;
+  margin: 0 0 8px;
+  overflow: auto;
+  border: 1px solid var(--tool-border);
+  background: var(--surface);
   font-size: 12px;
 }
 
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+@media (max-width: 720px) {
+  .tool {
+    margin-left: 0;
+  }
+  .head {
+    gap: 6px;
+  }
+  .status {
+    font-size: 0;
+  }
+  .status .el-icon {
+    font-size: 12px;
+  }
 }
 </style>

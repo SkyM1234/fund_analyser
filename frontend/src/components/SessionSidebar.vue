@@ -91,11 +91,24 @@ onMounted(() => {
 <template>
   <div class="sidebar">
     <div class="header">
-      <h3>会话历史</h3>
-      <el-button class="close-btn" text :icon="Close" @click="emit('close')" />
+      <div>
+        <h2>会话</h2>
+        <span class="session-count">{{ visibleSessions.length }} 个历史记录</span>
+      </div>
+      <el-tooltip content="收起侧栏" placement="right">
+        <el-button
+          class="close-btn"
+          text
+          :icon="Close"
+          aria-label="收起侧栏"
+          @click="emit('close')"
+        />
+      </el-tooltip>
     </div>
     <div class="new-btn-wrap">
-      <el-button type="primary" :icon="Plus" class="new-btn" @click="onNew">新建会话</el-button>
+      <el-button type="primary" :icon="Plus" class="new-btn" @click="onNew">
+        新建会话
+      </el-button>
     </div>
     <div v-if="loading" class="loading">
       <el-skeleton :rows="4" animated />
@@ -131,6 +144,8 @@ onMounted(() => {
               text
               :icon="Delete"
               :disabled="store.isSessionStreaming(s.thread_id)"
+              aria-label="删除会话"
+              title="删除会话"
               @click.stop
             />
           </template>
@@ -142,9 +157,9 @@ onMounted(() => {
 
 <style scoped>
 .sidebar {
-  width: 280px;
+  width: 272px;
   height: 100%;
-  background: var(--panel);
+  background: var(--surface);
   display: flex;
   flex-direction: column;
 }
@@ -152,49 +167,84 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 12px 8px 16px;
+  min-height: 66px;
+  padding: 14px 12px 8px 18px;
 }
-.header h3 {
+.header h2 {
   margin: 0;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 650;
   color: var(--text);
 }
-.close-btn {
+.session-count {
+  display: block;
+  margin-top: 3px;
   color: var(--muted);
-  font-size: 16px;
+  font-size: 11px;
+}
+.close-btn {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  color: var(--muted);
+  font-size: 15px;
+}
+.close-btn:hover {
+  color: var(--text);
+  background: var(--surface-hover);
 }
 .new-btn-wrap {
-  padding: 8px 16px 12px;
+  padding: 7px 14px 14px;
 }
 .new-btn {
   width: 100%;
+  height: 38px;
+  justify-content: flex-start;
+  padding-left: 15px;
+  box-shadow: 0 2px 6px rgba(23, 105, 170, 0.16);
 }
-.loading { padding: 16px; }
-.empty { flex: 1; }
+.loading {
+  padding: 12px 16px;
+}
+.empty {
+  flex: 1;
+}
 .list {
   flex: 1;
   overflow-y: auto;
-  padding: 4px 8px 8px;
+  padding: 2px 8px 12px;
 }
 .item {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 10px;
+  gap: 9px;
+  min-height: 56px;
+  margin-bottom: 3px;
+  padding: 8px 8px 8px 11px;
   border-radius: var(--radius-sm);
-  margin-bottom: 2px;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 .item:hover {
-  background: var(--bg);
+  background: var(--surface-hover);
 }
 .item:hover .del {
   opacity: 1;
 }
 .item.active {
-  background: var(--tool-bg);
+  background: var(--primary-soft);
+}
+.item.active::before {
+  position: absolute;
+  inset: 10px auto 10px 0;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--primary);
+  content: "";
+}
+.item.running:not(.active) {
+  background: var(--success-soft);
 }
 .item-icon {
   color: var(--muted);
@@ -204,29 +254,47 @@ onMounted(() => {
 .item.active .item-icon {
   color: var(--primary);
 }
+.item.running .item-icon {
+  color: var(--success);
+}
 .item-body {
   flex: 1;
   min-width: 0;
 }
 .title {
-  font-size: 13px;
-  color: var(--text);
-  margin-bottom: 2px;
-  white-space: nowrap;
+  margin-bottom: 3px;
   overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.35;
+  white-space: nowrap;
   text-overflow: ellipsis;
 }
 .meta {
-  font-size: 11px;
   color: var(--muted);
+  font-size: 11px;
+}
+.item.running .meta {
+  color: var(--success);
 }
 .del {
+  width: 28px;
+  height: 28px;
+  padding: 0;
   opacity: 0;
-  transition: opacity 0.15s;
   color: var(--muted);
   flex-shrink: 0;
+  transition: opacity 0.15s;
 }
 .del:hover {
-  color: #c0392b;
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+@media (hover: none) {
+  .del {
+    opacity: 1;
+  }
 }
 </style>
