@@ -11,7 +11,7 @@ import logging
 
 import httpx
 
-from app.core.config import get_settings
+from eval.config import get_eval_settings
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +28,7 @@ async def rag_search_target(inputs: dict) -> dict:
             "raw_total": int,               # GPU 端返回总数
         }
     """
-    s = get_settings()
+    s = get_eval_settings()
 
     payload = {
         "query": inputs["query"],
