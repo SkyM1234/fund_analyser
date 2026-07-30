@@ -83,6 +83,122 @@
 面试可讲：**Docker 开发效率的核心杠杆是"哪些文件需要 rebuild，哪些只需要 restart"。** 分层策略：依赖（Dockerfile RUN）→ rebuild；代码（volume mount）→ restart；模型（volume mount）→ 无需重启。把变化频率不同的文件分到不同的"变更层"，最小化每次改动的时间成本。
 
 
+### 8. 压测必须分层——GPU 快不等于完整聊天链路快
+
+最初只通过 `/api/chat/stream` 做端到端 SSE 压测，结果只能看到首 Token 延迟和总耗时，无法判断耗时来自 GPU、MCP、LLM 还是 Celery 排队。因此增加了两套职责不同的压测脚本：
+
+- `backend/scripts/gpu_load_test.py`：直接请求 embedding service，绕过 FastAPI 聊天接口、Celery、LangGraph、MCP 和外部 LLM，单独测量 embedding、Milvus 检索和 reranker。
+- `backend/scripts/chat_load_test.py`：请求完整 `/api/chat/stream` 链路，测量真实用户视角下的首 Token 延迟、总耗时、成功率和吞吐量。
+
+`chat_load_test.py` 同时替代了原来语义不明确的 `load_test.py`，并做了以下标准化：
+
+- 注册和登录属于准备阶段，不计入正式请求延迟。
+- `--requests` 表示总请求数，`--concurrency` 表示客户端最大并发数，避免把总量和并发度混为一谈。
+- 支持 `--warmup`，减少首次连接、模型预热和缓存冷启动对结果的干扰。
+- 按 SSE 规范解析 `event:` 和多行 `data:`，以首个非空 `token` 事件计算 TTFT。
+- 输出成功率、请求吞吐量、成功吞吐量以及 avg/p50/p90/p95/max/min。
+- 支持 `--same-session`，用于验证服务端会话锁是否正确拒绝同一会话的并发请求。
+
+面试可讲：**性能分析的第一步不是调参数，而是建立可隔离的测量边界。** 端到端测试回答"用户实际等多久"，组件测试回答"时间花在哪一层"；只有两者结合，才能避免把上游排队误判成 GPU 性能问题。
+
+
+### 9. Reranker 的 `max_batch` 必须是硬上限——触发阈值不等于执行上限
+
+- **原实现的问题**：`BatchReranker` 在累计 pair 数达到 `max_batch` 后只负责提前触发 flush，但 `_flush()` 会一次取走当时队列中的全部请求，再把所有 pairs 合并后一次性传给 `compute_score()`。高并发下，事件循环在 flush 真正执行前可能继续接收请求，因此实际输入规模可能远大于配置的 `max_batch`。
+- **风险**：超大 batch 会造成显存峰值、单次推理长尾甚至 OOM；此时把 `BATCH_RERANK_MAX=128` 理解为"单次最多 128 条"是错误的，它原来只是一个触发阈值。
+- **修复**：合并请求后按 `self.max_batch` 对 `all_pairs` 严格切片，每个 chunk 单独调用 `compute_score()`，最后校验 score 数量并按原请求边界拆分结果。
+- **异常处理**：任意 chunk 失败时，将同一个 flush 批次中尚未完成的 Future 全部设置异常，避免请求永久等待。
+- **参数校验**：`max_batch <= 0` 在初始化阶段直接抛出 `ValueError`，避免运行时出现无效步长或静默错误。
+
+面试可讲：**批处理系统中要区分"何时触发 flush"和"单次执行多少数据"。** 前者控制等待时间和聚合效率，后者控制资源上限；只实现触发阈值而没有执行分片，并不能形成真正的背压保护。
+
+
+### 10. Fast tokenizer 不是线程安全的——并发信号量不能代替模型实例锁
+
+- **现象**：并发调用 `asyncio.to_thread(model.encode/compute_score)` 时，fast tokenizer 偶发报 `Already borrowed`。
+- **根因**：`GPU_SEMAPHORE` 只限制全局允许多少个 GPU 推理进入临界区。当其值大于 1 时，同一个 encoder 或 reranker 实例仍可能被多个线程同时调用；Hugging Face fast tokenizer 和模型实例不保证这种并发方式是线程安全的。
+- **修复**：`BatchEncoder` 和 `BatchReranker` 分别增加独立的 `_inference_lock`。同一个模型实例一次只执行一个推理批次，但请求仍可在等待窗口内合并成动态 batch。
+- **结果**：并发请求不再直接竞争同一个 tokenizer；吞吐优化由"同实例并行调用"改为"短时间聚合后批量推理"，避免用线程并发换取不稳定的表面吞吐。
+
+`GPU_CONCURRENCY` 的准确语义是：**embedding service 进程内，允许同时进入 GPU 推理区的批次数量上限**。它不是 HTTP 并发数，也不是 Celery worker 数：
+
+- 设置为 `1`：encoder 与 reranker 的 GPU 推理全局串行，显存峰值最低，适合 6GB 显存。
+- 设置大于 `1`：可能允许 encoder 与 reranker 两个不同模型实例重叠执行，但同一个模型仍受各自 `_inference_lock` 保护。
+- 从 `1` 提高到 `8` 不保证提高吞吐量。单卡已经被一个 batch 跑满、reranker 占主导或动态批处理已充分利用 GPU 时，增加并发只会增加调度竞争和显存风险。
+
+本机测试中，提高 `GPU_CONCURRENCY` 没有带来明显吞吐增益，因此最终默认值使用 `1`，优先保证稳定性。修改 `.env` 后需要重新创建 embedding-service 容器，已经启动的容器不会自动读取宿主机上更新后的环境变量。
+
+面试可讲：**并发上限、批处理大小和线程安全是三个不同维度。** 信号量解决资源竞争，动态 batch 解决 GPU 利用率，模型实例锁解决第三方推理库的线程安全；不能用一个 `concurrency` 参数同时替代三者。
+
+
+### 11. 推理后显存不下降——通常是 CUDA 缓存，不是内存泄漏
+
+- **现象**：embedding service 刚启动时显存占用较低，第一次请求后显存明显上升；请求结束后显存没有回到启动值。
+- **原因**：模型可能在首次推理时完成 CUDA 上下文、kernel workspace 和中间 tensor 的懒初始化；PyTorch CUDA caching allocator 会保留已经申请的显存块，供后续请求复用，避免每次推理重复执行昂贵的 `cudaMalloc/cudaFree`。
+- **判断方法**：如果显存经过预热后稳定在一个平台值，连续压测不再持续增长，通常属于正常缓存。只有显存随每轮请求持续单调增长、最终 OOM，才应继续排查对象引用或 tensor 生命周期泄漏。
+- **监控口径**：`nvidia-smi dmon` 中 `fb` 才是显存占用 MB；`mem` 是显存控制器利用率，不是"显存已占百分比"。Windows/WSL2 下该利用率还可能存在长期显示 100% 的监控偏差。
+- **不建议**：不要在每个请求后调用 `torch.cuda.empty_cache()`。它不能释放模型权重，只会降低缓存复用效率并增加延迟；只有明确需要把空闲缓存让给同卡其他进程时才考虑主动清理。
+
+面试可讲：**GPU 内存观察要区分 allocated、reserved 和设备层看到的占用。** 深度学习框架保留显存是性能策略，不应仅凭"请求结束后 nvidia-smi 数字没下降"判定泄漏。
+
+
+### 12. MCP 不会把所有 worker 串行化——真正的并发边界在 Celery worker
+
+完整聊天链路为：
+
+```text
+FastAPI /api/chat/stream
+  → Celery agent_queue
+  → LangGraph 多 Agent 工作流
+  → 每个 worker 自己的 MCP stdio 子进程
+  → rag-mcp HTTP 请求
+  → 单个 embedding-service
+```
+
+backend worker 使用 `--pool=solo`。每个 worker 容器是独立 OS 进程，并在启动时创建自己的 asyncio loop、MCP client、rag-mcp 子进程和 stdio 管道。因此使用 `docker compose --scale worker=N` 时，得到的是 N 条独立 MCP 调用路径，而不是 N 个 worker 共用一个 MCP 串行连接。
+
+MCP 会增加 JSON-RPC 编解码、stdio 进程通信和一次 HTTP 转发，但直接 GPU 压测与完整 SSE 压测的数量级差异表明，它不是几十秒 TTFT 的主要来源。完整聊天的首 Token 只从 `synthesizer` 节点开始转发，因此 TTFT 还包含：
+
+```text
+Celery 排队
+→ LLM 意图分类
+→ Supervisor 规划
+→ Agent 多轮 LLM/tool 调用
+→ MCP/RAG
+→ 自检与反思
+→ Synthesizer 首次输出
+```
+
+当请求数大于 worker 数时，多出的请求会在 `agent_queue` 等待，并随着 worker 释放而分批进入完整工作流；这部分排队时间也会被客户端计入首 Token 延迟。
+
+worker 可以通过 Docker Compose 的 service scale 机制横向扩容。扩容后，每个新增 worker 都会获得独立的 MCP 子进程和资源连接，但仍然共享外部 LLM、Redis、数据库和 embedding-service。
+
+面试可讲：**排查异步链路时必须画出每一层的并发边界。** HTTP 接受的连接数不等于正在执行的 Agent 数，MCP 独立管道数也不等于 GPU 可同时执行的 reranker batch 数。队列、进程、协议连接和 GPU 临界区分别有自己的容量上限。
+
+
+### 13. 压测结论——先消除 worker 排队，再优化首 Token 前的串行工作流
+
+关键结论：
+
+1. 增加 worker 后，完整 SSE 的吞吐量明显提高、首 Token 延迟明显下降，说明 Celery 排队是端到端链路中的主要瓶颈之一。
+2. 请求数超过 worker 数时会形成滚动的多批执行。吞吐量可能继续提高，但排队会增加 TTFT 和尾延迟。
+3. 直接 GPU RAG 明显快于完整 SSE，且 GPU `SM` 呈现短时满载、长时间空闲的脉冲形态，说明完整链路的大部分时间在等待 LLM、Agent 编排或队列，而不是持续等待 GPU。
+4. 完整 SSE 中 TTFT 与总耗时较为接近，说明主要延迟发生在答案开始输出之前。继续优化时，应优先减少简单事实查询中的串行 LLM 调用，例如合并"基金识别 + RAG 搜索"工具、为明确查询增加快速路径、减少不必要的规划和反思步骤。
+5. worker 不是越多越好。扩容会增加 MCP 子进程、数据库连接、Redis 连接和外部 LLM 并发，应通过固定负载下的对照测试寻找吞吐量、尾延迟和资源消耗之间的平衡点。
+
+下一步最有价值的观测项是把 TTFT 拆成阶段耗时：
+
+```text
+请求提交 → worker 开始：Celery queue delay
+worker 开始 → plan_created：路由与规划
+tool_call → tool_result：MCP/RAG
+最后一次 tool_result → 首 Token：反思与 Synthesizer
+首 Token → done：答案输出
+```
+
+面试可讲：**吞吐量增加和单请求延迟下降不是同一个目标。** 增加 worker 可以提高系统吞吐并减少排队，但无法消除单个请求内部的串行 LLM 链路；容量规划需要同时观察 throughput、TTFT p95、错误率和资源饱和点。
+
+
 ## 最终 Dockerfile 关键决策一览
 
 | 决策 | 选择 | 原因 |
@@ -96,6 +212,8 @@
 | ipc | `host` | PyTorch CUDA 共享内存通信需要 |
 | memlock | `-1` | CUDA 需要锁定物理内存页 |
 | pip 源 | 清华镜像（除 torch 外） | torch CUDA 包清华不一定有，走官方 |
+| GPU 推理并发 | `GPU_CONCURRENCY=1` | 单卡 6GB 下优先稳定；同模型实例由独立 inference lock 串行保护 |
+| Reranker 动态批处理 | `wait=50ms, max=128` | 短窗口聚合请求，单次 `compute_score` 严格限制为 128 pairs |
 
 ## 最终 docker-compose.yml 服务总览
 
