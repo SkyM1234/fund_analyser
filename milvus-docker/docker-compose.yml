@@ -110,6 +110,8 @@ services:
     environment:
       - MILVUS_URL=http://milvus-standalone:19530
       - GPU_CONCURRENCY=${GPU_CONCURRENCY:-1}
+      - BATCH_RERANK_WAIT_MS=${BATCH_RERANK_WAIT_MS:-50}
+      - BATCH_RERANK_MAX=${BATCH_RERANK_MAX:-128}
       - EMBEDDING_MODEL_PATH=/app/embedding_model/bge-m3
       - RERANKER_MODEL_PATH=/app/embedding_model/bge-reranker-v2-m3
     ulimits:

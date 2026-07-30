@@ -21,8 +21,9 @@ from hybrid_search import rrf_fusion, deduplicate_results
 
 # 限制同时占用GPU模型（encode/rerank）的并发数，避免显存峰值叠加导致OOM。
 # 6G显存下两个fp16模型常驻已占用较多空间，可通过环境变量调优。
-GPU_SEMAPHORE = asyncio.Semaphore(int(os.getenv("GPU_CONCURRENCY", "4")))
-
+GPU_SEMAPHORE = asyncio.Semaphore(int(os.getenv("GPU_CONCURRENCY", "2")))
+BATCH_RERANK_MAX = int(os.getenv("BATCH_RERANK_MAX", "128"))
+BATCH_RERANK_WAIT_MS = float(os.getenv("BATCH_RERANK_WAIT_MS", "50"))
 
 class BatchEncoder:
     """动态批处理：收集短时间窗口内的查询，合并为 batch 推理。
@@ -42,6 +43,7 @@ class BatchEncoder:
         self.max_batch = max_batch
         self._queue: list = []  # [(query, future), ...]
         self._lock = asyncio.Lock()
+        self._inference_lock = asyncio.Lock()
         self._flush_event = asyncio.Event()
         self._task: asyncio.Task | None = None
 
@@ -50,10 +52,10 @@ class BatchEncoder:
         future = asyncio.get_event_loop().create_future()
         async with self._lock:
             self._queue.append((query, future))
+            if self._task is None:
+                self._task = asyncio.create_task(self._delayed_flush())
             if len(self._queue) >= self.max_batch:
                 self._flush_event.set()  # 满 batch 立刻触发
-            elif self._task is None:
-                self._task = asyncio.create_task(self._delayed_flush())
         return await future
 
     async def _delayed_flush(self):
@@ -75,11 +77,16 @@ class BatchEncoder:
             self._flush_event.clear()
 
         queries = [q for q, _ in batch]
-        # 一次 batch encode，GPU 利用率最大化；信号量限制并发防止显存 OOM
-        async with GPU_SEMAPHORE:
-            result = await asyncio.to_thread(
-                self.model.encode, queries, return_dense=True, return_sparse=True, return_colbert_vecs=False
-            )
+        # fast tokenizer 和模型实例不是线程安全的，同一实例只允许一次推理。
+        async with self._inference_lock:
+            async with GPU_SEMAPHORE:
+                result = await asyncio.to_thread(
+                    self.model.encode,
+                    queries,
+                    return_dense=True,
+                    return_sparse=True,
+                    return_colbert_vecs=False,
+                )
         # 分发结果到各自的 future
         dense_list = result["dense_vecs"]
         sparse_list = result.get("lexical_weights", [])
@@ -99,11 +106,14 @@ class BatchReranker:
     """
 
     def __init__(self, reranker, max_wait_ms: float = 50, max_batch: int = 128):
+        if max_batch <= 0:
+            raise ValueError("max_batch must be greater than 0")
         self.reranker = reranker
         self.max_wait = max_wait_ms / 1000
         self.max_batch = max_batch
         self._queue: list = []  # [(pairs, future), ...]
         self._lock = asyncio.Lock()
+        self._inference_lock = asyncio.Lock()
         self._flush_event = asyncio.Event()
         self._task: asyncio.Task | None = None
 
@@ -113,10 +123,10 @@ class BatchReranker:
         async with self._lock:
             self._queue.append((pairs, future))
             total_pairs = sum(len(p) for p, _ in self._queue)
+            if self._task is None:
+                self._task = asyncio.create_task(self._delayed_flush())
             if total_pairs >= self.max_batch:
                 self._flush_event.set()
-            elif self._task is None:
-                self._task = asyncio.create_task(self._delayed_flush())
         return await future
 
     async def _delayed_flush(self):
@@ -144,13 +154,32 @@ class BatchReranker:
             split_points.append(len(pairs))
             all_pairs.extend(pairs)
 
-        # 一次 batch compute_score，信号量限制并发防止显存 OOM
-        async with GPU_SEMAPHORE:
-            scores = await asyncio.to_thread(
-                self.reranker.compute_score, all_pairs, normalize=True
-            )
-        if not isinstance(scores, list):
-            scores = [scores]
+        # 严格限制单次 compute_score 的输入规模，避免并发突发时合并出超大 batch。
+        scores = []
+        try:
+            for start in range(0, len(all_pairs), self.max_batch):
+                pairs_chunk = all_pairs[start:start + self.max_batch]
+                async with self._inference_lock:
+                    async with GPU_SEMAPHORE:
+                        chunk_scores = await asyncio.to_thread(
+                            self.reranker.compute_score, pairs_chunk, normalize=True
+                        )
+
+                if hasattr(chunk_scores, "tolist"):
+                    chunk_scores = chunk_scores.tolist()
+                if not isinstance(chunk_scores, list):
+                    chunk_scores = [chunk_scores]
+                if len(chunk_scores) != len(pairs_chunk):
+                    raise RuntimeError(
+                        "Reranker score count mismatch: "
+                        f"expected {len(pairs_chunk)}, got {len(chunk_scores)}"
+                    )
+                scores.extend(float(score) for score in chunk_scores)
+        except Exception as exc:
+            for _, future in batch:
+                if not future.done():
+                    future.set_exception(exc)
+            return
 
         # 按原始请求拆分结果
         offset = 0
@@ -213,8 +242,8 @@ async def lifespan(app: FastAPI):
     # 初始化动态批处理重排器
     batch_reranker = BatchReranker(
         reranker,
-        max_wait_ms=float(os.getenv("BATCH_RERANK_WAIT_MS", "50")),
-        max_batch=int(os.getenv("BATCH_RERANK_MAX", "128")),
+        max_wait_ms=BATCH_RERANK_WAIT_MS,
+        max_batch=BATCH_RERANK_MAX,
     )
     print(f"✓ BatchReranker 初始化完成 (max_wait={batch_reranker.max_wait*1000:.0f}ms, max_batch={batch_reranker.max_batch})")
 
