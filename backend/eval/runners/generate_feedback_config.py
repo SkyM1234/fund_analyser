@@ -11,7 +11,7 @@ from eval.config import get_eval_settings
 
 async def generate_feedback_config():
     s = get_eval_settings()
-    s.export_langsmith_env()
+    s.prepare_runtime()
     client = Client()
     for config in client.list_feedback_configs():
         print(f"配置详情: {config}") # 打印反馈配置（包含UI不可见的隐式配置）

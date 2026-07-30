@@ -113,7 +113,7 @@ def _existing_ids(client: Client, dataset_id) -> set[str]:
 
 def upload(kind: str, mode: str = "append") -> None:
     settings = get_eval_settings()
-    settings.export_langsmith_env()
+    settings.prepare_runtime()
     client = Client()
 
     targets = []

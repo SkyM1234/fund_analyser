@@ -84,7 +84,7 @@ async def _ensure_mcp_ready():
         await client.initialize(configs)
         tools = await load_mcp_tools()
         set_cached_mcp_tools(tools)
-        logger.info(f"[agent_target] ✓ MCP 启动完成，{len(tools)} 个工具")
+        logger.info(f"[agent_target] [OK] MCP 启动完成，{len(tools)} 个工具")
         _mcp_initialized = True
 
 

@@ -32,7 +32,7 @@ def _get_judge() -> ChatOpenAI:
         s = get_eval_settings()
         _judge_llm = ChatOpenAI(
             base_url=s.JUDGE_LLM_BASE_URL,
-            api_key=s.JUDGE_LLM_API_KEY,
+            api_key=s.require_judge_api_key(),
             model=s.JUDGE_LLM_MODEL,
             temperature=s.JUDGE_LLM_TEMPERATURE,
         )

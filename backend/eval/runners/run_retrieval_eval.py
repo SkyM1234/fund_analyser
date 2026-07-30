@@ -34,7 +34,7 @@ REPORT_DIR.mkdir(exist_ok=True)
 
 async def run(experiment_prefix: str, concurrency: int, use_judge: bool):
     s = get_eval_settings()
-    s.export_langsmith_env()
+    s.prepare_runtime(use_judge=use_judge)
     client = Client()
 
     evaluators = [
@@ -83,7 +83,7 @@ async def run(experiment_prefix: str, concurrency: int, use_judge: bool):
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     out_path = REPORT_DIR / f"retrieval-{experiment_prefix}-{stamp}.json"
     out_path.write_text(json.dumps(rows, ensure_ascii=False, indent=2), encoding="utf-8")
-    logger.info(f"✓ 报告已落盘: {out_path}")
+    logger.info(f"[OK] 报告已落盘: {out_path}")
 
     # 简单聚合
     if rows:

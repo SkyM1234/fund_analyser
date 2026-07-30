@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-from calendar import c
 import json
 import logging
 from datetime import datetime
@@ -23,7 +22,6 @@ from langsmith.evaluation import aevaluate
 from eval.config import get_eval_settings
 from eval.evaluators import name_resolution_metrics as nrm
 from eval.targets.name_resolution_target import name_resolution_target
-import requests
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -34,7 +32,7 @@ REPORT_DIR.mkdir(exist_ok=True)
 
 async def run(experiment_prefix: str, concurrency: int):
     s = get_eval_settings()
-    s.export_langsmith_env()
+    s.prepare_runtime()
     client = Client()
 
     evaluators = [
@@ -78,7 +76,7 @@ async def run(experiment_prefix: str, concurrency: int):
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     out_path = REPORT_DIR / f"name-resolution-{experiment_prefix}-{stamp}.json"
     out_path.write_text(json.dumps(rows, ensure_ascii=False, indent=2), encoding="utf-8")
-    logger.info(f"✓ 报告已落盘: {out_path}")
+    logger.info(f"[OK] 报告已落盘: {out_path}")
 
     # 简单聚合（跳过 None，即"该指标不适用该样本"的情况）
     if rows:

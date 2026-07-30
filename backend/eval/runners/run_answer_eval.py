@@ -25,7 +25,6 @@ from langsmith.evaluation import aevaluate
 
 from eval.config import get_eval_settings
 from eval.evaluators import answer_metrics as am
-from eval.evaluators import retrieval_metrics as rm  # 新增
 from eval.evaluators import llm_judge as judge
 from eval.targets.agent_target import agent_target
 
@@ -45,7 +44,7 @@ REPORT_DIR.mkdir(exist_ok=True)
 
 async def run(experiment_prefix: str, concurrency: int, use_judge: bool):
     s = get_eval_settings()
-    s.export_langsmith_env()
+    s.prepare_runtime(use_judge=use_judge)
     client = Client()
 
     # MCP 初始化已移至 agent_target 内部，每个 worker 独立启动
@@ -100,7 +99,7 @@ async def run(experiment_prefix: str, concurrency: int, use_judge: bool):
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     out_path = REPORT_DIR / f"answer-{experiment_prefix}-{stamp}.json"
     out_path.write_text(json.dumps(rows, ensure_ascii=False, indent=2), encoding="utf-8")
-    logger.info(f"✓ 报告已落盘: {out_path}")
+    logger.info(f"[OK] 报告已落盘: {out_path}")
 
     if rows:
         agg: dict[str, list[float]] = {}
@@ -127,10 +126,9 @@ def main():
 
     # 如果指定 --no-cn-funds-mcp，覆盖配置
     if args.no_cn_funds_mcp:
-        from eval.config import get_eval_settings
         eval_s = get_eval_settings()
         eval_s.ENABLE_CN_FUNDS_MCP = False
-        logger.info("✓ 已禁用 cn-funds-mcp（仅测 RAG 部分）")
+        logger.info("[OK] 已禁用 cn-funds-mcp（仅测 RAG 部分）")
 
     asyncio.run(
         run(

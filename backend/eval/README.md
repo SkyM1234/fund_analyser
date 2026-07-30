@@ -109,6 +109,9 @@ python -m eval.runners.run_retrieval_eval --no-judge
 python -m eval.runners.run_answer_eval --no-judge
 ```
 
+`--no-judge` 只跳过 Judge LLM 调用。数据集读取、实验记录和结果上报仍由
+LangSmith 完成，因此始终需要有效的 `LANGSMITH_API_KEY`。
+
 每次运行后：
 - 结果同步到 LangSmith 项目 `fund-analyser-eval`
 - 本地落盘 JSON 到 `eval/reports/`

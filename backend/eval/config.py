@@ -52,13 +52,26 @@ class EvalSettings(BaseSettings):
     def gpu_base_url(self) -> str:
         return f"http://{self.GPU_HOST}:{self.GPU_PORT}"
 
+    @property
+    def env_path(self) -> Path:
+        return Path(__file__).with_name(".env")
+
+    def require_judge_api_key(self) -> str:
+        """返回 Judge API key；未配置时在发起请求前失败。"""
+        api_key = self.JUDGE_LLM_API_KEY.strip()
+        if not api_key:
+            raise RuntimeError(
+                "启用 LLM-judge 时必须配置 JUDGE_LLM_API_KEY "
+                f"（也兼容 DEEPSEEK_API_KEY），请检查 {self.env_path}"
+            )
+        return api_key
+
     def export_langsmith_env(self) -> None:
         """把 LangSmith 配置写入进程环境变量，供 langsmith SDK 自动读取。"""
         api_key = self.LANGSMITH_API_KEY.strip()
         if not api_key:
-            env_path = Path(__file__).with_name(".env")
             raise RuntimeError(
-                f"未配置 LANGSMITH_API_KEY，请在 {env_path} 或系统环境变量中设置有效值"
+                f"未配置 LANGSMITH_API_KEY，请在 {self.env_path} 或系统环境变量中设置有效值"
             )
 
         os.environ["LANGSMITH_API_KEY"] = api_key
@@ -66,6 +79,13 @@ class EvalSettings(BaseSettings):
         os.environ["LANGSMITH_PROJECT"] = self.LANGSMITH_PROJECT
         os.environ["LANGSMITH_TRACING"] = "true" if self.LANGSMITH_TRACING else "false"
         os.environ["LANGSMITH_ENDPOINT"] = self.LANGSMITH_ENDPOINT
+
+    def prepare_runtime(self, *, use_judge: bool = False) -> None:
+        """在创建 LangSmith Client 或 Judge LLM 前完成统一配置校验。"""
+        self.export_langsmith_env()
+        if use_judge:
+            self.require_judge_api_key()
+
 
 @lru_cache
 def get_eval_settings() -> EvalSettings:
