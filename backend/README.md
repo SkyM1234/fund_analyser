@@ -111,7 +111,7 @@ POSTGRES_HOST=postgres
 
 # MySQL（Docker 部署时自动指向 mysql 服务）
 MYSQL_HOST=mysql
-MYSQL_PASSWORD=skc393720
+MYSQL_PASSWORD=password
 
 # Redis
 REDIS_URL=redis://redis:6379/0

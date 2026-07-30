@@ -7,7 +7,7 @@ checkpoint pool、MySQL engine、Redis client 等均需在 worker 进程内自�
 Windows 开发：prefork（默认）在 Windows 上不可用，启动时必须加 --pool=solo：
     celery -A app.core.celery_app worker --pool=solo --loglevel=info
 
-Docker/Linux 部署后可切换为 prefork 或 gevent 以获得并发：
+Docker/Linux 部署后可切换为 prefork 或 gevent 以获得并发（mcp还是无法并发）：
     celery -A app.core.celery_app worker --pool=prefork --concurrency=4 --loglevel=info
 """
 from celery import Celery

@@ -9,7 +9,7 @@
     # Docker 内运行
     docker exec fund-backend python -m scripts.load_test --users 5 --message "159103的最新净值"
     # 裸机运行（在项目根目录下）
-    python backend/scripts/load_test.py --users 5 --message "159103的最新净值"
+    python backend/scripts/load_test.py --users 5 --message "金融科技ETF汇添富的基金经理是谁"
 
 依赖：httpx（项目已用于 rag_client，若未安装则 pip install httpx）
 """
