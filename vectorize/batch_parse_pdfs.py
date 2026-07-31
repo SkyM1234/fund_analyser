@@ -4,6 +4,7 @@
 """
 
 import io
+import json
 import re
 import subprocess
 import sys
@@ -17,6 +18,7 @@ import httpx
 # === 配置 ===
 INPUT_DIR = Path(__file__).parent.parent / "annual_reports_2025_funds"
 OUTPUT_DIR = Path(__file__).parent.parent / "markdown_mineru"
+REVIEW_PATH = INPUT_DIR / "_pdf_review.json"
 API_URL = "http://localhost:8000/file_parse"
 END_PAGES = 1000
 TIMEOUT = 1800  # 单个 PDF 最长 30 分钟
@@ -25,6 +27,33 @@ RESTART_EVERY_N = 1  # 每处理 N 个 PDF 后重启容器（1 = 每个都重启
 HEALTH_CHECK_URL = "http://localhost:8000/health"
 
 _shutdown_event = threading.Event()  # 使用线程事件代替全局标志
+
+
+def load_abnormal_pdfs(review_path: Path) -> dict[str, set[str]]:
+    """读取 PDF 校验结果，返回异常文件及其异常原因。"""
+    if not review_path.exists():
+        raise FileNotFoundError(
+            f"缺少 PDF 校验文件: {review_path}，请先运行 download_fund_reports.py"
+        )
+
+    try:
+        review = json.loads(review_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"无法读取 PDF 校验文件 {review_path}: {exc}") from exc
+
+    abnormal: dict[str, set[str]] = {}
+
+    for item in review.get("code_mismatches", []):
+        filename = item.get("filename")
+        if filename:
+            abnormal.setdefault(filename, set()).add("基金代码不一致")
+
+    for item in review.get("extraction_issues", []):
+        filename = item.get("filename")
+        if filename:
+            abnormal.setdefault(filename, set()).add("PDF 正文提取异常")
+
+    return abnormal
 
 
 def restart_mineru_container():
@@ -209,7 +238,26 @@ def main():
     # 追加模式：仅创建输出目录，不清空
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    pdf_files = sorted(INPUT_DIR.glob("*.pdf"))
+    try:
+        abnormal_pdfs = load_abnormal_pdfs(REVIEW_PATH)
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"错误: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    all_pdf_files = sorted(INPUT_DIR.glob("*.pdf"))
+    pdf_files = [
+        pdf_path for pdf_path in all_pdf_files if pdf_path.name not in abnormal_pdfs
+    ]
+    excluded_files = [
+        pdf_path for pdf_path in all_pdf_files if pdf_path.name in abnormal_pdfs
+    ]
+
+    if excluded_files:
+        print(f"根据 {REVIEW_PATH.name} 排除 {len(excluded_files)} 个异常 PDF:")
+        for pdf_path in excluded_files:
+            reasons = "、".join(sorted(abnormal_pdfs[pdf_path.name]))
+            print(f"  [排除] {pdf_path.name} ({reasons})")
+
     if not pdf_files:
         print(f"错误: {INPUT_DIR} 中没有找到 PDF 文件")
         sys.exit(1)
