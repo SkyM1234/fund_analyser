@@ -145,17 +145,16 @@ LangSmith 完成，因此始终需要有效的 `LANGSMITH_API_KEY`。
   1. 数据集位置与格式
   - 相关代码和数据位于 backend/eval。
   - 输出文件参考现有的 backend/eval/datasets/retrieval.jsonl。
-  - 已有 retrieval 数据可以直接覆盖，不需要保留旧版本。
   - 如果已有构建脚本 backend/eval/runners/build_retrieval_dataset.py，先检查并在其基础上修改，不要重复创建功能相同的脚
   本。
 
-  2. 原始 Markdown
+  1. 原始 Markdown
   - Markdown 位于 markdown_mineru。
   - 每份报告一个子目录。
   - 主要使用文件名以 `_analyzed.md` 结尾的文件，这是最终用于向量化的原始内容。
   - 不要只根据文件名、基金名称或常识生成问题，必须阅读报告实际内容。
 
-  3. Milvus 数据
+  1. Milvus 数据
   - 参考 vectorize/vectorize_to_milvus.py，理解 Markdown 的切分、metadata 和入库方式。
   - 必须直接访问 Milvus 查询实际入库数据，用真实 chunk、主键和 metadata 构建 ground truth，不能自行猜测。
   - Milvus 地址通常是：
@@ -165,22 +164,20 @@ LangSmith 完成，因此始终需要有效的 `LANGSMITH_API_KEY`。
   - 如有需要，同时检查 fund_index 等相关 collection。
   - 构建后要验证每条正例在 Milvus 中确实存在，并且与问题对应。
 
-  4. 异常报告过滤
+  1. 异常报告过滤
   - PDF 校验结果位于：
     annual_reports_2025_funds/_pdf_review.json
   - 不要使用 `code_mismatches` 或 `extraction_issues` 中的异常报告。
   - SHA256 重复本身不能直接判定异常：如果基金代码和 PDF 正文代码一致，可以保留。
-  - 已知 159362 是错误报告，不应出现在 MD、向量或评测数据中。
-  - 159335 是正确报告，需要保留。
   - 如果 Markdown、Milvus 和 PDF 校验结果不一致，先报告并处理数据一致性问题。
 
-  5. 数据规模
+  1. 数据规模
   - 每次处理 10 份正常报告。
   - 每份报告构建 10 条 retrieval 评测数据，共 100 条。
   - 如果前面的报告已经处理过，则继续选择接下来的 10 份未处理报告。
   - 输出时说明本次使用了哪些报告和基金代码。
 
-  6. 问题质量
+  1. 问题质量
   每份报告的 10 个问题应尽量覆盖不同方面，避免只是替换数字或改写句式。可覆盖：
   - 基金基本信息和基金代码
   - 基金经理及变更
