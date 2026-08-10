@@ -135,88 +135,145 @@ LangSmith 完成，因此始终需要有效的 `LANGSMITH_API_KEY`。
 
 ## 构建数据集的提示词
 
-  我需要继续构建本项目的 RAG 评测数据集，请直接检查代码、数据和 Milvus 后执行，不要只给方案。
+  请继续构建本项目的 RAG retrieval（检索）评测数据集。请直接检查代码、Markdown、现有数据集和 Milvus 后执行，不要只给方案
+  或问题列表。
 
   项目目录：
   E:\pythonprojects\fund_analyser
 
-  当前先构建 retrieval（检索）评测数据集，要求如下：
+  一、执行要求
 
-  1. 数据集位置与格式
-  - 相关代码和数据位于 backend/eval。
-  - 输出文件参考现有的 backend/eval/datasets/retrieval.jsonl。
-  - 如果已有构建脚本 backend/eval/runners/build_retrieval_dataset.py，先检查并在其基础上修改，不要重复创建功能相同的脚
-  本。
+  1. 先检查工作区状态、现有代码和数据，不要覆盖或回退已有改动。
+  2. 相关代码和数据位于：
+     - backend/eval
+     - markdown_mineru
+     - annual_reports_2025_funds/_pdf_review.json
+  3. 输出文件参考并更新：
+     - backend/eval/datasets/retrieval.jsonl
+  4. 必须在现有构建脚本基础上修改：
+     - backend/eval/runners/build_retrieval_dataset.py
+     不要重复创建功能相同的脚本。
+  5. 用于查看 Milvus 原始 chunk 的辅助脚本是：
+     - backend/eval/runners/query_fund_report.py
+     如果该脚本因 Python 版本、连接参数或输出编码问题不能运行，可以做最小必要优化。
 
-  1. 原始 Markdown
-  - Markdown 位于 markdown_mineru。
-  - 每份报告一个子目录。
-  - 主要使用文件名以 `_analyzed.md` 结尾的文件，这是最终用于向量化的原始内容。
-  - 不要只根据文件名、基金名称或常识生成问题，必须阅读报告实际内容。
+  二、报告选择
 
-  1. Milvus 数据
-  - 参考 vectorize/vectorize_to_milvus.py，理解 Markdown 的切分、metadata 和入库方式。
-  - 必须直接访问 Milvus 查询实际入库数据，用真实 chunk、主键和 metadata 构建 ground truth，不能自行猜测。
-  - Milvus 地址通常是：
-    http://localhost:19595
-  - 主要 collection 是：
-    fund_reports_mineru
-  - 如有需要，同时检查 fund_index 等相关 collection。
-  - 构建后要验证每条正例在 Milvus 中确实存在，并且与问题对应。
+  1. 每次处理接下来的 10 份尚未构建 retrieval 数据的正常报告。
+  2. 每份报告生成 10 条数据，本批共 100 条。
+  3. 根据现有 retrieval.jsonl 和构建脚本判断哪些报告已经处理，继续选择按既有排序规则排列的后续 10 份，不要重复。
+  4. Markdown 位于 markdown_mineru，每份报告一个子目录。
+  5. 主要使用 `_analyzed.md` 结尾的文件，这是实际向量化的原始内容。
+  6. 必须阅读报告实际正文，不能只根据文件名、基金名称或常识生成问题。
 
-  1. 异常报告过滤
-  - PDF 校验结果位于：
-    annual_reports_2025_funds/_pdf_review.json
-  - 不要使用 `code_mismatches` 或 `extraction_issues` 中的异常报告。
-  - SHA256 重复本身不能直接判定异常：如果基金代码和 PDF 正文代码一致，可以保留。
-  - 如果 Markdown、Milvus 和 PDF 校验结果不一致，先报告并处理数据一致性问题。
+  三、异常报告过滤
 
-  1. 数据规模
-  - 每次处理 10 份正常报告。
-  - 每份报告构建 10 条 retrieval 评测数据，共 100 条。
-  - 如果前面的报告已经处理过，则继续选择接下来的 10 份未处理报告。
-  - 输出时说明本次使用了哪些报告和基金代码。
+  1. 读取 annual_reports_2025_funds/_pdf_review.json。
+  2. 不得使用 `code_mismatches` 或 `extraction_issues` 中的异常报告。
+  3. SHA256 重复不能单独判定异常；如果基金代码与 PDF 正文代码一致，可以保留。
+  4. 核对 Markdown 文件名和正文、Milvus fund_code/file_path、PDF 校验结果。
+  5. 如果三者不一致，先定位并处理数据一致性问题，不要带着冲突继续生成。
 
-  1. 问题质量
-  每份报告的 10 个问题应尽量覆盖不同方面，避免只是替换数字或改写句式。可覆盖：
-  - 基金基本信息和基金代码
-  - 基金经理及变更
-  - 报告期内业绩表现
-  - 净值增长率及基准比较
+  四、Milvus Ground Truth
+
+  Milvus 地址：
+  http://localhost:19595
+
+  主要 collection：
+  fund_reports_mineru
+
+  参考以下代码理解切分、metadata 和入库方式：
+  vectorize/vectorize_to_milvus.py
+
+  要求：
+
+  1. 必须直接查询当前 Milvus，使用真实存在的 chunk、主键和 metadata。
+  2. 不允许推测、编造或根据 Markdown 自行生成 Milvus ID。
+  3. 优先选择能够完整支持问题答案的 chunk。
+  4. 只有问题确实需要多个章节时才记录多个正例。
+  5. 不得把只包含相同关键词但不能回答问题的 chunk 标为正例。
+  6. 不得混用其他基金的 chunk。
+  7. 保持现有数据集字段格式，包括：
+     - id
+     - query
+     - filter_fund_code
+     - top_k
+     - expected_fund_codes
+     - relevant_chunk_ids
+     - relevant_keywords
+     - category
+     - note
+  8. relevant_chunk_ids 必须使用 Milvus 中真实的 `id`，不能用 chunk_index 代替。
+  9. note 应记录主题和实际 chunk_index/章节。
+
+  五、构建报错处理
+
+  如果 build_retrieval_dataset.py 报缺少关键词、chunk 不存在或 metadata 不一致：
+
+  1. 使用 query_fund_report.py 查询对应基金和 chunk，例如：
+     python backend/eval/runners/query_fund_report.py 159269 --chunks 100,101
+  2. 以 Milvus 实际 content 为准检查：
+     - 日期格式，如 `2025-06-26` 与 `2025年6月26日`
+     - 数字和单位之间的空格
+     - 行业名称的实际写法
+     - 监管机构的完整名称
+     - Markdown 表格解析产生的空格
+  3. 修正问题规范或关键词后继续运行，不能因首次报错停止。
+  4. 关键词必须是实际正例正文中的原始子串，同时应足以证明语义相关性。
+
+  六、问题质量
+
+  每份报告的 10 个问题应覆盖不同章节，尽量包括：
+
+  - 基金基本信息、成立日、上市日和基金代码
+  - 跟踪指数、复制策略及跟踪误差目标
+  - 基金经理、经理助理或人员变更
+  - 报告期业绩、净值增长率及基准比较
+  - 投资策略、市场回顾和运作分析
   - 资产配置
-  - 股票或债券持仓
-  - 前十大持仓
   - 行业配置
-  - 投资策略和运作分析
-  - 风险、费用、关联交易或重大事项
+  - 股票或债券持仓
+  - 前十大或主要持仓
+  - 持有人结构、风险、费用、关联交易或重大事项
 
-  问题必须满足：
-  - 能由报告中的明确内容回答。
-  - 表述自然，接近真实用户检索问题。
-  - 不把答案直接写进问题。
-  - 不生成含糊、无法定位或需要跨报告推断的问题。
-  - 尽量让不同问题命中不同章节和 chunk。
-  - 数值类问题必须核对单位、报告期和上下文。
-  - 问题中的基金名称、代码、人物和日期必须来自真实内容。
+  问题必须：
 
-  7. Ground truth 要求
-  - 每条数据的正例必须来自 Milvus 中真实存在的相关 chunk。
-  - 优先选择能够完整支持答案的 chunk，不要只选择出现关键词但无法回答问题的片段。
-  - 如一个问题确实需要多个 chunk，可以记录多个正例，但不要无意义增加正例。
-  - 检查 fund_code、source、section、chunk_id 或主键等字段是否与现有数据集格式一致。
-  - 不要把同基金但不相关的 chunk 标成正例。
-  - 避免不同基金之间的数据串用。
+  1. 能由指定正例 chunk 中的明确内容回答。
+  2. 表述自然，接近真实用户检索问题。
+  3. 不把答案直接写入问题。
+  4. 不依赖跨报告推断。
+  5. 尽量命中不同章节和 chunk。
+  6. 数值类问题核对报告期、单位和上下文。
+  7. 基金名称、代码、人物和日期必须来自真实报告。
+  8. 避免仅替换数字或基金名称形成模板化重复问题。
 
-  8. 验证
-  完成后至少检查：
-  - JSONL 每行都是合法 JSON。
-  - 总数是否为 100 条。
-  - 是否每份报告正好 10 条。
-  - 是否覆盖 10 份不同的正常报告。
-  - 是否存在重复问题。
-  - 所有正例 ID 是否能在 Milvus 中查到。
-  - 问题与正例内容是否语义匹配。
-  - 是否误用了异常基金或其他基金的 chunk。
-  - 给出构建结果摘要和发现的数据问题。
+  七、生成与验证
 
-  请直接完成数据选择、Milvus 查询、数据集生成和验证。不要只生成问题列表，也不要使用虚构的 Milvus 数据。
+  运行构建脚本，更新累计 retrieval.jsonl，并独立验证：
+
+  1. 每行均为合法 JSON。
+  2. 本批新增恰好 100 条。
+  3. 本批覆盖恰好 10 份不同的正常报告。
+  4. 每份报告恰好 10 条。
+  5. ID 连续，历史数据顺序和 ID 不被破坏。
+  6. 不存在重复 query。
+  7. 不包含 PDF 校验异常基金。
+  8. 所有 relevant_chunk_ids 均可在 Milvus 查询到。
+  9. 每个正例的 fund_code 与 filter_fund_code 一致。
+  10. file_path 指向对应基金的 `_analyzed.md`。
+  11. relevant_keywords 均存在于对应正例正文。
+  12. 问题与正例内容语义匹配，正例足以回答问题。
+  13. 没有使用同基金的不相关 chunk 或其他基金的 chunk。
+  14. 构建脚本通过语法检查并可重复运行。
+
+  八、最终输出
+
+  完成代码修改、数据集生成和验证后，给出：
+
+  1. 本批使用的 10 份报告、基金代码和基金名称。
+  2. 历史累计条数、本批新增条数和累计基金数。
+  3. 实际执行的验证结果。
+  4. 发现并处理的数据格式或一致性问题。
+  5. 修改过的文件列表。
+
+  请持续执行到数据集成功生成并验证完成，不要停留在方案、问题草稿或未解决的构建报错。
