@@ -158,6 +158,8 @@ async def handle_rag_search(args: dict) -> Sequence[TextContent]:
     for i, r in enumerate(results, 1):
         formatted.append(
             f"--- 结果 {i} (相似度: {r.get('score', 0):.4f}) ---\n"
+            f"Chunk ID: {r.get('id', '')}\n"
+            f"Chunk Index: {r.get('chunk_index', '')}\n"
             f"基金代码: {r.get('fund_code', 'N/A')}\n"
             # f"文档类型: {r.get('doc_type', 'N/A')}\n"
             # f"报告时间: {r.get('report_date', 'N/A')}\n"

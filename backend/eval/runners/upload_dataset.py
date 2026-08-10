@@ -80,7 +80,8 @@ def _split_inputs_outputs(item, schema_kind: str) -> tuple[dict, dict]:
             "key_facts": data.get("key_facts", []),
             "should_refuse": data.get("should_refuse", False),
             "intent": data.get("intent"),
-            # 可选的检索 ground truth（用于 Agent RAG 质量评测的弱标注）
+            # 可选的检索 ground truth（用于 Agent RAG 与直接 RAG 对比）
+            "relevant_chunk_ids": data.get("relevant_chunk_ids", []),
             "relevant_keywords": data.get("relevant_keywords", []),
             # 可选的工具调用 ground truth（用于 tool_call_accuracy）
             "expected_tool_calls": data.get("expected_tool_calls", []),

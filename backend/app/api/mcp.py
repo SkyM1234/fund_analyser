@@ -2,7 +2,7 @@
 import logging
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.core.security import get_current_user
+from app.core.security import get_current_admin, get_current_user
 from app.db.models import User
 from app.services.mcp_client import get_mcp_client
 
@@ -36,8 +36,8 @@ async def get_mcp_stats(user: User = Depends(get_current_user)):
 
 
 @router.post("/reset-stats")
-async def reset_mcp_stats(user: User = Depends(get_current_user)):
-    """重置当前用户的 MCP 工具调用计数器。"""
+async def reset_mcp_stats(user: User = Depends(get_current_admin)):
+    """重置当前管理员的 MCP 工具调用计数器。"""
     try:
         mcp_client = await get_mcp_client()
         await mcp_client.reset_call_counts(user_id=str(user.id))

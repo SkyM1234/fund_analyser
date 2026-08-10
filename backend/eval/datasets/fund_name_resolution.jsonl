@@ -1,10 +1,945 @@
-{"id": "name-res-001", "query": "159103", "expected_fund_code": "159103", "category": "exact_code", "note": "直接给代码，应无条件识别"}
-{"id": "name-res-002", "query": "汇添富中证金融科技主题ETF", "expected_fund_code": "159103", "category": "exact_name", "note": "全称精确匹配"}
-{"id": "name-res-003", "query": "汇添富金融科技ETF", "expected_fund_code": "159103", "category": "alias", "note": "简称/别名匹配"}
-{"id": "name-res-004", "query": "那只跟踪中证金融科技主题指数、汇添富家的基金", "expected_fund_code": "159103", "category": "vague_description", "note": "模糊描述，需语义识别"}
-{"id": "name-res-005", "query": "159299", "expected_fund_code": "159299", "category": "exact_code", "note": "直接给代码，应无条件识别"}
-{"id": "name-res-006", "query": "易方达中证金融科技主题ETF", "expected_fund_code": "159299", "category": "exact_name", "note": "全称精确匹配"}
-{"id": "name-res-007", "query": "易方达金融科技ETF", "expected_fund_code": "159299", "category": "alias", "note": "简称/别名匹配"}
-{"id": "name-res-008", "query": "易方达那只金融科技主题的基金", "expected_fund_code": "159299", "category": "vague_description", "note": "模糊描述，需语义识别"}
-{"id": "name-res-009", "query": "帮我查一下今天天气怎么样", "expected_fund_code": null, "category": "no_match", "note": "与基金无关，应不命中任何基金"}
-{"id": "name-res-010", "query": "那个很有名的科技基金", "expected_fund_code": null, "category": "no_match", "note": "描述过于宽泛，不应强行匹配到具体基金"}
+{"id": "name-res-001", "query": "港股通科技ETF华夏", "expected_fund_code": "159101", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-002", "query": "华夏国证港股通科技交易型开放式指数证券投资基金", "expected_fund_code": "159101", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-003", "query": "港股通科技ETF华夏2025年年度报告", "expected_fund_code": "159101", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-004", "query": "华夏国证港股通科技交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159101", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-005", "query": "159101_港股通科技ETF华夏_华夏国证港股通科技交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159101", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-006", "query": "港股通生物科技ETF华安", "expected_fund_code": "159102", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-007", "query": "华安恒生生物科技交易型开放式指数证券投资基金", "expected_fund_code": "159102", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-008", "query": "港股通生物科技ETF华安2025年年度报告", "expected_fund_code": "159102", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-009", "query": "华安恒生生物科技交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159102", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-010", "query": "159102_港股通生物科技ETF华安_华安恒生生物科技交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159102", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-011", "query": "金融科技ETF汇添富", "expected_fund_code": "159103", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-012", "query": "汇添富中证金融科技主题交易型开放式指数证券投资基金", "expected_fund_code": "159103", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-013", "query": "金融科技ETF汇添富2025年年度报告", "expected_fund_code": "159103", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-014", "query": "汇添富中证金融科技主题交易型开放式指数证券投资基金 2025 年年度报告", "expected_fund_code": "159103", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-015", "query": "159103_金融科技ETF汇添富_汇添富中证金融科技主题交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159103", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-016", "query": "恒生生物科技ETF易方达", "expected_fund_code": "159105", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-017", "query": "易方达恒生生物科技交易型开放式指数证券投资基金", "expected_fund_code": "159105", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-018", "query": "恒生生物科技ETF易方达2025年年度报告", "expected_fund_code": "159105", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-019", "query": "易方达恒生生物科技交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159105", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-020", "query": "159105_恒生生物科技ETF易方达_易方达恒生生物科技交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159105", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-021", "query": "科创债ETF万家", "expected_fund_code": "159110", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-022", "query": "万家深证AAA科技创新公司债交易型开放式指数证券投资基金", "expected_fund_code": "159110", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-023", "query": "科创债ETF万家2025年年度报告", "expected_fund_code": "159110", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-024", "query": "万家深证 AAA 科技创新公司债交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159110", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-025", "query": "159110_科创债ETF万家_万家深证AAA科技创新公司债交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159110", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-026", "query": "科创债ETF天弘", "expected_fund_code": "159111", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-027", "query": "天弘中证AAA科技创新公司债交易型开放式指数证券投资基金", "expected_fund_code": "159111", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-028", "query": "科创债ETF天弘2025年年度报告", "expected_fund_code": "159111", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-029", "query": "天弘中证 AAA 科技创新公司债交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159111", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-030", "query": "159111_科创债ETF天弘_159111_天弘中证AAA科技创新公司债交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159111", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-031", "query": "科创债ETF银华", "expected_fund_code": "159112", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-032", "query": "银华中证AAA科技创新公司债交易型开放式指数证券投资基金", "expected_fund_code": "159112", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-033", "query": "科创债ETF银华2025年年度报告", "expected_fund_code": "159112", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-034", "query": "银华中证 AAA 科技创新公司债交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159112", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-035", "query": "159112_科创债ETF银华_银华中证AAA科技创新公司债交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159112", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-036", "query": "科创债ETF华安", "expected_fund_code": "159115", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-037", "query": "华安中证AAA科技创新公司债交易型开放式指数证券投资基金", "expected_fund_code": "159115", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-038", "query": "科创债ETF华安2025年年度报告", "expected_fund_code": "159115", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-039", "query": "华安中证 AAA 科技创新公司债交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159115", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-040", "query": "159115_科创债ETF华安_华安中证AAA科技创新公司债交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159115", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-041", "query": "港股通科技ETF招商", "expected_fund_code": "159125", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-042", "query": "招商国证港股通科技交易型开放式指数证券投资基金", "expected_fund_code": "159125", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-043", "query": "港股通科技ETF招商2025年年度报告", "expected_fund_code": "159125", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-044", "query": "招商国证港股通科技交易型开放式指数证券投资基金 2025 年年度报告", "expected_fund_code": "159125", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-045", "query": "159125_港股通科技ETF招商_招商国证港股通科技交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159125", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-046", "query": "港股通50ETF南方", "expected_fund_code": "159126", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-047", "query": "南方中证港股通50交易型开放式指数证券投资基金", "expected_fund_code": "159126", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-048", "query": "港股通50ETF南方2025年年度报告", "expected_fund_code": "159126", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-049", "query": "南方中证港股通 50 交易型开放式指数证券投资基金 2025 年年度报告", "expected_fund_code": "159126", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-050", "query": "159126_港股通50ETF南方_南方中证港股通50交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159126", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-051", "query": "港股科技ETF天弘", "expected_fund_code": "159128", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-052", "query": "天弘国证港股通科技交易型开放式指数证券投资基金", "expected_fund_code": "159128", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-053", "query": "港股科技ETF天弘2025年年度报告", "expected_fund_code": "159128", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-054", "query": "天弘国证港股通科技交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159128", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-055", "query": "159128_港股科技ETF天弘_天弘国证港股通科技交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159128", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-056", "query": "深证50ETF易方达", "expected_fund_code": "159150", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-057", "query": "易方达深证50交易型开放式指数证券投资基金", "expected_fund_code": "159150", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-058", "query": "深证50ETF易方达2025年年度报告", "expected_fund_code": "159150", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-059", "query": "易方达深证 50 交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159150", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-060", "query": "159150_深证50ETF易方达_易方达深证50交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159150", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-061", "query": "自由现金流ETF华夏", "expected_fund_code": "159201", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-062", "query": "华夏国证自由现金流交易型开放式指数证券投资基金", "expected_fund_code": "159201", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-063", "query": "自由现金流ETF华夏2025年年度报告", "expected_fund_code": "159201", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-064", "query": "华夏国证自由现金流交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159201", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-065", "query": "159201_自由现金流ETF华夏_华夏国证自由现金流交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159201", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-066", "query": "恒生互联网ETF万家", "expected_fund_code": "159202", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-067", "query": "万家恒生互联网科技业交易型开放式指数证券投资基金(QDII)", "expected_fund_code": "159202", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-068", "query": "恒生互联网ETF万家2025年年度报告", "expected_fund_code": "159202", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-069", "query": "万家恒生互联网科技业交易型开放式指数证券投资基金(QDII)2025 年年度报告", "expected_fund_code": "159202", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-070", "query": "159202_恒生互联网ETF万家_万家恒生互联网科技业交易型开放式指数证券投资基金(QDII)2025年年度报告", "expected_fund_code": "159202", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-071", "query": "机器人ETF汇添富", "expected_fund_code": "159213", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-072", "query": "汇添富中证机器人交易型开放式指数证券投资基金", "expected_fund_code": "159213", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-073", "query": "机器人ETF汇添富2025年年度报告", "expected_fund_code": "159213", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-074", "query": "汇添富中证机器人交易型开放式指数证券投资基金 2025 年年度报告", "expected_fund_code": "159213", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-075", "query": "159213_机器人ETF汇添富_汇添富中证机器人交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159213", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-076", "query": "航空航天ETF华夏", "expected_fund_code": "159227", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-077", "query": "华夏国证航天航空行业交易型开放式指数证券投资基金", "expected_fund_code": "159227", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-078", "query": "航空航天ETF华夏2025年年度报告", "expected_fund_code": "159227", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-079", "query": "华夏国证航天航空行业交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159227", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-080", "query": "159227_航空航天ETF华夏_华夏国证航天航空行业交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159227", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-081", "query": "通用航空ETF华夏", "expected_fund_code": "159230", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-082", "query": "华夏国证通用航空产业交易型开放式指数证券投资基金", "expected_fund_code": "159230", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-083", "query": "通用航空ETF华夏2025年年度报告", "expected_fund_code": "159230", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-084", "query": "华夏国证通用航空产业交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159230", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-085", "query": "159230_通用航空ETF华夏_华夏国证通用航空产业交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159230", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-086", "query": "港股通科技ETF万家", "expected_fund_code": "159251", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-087", "query": "万家国证港股通科技交易型开放式指数证券投资基金", "expected_fund_code": "159251", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-088", "query": "港股通科技ETF万家2025年年度报告", "expected_fund_code": "159251", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-089", "query": "万家国证港股通科技交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159251", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-090", "query": "159251_港股通科技ETF万家_万家国证港股通科技交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159251", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-091", "query": "创业板软件ETF华夏", "expected_fund_code": "159256", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-092", "query": "华夏创业板软件交易型开放式指数证券投资基金", "expected_fund_code": "159256", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-093", "query": "创业板软件ETF华夏2025年年度报告", "expected_fund_code": "159256", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-094", "query": "华夏创业板软件交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159256", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-095", "query": "159256_创业板软件ETF华夏_华夏创业板软件交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159256", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-096", "query": "机器人ETF南方", "expected_fund_code": "159258", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-097", "query": "南方中证机器人交易型开放式指数证券投资基金", "expected_fund_code": "159258", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-098", "query": "机器人ETF南方2025年年度报告", "expected_fund_code": "159258", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-099", "query": "南方中证机器人交易型开放式指数证券投资基金 2025 年年度报告", "expected_fund_code": "159258", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-100", "query": "159258_机器人ETF南方_南方中证机器人交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159258", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-101", "query": "港股通科技ETF广发", "expected_fund_code": "159262", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-102", "query": "广发恒生港股通科技主题交易型开放式指数证券投资基金", "expected_fund_code": "159262", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-103", "query": "港股通科技ETF广发2025年年度报告", "expected_fund_code": "159262", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-104", "query": "广发恒生港股通科技主题交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159262", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-105", "query": "159262_港股通科技ETF广发_广发恒生港股通科技主题交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159262", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-106", "query": "港股通科技ETF南方", "expected_fund_code": "159269", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-107", "query": "南方中证港股通科技交易型开放式指数证券投资基金", "expected_fund_code": "159269", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-108", "query": "港股通科技ETF南方2025年年度报告", "expected_fund_code": "159269", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-109", "query": "南方中证港股通科技交易型开放式指数证券投资基金 2025 年年度报告", "expected_fund_code": "159269", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-110", "query": "159269_港股通科技ETF南方_南方中证港股通科技交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159269", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-111", "query": "机器人ETF鹏华", "expected_fund_code": "159278", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-112", "query": "鹏华国证机器人产业交易型开放式指数证券投资基金", "expected_fund_code": "159278", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-113", "query": "机器人ETF鹏华2025年年度报告", "expected_fund_code": "159278", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-114", "query": "鹏华国证机器人产业交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159278", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-115", "query": "159278_机器人ETF鹏华_鹏华国证机器人产业交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159278", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-116", "query": "创业板50ETF大成", "expected_fund_code": "159298", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-117", "query": "大成创业板50交易型开放式指数证券投资基金", "expected_fund_code": "159298", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-118", "query": "创业板50ETF大成2025年年度报告", "expected_fund_code": "159298", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-119", "query": "大成创业板50交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159298", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-120", "query": "159298_创业板50ETF大成_大成创业板50交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159298", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-121", "query": "金融科技ETF易方达", "expected_fund_code": "159299", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-122", "query": "易方达中证金融科技主题交易型开放式指数证券投资基金", "expected_fund_code": "159299", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-123", "query": "金融科技ETF易方达2025年年度报告", "expected_fund_code": "159299", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-124", "query": "易方达中证金融科技主题交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159299", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-125", "query": "159299_金融科技ETF易方达_易方达中证金融科技主题交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159299", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-126", "query": "公用事业ETF华夏", "expected_fund_code": "159301", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-127", "query": "华夏中证全指公用事业交易型开放式指数证券投资基金", "expected_fund_code": "159301", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-128", "query": "公用事业ETF华夏2025年年度报告", "expected_fund_code": "159301", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-129", "query": "华夏中证全指公用事业交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159301", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-130", "query": "159301_公用事业ETF华夏_华夏中证全指公用事业交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159301", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-131", "query": "港股通汽车ETF华夏", "expected_fund_code": "159323", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-132", "query": "华夏中证港股通汽车产业主题交易型开放式指数证券投资基金", "expected_fund_code": "159323", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-133", "query": "港股通汽车ETF华夏2025年年度报告", "expected_fund_code": "159323", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-134", "query": "华夏中证港股通汽车产业主题交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159323", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-135", "query": "159323_港股通汽车ETF华夏_华夏中证港股通汽车产业主题交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159323", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-136", "query": "电网设备ETF华夏", "expected_fund_code": "159326", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-137", "query": "华夏中证电网设备主题交易型开放式指数证券投资基金", "expected_fund_code": "159326", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-138", "query": "电网设备ETF华夏2025年年度报告", "expected_fund_code": "159326", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-139", "query": "华夏中证电网设备主题交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159326", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-140", "query": "159326_电网设备ETF华夏_华夏中证电网设备主题交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159326", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-141", "query": "央企科创ETF融通", "expected_fund_code": "159335", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-142", "query": "融通中证诚通央企科技创新交易型开放式指数证券投资基金", "expected_fund_code": "159335", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-143", "query": "央企科创ETF融通2025年年度报告", "expected_fund_code": "159335", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-144", "query": "融通中证诚通央企科技创新交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159335", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-145", "query": "159335_央企科创ETF融通_融通中证诚通央企科技创新交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159335", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-146", "query": "中证500ETF东财", "expected_fund_code": "159337", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-147", "query": "西藏东财中证500交易型开放式指数证券投资基金", "expected_fund_code": "159337", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-148", "query": "中证500ETF东财2025年年度报告", "expected_fund_code": "159337", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-149", "query": "西藏东财中证 500 交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159337", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-150", "query": "159337_中证500ETF东财_西藏东财中证500交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159337", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-151", "query": "港股医疗ETF永赢", "expected_fund_code": "159366", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-152", "query": "永赢中证港股通医疗主题交易型开放式指数证券投资基金", "expected_fund_code": "159366", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-153", "query": "港股医疗ETF永赢2025年年度报告", "expected_fund_code": "159366", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-154", "query": "永赢中证港股通医疗主题交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159366", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-155", "query": "159366_港股医疗ETF永赢_永赢中证港股通医疗主题交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159366", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-156", "query": "创业板50ETF华夏", "expected_fund_code": "159367", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-157", "query": "华夏创业板50交易型开放式指数证券投资基金", "expected_fund_code": "159367", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-158", "query": "创业板50ETF华夏2025年年度报告", "expected_fund_code": "159367", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-159", "query": "华夏创业板 50 交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159367", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-160", "query": "159367_创业板50ETF华夏_华夏创业板50交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159367", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-161", "query": "创业板新能源ETF华夏", "expected_fund_code": "159368", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-162", "query": "华夏创业板新能源交易型开放式指数证券投资基金", "expected_fund_code": "159368", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-163", "query": "创业板新能源ETF华夏2025年年度报告", "expected_fund_code": "159368", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-164", "query": "华夏创业板新能源交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159368", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-165", "query": "159368_创业板新能源ETF华夏_华夏创业板新能源交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159368", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-166", "query": "创业板50ETF易方达", "expected_fund_code": "159369", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-167", "query": "易方达创业板50交易型开放式指数证券投资基金", "expected_fund_code": "159369", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-168", "query": "创业板50ETF易方达2025年年度报告", "expected_fund_code": "159369", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-169", "query": "易方达创业板 50 交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159369", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-170", "query": "159369_创业板50ETF易方达_易方达创业板50交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159369", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-171", "query": "创50ETF工银", "expected_fund_code": "159370", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-172", "query": "工银瑞信创业板50交易型开放式指数证券投资基金", "expected_fund_code": "159370", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-173", "query": "创50ETF工银2025年年度报告", "expected_fund_code": "159370", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-174", "query": "工银瑞信创业板50交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159370", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-175", "query": "159370_创50ETF工银_工银瑞信创业板50交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159370", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-176", "query": "创业板50ETF万家", "expected_fund_code": "159372", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-177", "query": "万家创业板50交易型开放式指数证券投资基金", "expected_fund_code": "159372", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-178", "query": "创业板50ETF万家2025年年度报告", "expected_fund_code": "159372", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-179", "query": "万家创业板50交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159372", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-180", "query": "159372_创业板50ETF万家_万家创业板50交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159372", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-181", "query": "创业板50ETF嘉实", "expected_fund_code": "159373", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-182", "query": "嘉实创业板50交易型开放式指数证券投资基金", "expected_fund_code": "159373", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-183", "query": "创业板50ETF嘉实2025年年度报告", "expected_fund_code": "159373", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-184", "query": "嘉实创业板50交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159373", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-185", "query": "159373_创业板50ETF嘉实_嘉实创业板50交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159373", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-186", "query": "创业板50ETF国泰", "expected_fund_code": "159375", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-187", "query": "国泰创业板50交易型开放式指数证券投资基金", "expected_fund_code": "159375", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-188", "query": "创业板50ETF国泰2025年年度报告", "expected_fund_code": "159375", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-189", "query": "国泰创业板 50 交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159375", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-190", "query": "159375_创业板50ETF国泰_国泰创业板50交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159375", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-191", "query": "创业板人工智能ETF华夏", "expected_fund_code": "159381", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-192", "query": "华夏创业板人工智能交易型开放式指数证券投资基金", "expected_fund_code": "159381", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-193", "query": "创业板人工智能ETF华夏2025年年度报告", "expected_fund_code": "159381", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-194", "query": "华夏创业板人工智能交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159381", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-195", "query": "159381_创业板人工智能ETF华夏_华夏创业板人工智能交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159381", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-196", "query": "创业板50ETF华泰柏瑞", "expected_fund_code": "159383", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-197", "query": "华泰柏瑞创业板50交易型开放式指数证券投资基金", "expected_fund_code": "159383", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-198", "query": "创业板50ETF华泰柏瑞2025年年度报告", "expected_fund_code": "159383", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-199", "query": "华泰柏瑞创业板50交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159383", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-200", "query": "159383_创业板50ETF华泰柏瑞_华泰柏瑞创业板50交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159383", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-201", "query": "中证A50ETF国联", "expected_fund_code": "159390", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-202", "query": "国联中证A50交易型开放式指数证券投资基金", "expected_fund_code": "159390", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-203", "query": "中证A50ETF国联2025年年度报告", "expected_fund_code": "159390", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-204", "query": "国联中证 A50 交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159390", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-205", "query": "159390_中证A50ETF国联_国联中证A50交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159390", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-206", "query": "科创债ETF景顺", "expected_fund_code": "159400", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-207", "query": "景顺长城深证AAA科技创新公司债交易型开放式指数证券投资基金", "expected_fund_code": "159400", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-208", "query": "科创债ETF景顺2025年年度报告", "expected_fund_code": "159400", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-209", "query": "景顺长城深证 AAA 科技创新公司债交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159400", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-210", "query": "159400_科创债ETF景顺_景顺长城深证AAA科技创新公司债交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159400", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-211", "query": "纳指ETF嘉实", "expected_fund_code": "159501", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-212", "query": "嘉实纳斯达克100交易型开放式指数证券投资基金（QDII）", "expected_fund_code": "159501", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-213", "query": "纳指ETF嘉实2025年年度报告", "expected_fund_code": "159501", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-214", "query": "嘉实纳斯达克 100 交易型开放式指数证券投资基金（QDII）2025 年年度报告", "expected_fund_code": "159501", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-215", "query": "159501_纳指ETF嘉实_嘉实纳斯达克100交易型开放式指数证券投资基金（QDII）2025年年度报告", "expected_fund_code": "159501", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-216", "query": "标普生物科技ETF嘉实", "expected_fund_code": "159502", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-217", "query": "嘉实标普生物科技精选行业交易型开放式指数证券投资基金（QDII）", "expected_fund_code": "159502", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-218", "query": "标普生物科技ETF嘉实2025年年度报告", "expected_fund_code": "159502", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-219", "query": "嘉实标普生物科技精选行业交易型开放式指数证券投资基金（QDII）2025 年年度报告", "expected_fund_code": "159502", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-220", "query": "159502_标普生物科技ETF嘉实_嘉实标普生物科技精选行业交易型开放式指数证券投资基金（QDII）2025年年度报告", "expected_fund_code": "159502", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-221", "query": "纳指科技ETF景顺", "expected_fund_code": "159509", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-222", "query": "景顺长城纳斯达克科技市值加权交易型开放式指数证券投资基金（QDII）", "expected_fund_code": "159509", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-223", "query": "纳指科技ETF景顺2025年年度报告", "expected_fund_code": "159509", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-224", "query": "景顺长城纳斯达克科技市值加权交易型开放式指数证券投资基金（QDII）2025 年年度报告", "expected_fund_code": "159509", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-225", "query": "159509_纳指科技ETF景顺_景顺长城纳斯达克科技市值加权交易型开放式指数证券投资基金（QDII）2025年年度报告", "expected_fund_code": "159509", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-226", "query": "沪深300价值ETF华夏", "expected_fund_code": "159510", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-227", "query": "华夏中证智选300价值稳健策略交易型开放式指数证券投资基金", "expected_fund_code": "159510", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-228", "query": "沪深300价值ETF华夏2025年年度报告", "expected_fund_code": "159510", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-229", "query": "华夏中证智选 300 价值稳健策略交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159510", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-230", "query": "159510_沪深300价值ETF华夏_华夏中证智选300价值稳健策略交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159510", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-231", "query": "纳斯达克100ETF大成", "expected_fund_code": "159513", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-232", "query": "大成纳斯达克100交易型开放式指数证券投资基金（QDII）", "expected_fund_code": "159513", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-233", "query": "纳斯达克100ETF大成2025年年度报告", "expected_fund_code": "159513", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-234", "query": "大成纳斯达克 100 交易型开放式指数证券投资基金（QDII）2025 年年度报告", "expected_fund_code": "159513", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-235", "query": "159513_纳斯达克100ETF大成_大成纳斯达克100交易型开放式指数证券投资基金（QDII）2025年年度报告", "expected_fund_code": "159513", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-236", "query": "港股国企ETF国泰", "expected_fund_code": "159519", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-237", "query": "国泰中证香港内地国有企业交易型开放式指数证券投资基金（QDII）", "expected_fund_code": "159519", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-238", "query": "港股国企ETF国泰2025年年度报告", "expected_fund_code": "159519", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-239", "query": "国泰中证香港内地国有企业交易型开放式指数证券投资基金（QDII）2025 年年度报告", "expected_fund_code": "159519", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-240", "query": "159519_港股国企ETF国泰_国泰中证香港内地国有企业交易型开放式指数证券投资基金（QDII）2025年年度报告", "expected_fund_code": "159519", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-241", "query": "沪深300成长ETF华夏", "expected_fund_code": "159523", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-242", "query": "华夏中证智选300成长创新策略交易型开放式指数证券投资基金", "expected_fund_code": "159523", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-243", "query": "沪深300成长ETF华夏2025年年度报告", "expected_fund_code": "159523", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-244", "query": "华夏中证智选 300 成长创新策略交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159523", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-245", "query": "159523_沪深300成长ETF华夏_华夏中证智选300成长创新策略交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159523", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-246", "query": "机器人ETF嘉实", "expected_fund_code": "159526", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-247", "query": "嘉实中证机器人交易型开放式指数证券投资基金", "expected_fund_code": "159526", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-248", "query": "机器人ETF嘉实2025年年度报告", "expected_fund_code": "159526", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-249", "query": "嘉实中证机器人交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159526", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-250", "query": "159526_机器人ETF嘉实_嘉实中证机器人交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159526", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-251", "query": "机器人ETF易方达", "expected_fund_code": "159530", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-252", "query": "易方达国证机器人产业交易型开放式指数证券投资基金", "expected_fund_code": "159530", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-253", "query": "机器人ETF易方达2025年年度报告", "expected_fund_code": "159530", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-254", "query": "易方达国证机器人产业交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159530", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-255", "query": "159530_机器人ETF易方达_易方达国证机器人产业交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159530", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-256", "query": "信创ETF国泰", "expected_fund_code": "159537", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-257", "query": "国泰国证信息技术创新主题交易型开放式指数证券投资基金", "expected_fund_code": "159537", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-258", "query": "信创ETF国泰2025年年度报告", "expected_fund_code": "159537", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-259", "query": "国泰国证信息技术创新主题交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159537", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-260", "query": "159537_信创ETF国泰_国泰国证信息技术创新主题交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159537", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-261", "query": "信创ETF广发", "expected_fund_code": "159539", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-262", "query": "广发国证信息技术创新主题交易型开放式指数证券投资基金", "expected_fund_code": "159539", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-263", "query": "信创ETF广发2025年年度报告", "expected_fund_code": "159539", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-264", "query": "广发国证信息技术创新主题交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159539", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-265", "query": "159539_信创ETF广发_广发国证信息技术创新主题交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159539", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-266", "query": "信创ETF易方达", "expected_fund_code": "159540", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-267", "query": "易方达国证信息技术创新主题交易型开放式指数证券投资基金", "expected_fund_code": "159540", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-268", "query": "信创ETF易方达2025年年度报告", "expected_fund_code": "159540", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-269", "query": "易方达国证信息技术创新主题交易型开放式指数证券投资2025 年年度报告", "expected_fund_code": "159540", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-270", "query": "159540_信创ETF易方达_易方达国证信息技术创新主题交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159540", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-271", "query": "红利低波ETF华夏", "expected_fund_code": "159547", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-272", "query": "华夏中证红利低波动交易型开放式指数证券投资基金", "expected_fund_code": "159547", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-273", "query": "红利低波ETF华夏2025年年度报告", "expected_fund_code": "159547", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-274", "query": "华夏中证红利低波动交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159547", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-275", "query": "159547_红利低波ETF华夏_华夏中证红利低波动交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159547", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-276", "query": "机器人ETF国泰", "expected_fund_code": "159551", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-277", "query": "国泰中证机器人交易型开放式指数证券投资基金", "expected_fund_code": "159551", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-278", "query": "机器人ETF国泰2025年年度报告", "expected_fund_code": "159551", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-279", "query": "国泰中证机器人交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159551", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-280", "query": "159551_机器人ETF国泰_国泰中证机器人交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159551", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-281", "query": "黄金股ETF华夏", "expected_fund_code": "159562", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-282", "query": "华夏中证沪深港黄金产业股票交易型开放式指数证券投资基金", "expected_fund_code": "159562", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-283", "query": "黄金股ETF华夏2025年年度报告", "expected_fund_code": "159562", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-284", "query": "华夏中证沪深港黄金产业股票交易型开放式指数证券投资2025 年年度报告", "expected_fund_code": "159562", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-285", "query": "159562_黄金股ETF华夏_华夏中证沪深港黄金产业股票交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159562", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-286", "query": "创业板综ETF华夏", "expected_fund_code": "159563", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-287", "query": "华夏创业板综合交易型开放式指数证券投资基金", "expected_fund_code": "159563", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-288", "query": "创业板综ETF华夏2025年年度报告", "expected_fund_code": "159563", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-289", "query": "华夏创业板综合交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159563", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-290", "query": "159563_创业板综ETF华夏_华夏创业板综合交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159563", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-291", "query": "创业板200ETF华夏", "expected_fund_code": "159573", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-292", "query": "华夏创业板中盘200交易型开放式指数证券投资基金", "expected_fund_code": "159573", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-293", "query": "创业板200ETF华夏2025年年度报告", "expected_fund_code": "159573", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-294", "query": "华夏创业板中盘200 交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159573", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-295", "query": "159573_创业板200ETF华夏_华夏创业板中盘200交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159573", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-296", "query": "美国50ETF汇添富", "expected_fund_code": "159577", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-297", "query": "汇添富MSCI美国50交易型开放式指数证券投资基金（QDII）", "expected_fund_code": "159577", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-298", "query": "美国50ETF汇添富2025年年度报告", "expected_fund_code": "159577", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-299", "query": "汇添富MSCI美国50交易型开放式指数证券投资基金（QDII）2025 年年度报告", "expected_fund_code": "159577", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-300", "query": "159577_美国50ETF汇添富_汇添富MSCI美国50交易型开放式指数证券投资基金（QDII）2025年年度报告", "expected_fund_code": "159577", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-301", "query": "深证主板50ETF南方", "expected_fund_code": "159578", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-302", "query": "南方深证主板50交易型开放式指数证券投资基金", "expected_fund_code": "159578", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-303", "query": "深证主板50ETF南方2025年年度报告", "expected_fund_code": "159578", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-304", "query": "南方深证主板 50 交易型开放式指数证券投资基金 2025 年年度报告", "expected_fund_code": "159578", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-305", "query": "159578_深证主板50ETF南方_南方深证主板50交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159578", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-306", "query": "A50ETF银华", "expected_fund_code": "159592", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-307", "query": "银华中证A50交易型开放式指数证券投资基金", "expected_fund_code": "159592", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-308", "query": "A50ETF银华2025年年度报告", "expected_fund_code": "159592", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-309", "query": "银华中证 A50 交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159592", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-310", "query": "159592_A50ETF银华_银华中证A50交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159592", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-311", "query": "中证A50ETF平安", "expected_fund_code": "159593", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-312", "query": "平安中证A50交易型开放式指数证券投资基金", "expected_fund_code": "159593", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-313", "query": "中证A50ETF平安2025年年度报告", "expected_fund_code": "159593", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-314", "query": "平安中证 A50 交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159593", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-315", "query": "159593_中证A50ETF平安_平安中证A50交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159593", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-316", "query": "中证A50ETF大成", "expected_fund_code": "159595", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-317", "query": "大成中证A50交易型开放式指数证券投资基金", "expected_fund_code": "159595", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-318", "query": "中证A50ETF大成2025年年度报告", "expected_fund_code": "159595", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-319", "query": "大成中证 A50 交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159595", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-320", "query": "159595_中证A50ETF大成_大成中证A50交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159595", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-321", "query": "A50ETF华宝", "expected_fund_code": "159596", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-322", "query": "华宝中证A50交易型开放式指数证券投资基金", "expected_fund_code": "159596", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-323", "query": "A50ETF华宝2025年年度报告", "expected_fund_code": "159596", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-324", "query": "华宝中证 A50 交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159596", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-325", "query": "159596_A50ETF华宝_华宝中证A50交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159596", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-326", "query": "科创债ETF嘉实", "expected_fund_code": "159600", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-327", "query": "嘉实中证AAA科技创新公司债交易型开放式指数证券投资基金", "expected_fund_code": "159600", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-328", "query": "科创债ETF嘉实2025年年度报告", "expected_fund_code": "159600", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-329", "query": "嘉实中证 AAA 科技创新公司债交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159600", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-330", "query": "159600_科创债ETF嘉实_嘉实中证AAA科技创新公司债交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159600", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-331", "query": "A50ETF华夏", "expected_fund_code": "159601", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-332", "query": "华夏MSCI中国A50互联互通交易型开放式指数证券投资基金", "expected_fund_code": "159601", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-333", "query": "A50ETF华夏2025年年度报告", "expected_fund_code": "159601", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-334", "query": "华夏MSCI中国A50互联互通交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159601", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-335", "query": "159601_A50ETF华夏_华夏MSCI中国A50互联互通交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159601", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-336", "query": "中国A50ETF南方", "expected_fund_code": "159602", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-337", "query": "南方MSCI中国A50互联互通交易型开放式指数证券投资基金", "expected_fund_code": "159602", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-338", "query": "中国A50ETF南方2025年年度报告", "expected_fund_code": "159602", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-339", "query": "南方MSCI中国A50互联互通交易型开放式指数证券投资基金 2025 年年度报告", "expected_fund_code": "159602", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-340", "query": "159602_中国A50ETF南方_南方MSCI中国A50互联互通交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159602", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-341", "query": "中证500成长ETF易方达", "expected_fund_code": "159606", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-342", "query": "易方达中证500质量成长交易型开放式指数证券投资基金", "expected_fund_code": "159606", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-343", "query": "中证500成长ETF易方达2025年年度报告", "expected_fund_code": "159606", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-344", "query": "易方达中证 500 质量成长交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159606", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-345", "query": "159606_中证500成长ETF易方达_易方达中证500质量成长交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159606", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-346", "query": "光伏ETF浦银", "expected_fund_code": "159609", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-347", "query": "浦银安盛中证光伏产业交易型开放式指数证券投资基金", "expected_fund_code": "159609", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-348", "query": "光伏ETF浦银2025年年度报告", "expected_fund_code": "159609", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-349", "query": "浦银安盛中证光伏产业交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159609", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-350", "query": "159609_光伏ETF浦银_浦银安盛中证光伏产业交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159609", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-351", "query": "恒生生物科技ETF南方", "expected_fund_code": "159615", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-352", "query": "南方恒生生物科技交易型开放式指数证券投资基金（QDII）", "expected_fund_code": "159615", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-353", "query": "恒生生物科技ETF南方2025年年度报告", "expected_fund_code": "159615", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-354", "query": "南方恒生生物科技交易型开放式指数证券投资基金（QDII）2025 年年度报告", "expected_fund_code": "159615", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-355", "query": "159615_恒生生物科技ETF南方_南方恒生生物科技交易型开放式指数证券投资基金（QDII）2025年年度报告", "expected_fund_code": "159615", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-356", "query": "中证500价值ETF华夏", "expected_fund_code": "159617", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-357", "query": "华夏中证智选500价值稳健策略交易型开放式指数证券投资基金", "expected_fund_code": "159617", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-358", "query": "中证500价值ETF华夏2025年年度报告", "expected_fund_code": "159617", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-359", "query": "华夏中证智选 500 价值稳健策略交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159617", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-360", "query": "159617_中证500价值ETF华夏_华夏中证智选500价值稳健策略交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159617", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-361", "query": "光伏ETF华安", "expected_fund_code": "159618", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-362", "query": "华安中证光伏产业交易型开放式指数证券投资基金", "expected_fund_code": "159618", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-363", "query": "光伏ETF华安2025年年度报告", "expected_fund_code": "159618", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-364", "query": "华安中证光伏产业交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159618", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-365", "query": "159618_光伏ETF华安_华安中证光伏产业交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159618", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-366", "query": "中证500成长ETF华夏", "expected_fund_code": "159620", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-367", "query": "华夏中证智选500成长创新策略交易型开放式指数证券投资基金", "expected_fund_code": "159620", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-368", "query": "中证500成长ETF华夏2025年年度报告", "expected_fund_code": "159620", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-369", "query": "华夏中证智选 500 成长创新策略交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159620", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-370", "query": "159620_中证500成长ETF华夏_华夏中证智选500成长创新策略交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159620", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-371", "query": "A100ETF华夏", "expected_fund_code": "159627", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-372", "query": "华夏中证A100交易型开放式指数证券投资基金", "expected_fund_code": "159627", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-373", "query": "A100ETF华夏2025年年度报告", "expected_fund_code": "159627", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-374", "query": "华夏中证 A100 交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159627", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-375", "query": "159627_A100ETF华夏_华夏中证A100交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159627", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-376", "query": "纳斯达克ETF华安", "expected_fund_code": "159632", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-377", "query": "华安纳斯达克100交易型开放式指数证券投资基金（QDII）", "expected_fund_code": "159632", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-378", "query": "纳斯达克ETF华安2025年年度报告", "expected_fund_code": "159632", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-379", "query": "华安纳斯达克 100 交易型开放式指数证券投资基金（QDII）2025 年年度报告", "expected_fund_code": "159632", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-380", "query": "159632_纳斯达克ETF华安_华安纳斯达克100交易型开放式指数证券投资基金（QDII）2025年年度报告", "expected_fund_code": "159632", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-381", "query": "基建ETF华夏", "expected_fund_code": "159635", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-382", "query": "华夏中证基建交易型开放式指数证券投资基金", "expected_fund_code": "159635", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-383", "query": "基建ETF华夏2025年年度报告", "expected_fund_code": "159635", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-384", "query": "华夏中证基建交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159635", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-385", "query": "159635_基建ETF华夏_华夏中证基建交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159635", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-386", "query": "港股通科技30ETF工银", "expected_fund_code": "159636", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-387", "query": "工银瑞信国证港股通科技交易型开放式指数证券投资基金", "expected_fund_code": "159636", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-388", "query": "港股通科技30ETF工银2025年年度报告", "expected_fund_code": "159636", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-389", "query": "工银瑞信国证港股通科技交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159636", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-390", "query": "159636_港股通科技30ETF工银_工银瑞信国证港股通科技交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159636", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-391", "query": "高端装备ETF嘉实", "expected_fund_code": "159638", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-392", "query": "嘉实中证高端装备细分50交易型开放式指数证券投资基金", "expected_fund_code": "159638", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-393", "query": "高端装备ETF嘉实2025年年度报告", "expected_fund_code": "159638", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-394", "query": "嘉实中证高端装备细分50交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159638", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-395", "query": "159638_高端装备ETF嘉实_嘉实中证高端装备细分50交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159638", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-396", "query": "疫苗ETF国泰", "expected_fund_code": "159643", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-397", "query": "国泰国证疫苗与生物科技交易型开放式指数证券投资基金", "expected_fund_code": "159643", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-398", "query": "疫苗ETF国泰2025年年度报告", "expected_fund_code": "159643", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-399", "query": "国泰国证疫苗与生物科技交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159643", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-400", "query": "159643_疫苗ETF国泰_国泰国证疫苗与生物科技交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159643", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-401", "query": "标普500ETF华夏", "expected_fund_code": "159655", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-402", "query": "华夏标普500交易型开放式指数证券投资基金（QDII）", "expected_fund_code": "159655", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-403", "query": "标普500ETF华夏2025年年度报告", "expected_fund_code": "159655", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-404", "query": "华夏标普 500 交易型开放式指数证券投资基金（QDII）2025 年年度报告", "expected_fund_code": "159655", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-405", "query": "159655_标普500ETF华夏_华夏标普500交易型开放式指数证券投资基金（QDII）2025年年度报告", "expected_fund_code": "159655", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-406", "query": "疫苗ETF鹏华", "expected_fund_code": "159657", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-407", "query": "鹏华国证疫苗与生物科技交易型开放式指数证券投资基金", "expected_fund_code": "159657", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-408", "query": "疫苗ETF鹏华2025年年度报告", "expected_fund_code": "159657", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-409", "query": "鹏华国证疫苗与生物科技交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159657", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-410", "query": "159657_疫苗ETF鹏华_鹏华国证疫苗与生物科技交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159657", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-411", "query": "纳斯达克100ETF招商", "expected_fund_code": "159659", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-412", "query": "招商纳斯达克100交易型开放式指数证券投资基金（QDII）", "expected_fund_code": "159659", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-413", "query": "纳斯达克100ETF招商2025年年度报告", "expected_fund_code": "159659", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-414", "query": "招商纳斯达克 100 交易型开放式指数证券投资基金（QDII）2025 年年度报告", "expected_fund_code": "159659", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-415", "query": "159659_纳斯达克100ETF招商_招商纳斯达克100交易型开放式指数证券投资基金（QDII）2025年年度报告", "expected_fund_code": "159659", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-416", "query": "纳指ETF汇添富", "expected_fund_code": "159660", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-417", "query": "汇添富纳斯达克100交易型开放式指数证券投资基金（QDII）", "expected_fund_code": "159660", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-418", "query": "纳指ETF汇添富2025年年度报告", "expected_fund_code": "159660", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-419", "query": "汇添富纳斯达克 100 交易型开放式指数证券投资基金（QDII）2025 年年度报告", "expected_fund_code": "159660", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-420", "query": "159660_纳指ETF汇添富_汇添富纳斯达克100交易型开放式指数证券投资基金（QDII）2025年年度报告", "expected_fund_code": "159660", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-421", "query": "机床ETF华夏", "expected_fund_code": "159663", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-422", "query": "华夏中证机床交易型开放式指数证券投资基金", "expected_fund_code": "159663", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-423", "query": "机床ETF华夏2025年年度报告", "expected_fund_code": "159663", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-424", "query": "华夏中证机床交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159663", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-425", "query": "159663_机床ETF华夏_华夏中证机床交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159663", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-426", "query": "交通运输ETF华夏", "expected_fund_code": "159666", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-427", "query": "华夏中证全指运输交易型开放式指数证券投资基金", "expected_fund_code": "159666", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-428", "query": "交通运输ETF华夏2025年年度报告", "expected_fund_code": "159666", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-429", "query": "华夏中证全指运输交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159666", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-430", "query": "159666_交通运输ETF华夏_华夏中证全指运输交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159666", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-431", "query": "消费50ETF国联安", "expected_fund_code": "159670", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-432", "query": "国联安中证消费50交易型开放式指数证券投资基金", "expected_fund_code": "159670", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-433", "query": "消费50ETF国联安2025年年度报告", "expected_fund_code": "159670", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-434", "query": "国联安中证消费50交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159670", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-435", "query": "159670_消费50ETF国联安_国联安中证消费50交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159670", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-436", "query": "500增强ETF博时", "expected_fund_code": "159678", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-437", "query": "博时中证500增强策略交易型开放式指数证券投资基金", "expected_fund_code": "159678", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-438", "query": "500增强ETF博时2025年年度报告", "expected_fund_code": "159678", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-439", "query": "博时中证500 增强策略交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159678", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-440", "query": "159678_500增强ETF博时_博时中证500增强策略交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159678", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-441", "query": "创50ETF", "expected_fund_code": "159681", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-442", "query": "鹏华创业板50交易型开放式指数证券投资基金", "expected_fund_code": "159681", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-443", "query": "创50ETF2025年年度报告", "expected_fund_code": "159681", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-444", "query": "鹏华创业板50交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159681", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-445", "query": "159681_创50ETF_鹏华创业板50交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159681", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-446", "query": "恒生互联网ETF华安", "expected_fund_code": "159688", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-447", "query": "华安恒生互联网科技业交易型开放式指数证券投资基金（QDII）", "expected_fund_code": "159688", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-448", "query": "恒生互联网ETF华安2025年年度报告", "expected_fund_code": "159688", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-449", "query": "华安恒生互联网科技业交易型开放式指数证券投资基金（QDII）2025 年年度报告", "expected_fund_code": "159688", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-450", "query": "159688_恒生互联网ETF华安_华安恒生互联网科技业交易型开放式指数证券投资基金（QDII）2025年年度报告", "expected_fund_code": "159688", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-451", "query": "纳指ETF易方达", "expected_fund_code": "159696", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-452", "query": "易方达纳斯达克100交易型开放式指数证券投资基金（QDII）", "expected_fund_code": "159696", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-453", "query": "纳指ETF易方达2025年年度报告", "expected_fund_code": "159696", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-454", "query": "易方达纳斯达克 100 交易型开放式指数证券投资基金", "expected_fund_code": "159696", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-455", "query": "159696_纳指ETF易方达_易方达纳斯达克100交易型开放式指数证券投资基金（QDII）2025年年度报告", "expected_fund_code": "159696", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-456", "query": "科创债ETF南方", "expected_fund_code": "159700", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-457", "query": "南方中证AAA科技创新公司债交易型开放式指数证券投资基金", "expected_fund_code": "159700", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-458", "query": "科创债ETF南方2025年年度报告", "expected_fund_code": "159700", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-459", "query": "南方中证 AAA 科技创新公司债交易型开放式指数证券投资基金 2025 年年度报告", "expected_fund_code": "159700", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-460", "query": "159700_科创债ETF南方_南方中证AAA科技创新公司债交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159700", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-461", "query": "物联网ETF工银", "expected_fund_code": "159709", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-462", "query": "工银瑞信深证物联网50交易型开放式指数证券投资基金", "expected_fund_code": "159709", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-463", "query": "物联网ETF工银2025年年度报告", "expected_fund_code": "159709", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-464", "query": "工银瑞信深证物联网50交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159709", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-465", "query": "159709_物联网ETF工银_工银瑞信深证物联网50交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159709", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-466", "query": "港股通50ETF华夏", "expected_fund_code": "159711", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-467", "query": "华夏中证港股通50交易型开放式指数证券投资基金", "expected_fund_code": "159711", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-468", "query": "港股通50ETF华夏2025年年度报告", "expected_fund_code": "159711", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-469", "query": "华夏中证港股通 50 交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159711", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-470", "query": "159711_港股通50ETF华夏_华夏中证港股通50交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159711", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-471", "query": "港股通50ETF国泰", "expected_fund_code": "159712", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-472", "query": "国泰中证港股通50交易型开放式指数证券投资基金", "expected_fund_code": "159712", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-473", "query": "港股通50ETF国泰2025年年度报告", "expected_fund_code": "159712", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-474", "query": "国泰中证港股通50 交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159712", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-475", "query": "159712_港股通50ETF国泰_国泰中证港股通50交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159712", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-476", "query": "科技龙头ETF汇添富", "expected_fund_code": "159723", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-477", "query": "汇添富中证沪港深科技龙头交易型开放式指数证券投资基金", "expected_fund_code": "159723", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-478", "query": "科技龙头ETF汇添富2025年年度报告", "expected_fund_code": "159723", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-479", "query": "汇添富中证沪港深科技龙头交易型开放式指数证券投资基金 2025 年年度报告", "expected_fund_code": "159723", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-480", "query": "159723_科技龙头ETF汇添富_汇添富中证沪港深科技龙头交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159723", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-481", "query": "港股通高股息ETF华夏", "expected_fund_code": "159726", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-482", "query": "华夏恒生中国内地企业高股息率交易型开放式指数证券投资基金", "expected_fund_code": "159726", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-483", "query": "港股通高股息ETF华夏2025年年度报告", "expected_fund_code": "159726", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-484", "query": "华夏恒生中国内地企业高股息率交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159726", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-485", "query": "159726_港股通高股息ETF华夏_华夏恒生中国内地企业高股息率交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159726", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-486", "query": "石化ETF华夏", "expected_fund_code": "159731", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-487", "query": "华夏中证石化产业交易型开放式指数证券投资基金", "expected_fund_code": "159731", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-488", "query": "石化ETF华夏2025年年度报告", "expected_fund_code": "159731", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-489", "query": "华夏中证石化产业交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159731", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-490", "query": "159731_石化ETF华夏_华夏中证石化产业交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159731", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-491", "query": "消费电子ETF华夏", "expected_fund_code": "159732", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-492", "query": "华夏国证消费电子主题交易型开放式指数证券投资基金", "expected_fund_code": "159732", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-493", "query": "消费电子ETF华夏2025年年度报告", "expected_fund_code": "159732", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-494", "query": "华夏国证消费电子主题交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159732", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-495", "query": "159732_消费电子ETF华夏_华夏国证消费电子主题交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159732", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-496", "query": "食品饮料ETF天弘", "expected_fund_code": "159736", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-497", "query": "天弘中证食品饮料交易型开放式指数证券投资基金", "expected_fund_code": "159736", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-498", "query": "食品饮料ETF天弘2025年年度报告", "expected_fund_code": "159736", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-499", "query": "天弘中证食品饮料交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159736", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-500", "query": "159736_食品饮料ETF天弘_天弘中证食品饮料交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159736", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-501", "query": "恒生科技ETF大成", "expected_fund_code": "159740", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-502", "query": "大成恒生科技交易型开放式指数证券投资基金（QDII）", "expected_fund_code": "159740", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-503", "query": "恒生科技ETF大成2025年年度报告", "expected_fund_code": "159740", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-504", "query": "大成恒生科技交易型开放式指数证券投资基金（QDII）2025 年年度报告", "expected_fund_code": "159740", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-505", "query": "159740_恒生科技ETF大成_大成恒生科技交易型开放式指数证券投资基金（QDII）2025年年度报告", "expected_fund_code": "159740", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-506", "query": "恒生科技ETF嘉实", "expected_fund_code": "159741", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-507", "query": "嘉实恒生科技交易型开放式指数证券投资基金（QDII）", "expected_fund_code": "159741", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-508", "query": "恒生科技ETF嘉实2025年年度报告", "expected_fund_code": "159741", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-509", "query": "嘉实恒生科技交易型开放式指数证券投资基金（QDII）2025 年年度报告", "expected_fund_code": "159741", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-510", "query": "159741_恒生科技ETF嘉实_嘉实恒生科技交易型开放式指数证券投资基金（QDII）2025年年度报告", "expected_fund_code": "159741", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-511", "query": "恒生科技ETF博时", "expected_fund_code": "159742", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-512", "query": "博时恒生科技交易型开放式指数证券投资基金(QDII)", "expected_fund_code": "159742", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-513", "query": "恒生科技ETF博时2025年年度报告", "expected_fund_code": "159742", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-514", "query": "博时恒生科技交易型开放式指数证券投资基金(QDII)2025 年年度报告", "expected_fund_code": "159742", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-515", "query": "159742_恒生科技ETF博时_博时恒生科技交易型开放式指数证券投资基金(QDII)2025年年度报告", "expected_fund_code": "159742", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-516", "query": "香港科技ETF南方", "expected_fund_code": "159747", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-517", "query": "南方中证香港科技交易型开放式指数证券投资基金(QDII)", "expected_fund_code": "159747", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-518", "query": "香港科技ETF南方2025年年度报告", "expected_fund_code": "159747", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-519", "query": "南方中证香港科技交易型开放式指数证券投资基金(QDII)2025 年年度报告", "expected_fund_code": "159747", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-520", "query": "159747_香港科技ETF南方_南方中证香港科技交易型开放式指数证券投资基金(QDII)2025年年度报告", "expected_fund_code": "159747", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-521", "query": "港股科技50ETF招商", "expected_fund_code": "159750", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-522", "query": "招商中证香港科技交易型开放式指数证券投资基金（QDII）", "expected_fund_code": "159750", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-523", "query": "港股科技50ETF招商2025年年度报告", "expected_fund_code": "159750", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-524", "query": "招商中证香港科技交易型开放式指数证券投资基金（QDII）2025 年年度报告", "expected_fund_code": "159750", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-525", "query": "159750_港股科技50ETF招商_招商中证香港科技交易型开放式指数证券投资基金（QDII）2025年年度报告", "expected_fund_code": "159750", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-526", "query": "港股通科技ETF鹏华", "expected_fund_code": "159751", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-527", "query": "鹏华中证港股通科技交易型开放式指数证券投资基金", "expected_fund_code": "159751", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-528", "query": "港股通科技ETF鹏华2025年年度报告", "expected_fund_code": "159751", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-529", "query": "鹏华中证港股通科技交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159751", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-530", "query": "159751_港股通科技ETF鹏华_鹏华中证港股通科技交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159751", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-531", "query": "红利质量ETF华夏", "expected_fund_code": "159758", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-532", "query": "华夏中证红利质量交易型开放式指数证券投资基金", "expected_fund_code": "159758", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-533", "query": "红利质量ETF华夏2025年年度报告", "expected_fund_code": "159758", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-534", "query": "华夏中证红利质量交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159758", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-535", "query": "159758_红利质量ETF华夏_华夏中证红利质量交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159758", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-536", "query": "机器人ETF天弘", "expected_fund_code": "159770", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-537", "query": "天弘中证机器人交易型开放式指数证券投资基金", "expected_fund_code": "159770", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-538", "query": "机器人ETF天弘2025年年度报告", "expected_fund_code": "159770", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-539", "query": "天弘中证机器人交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159770", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-540", "query": "159770_机器人ETF天弘_天弘中证机器人交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159770", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-541", "query": "创业板科技ETF华泰柏瑞", "expected_fund_code": "159773", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-542", "query": "华泰柏瑞创业板科技交易型开放式指数证券投资基金", "expected_fund_code": "159773", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-543", "query": "创业板科技ETF华泰柏瑞2025年年度报告", "expected_fund_code": "159773", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-544", "query": "华泰柏瑞创业板科技交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159773", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-545", "query": "159773_创业板科技ETF华泰柏瑞_华泰柏瑞创业板科技交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159773", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-546", "query": "创科技ETF国联安", "expected_fund_code": "159777", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-547", "query": "国联安创业板科技交易型开放式指数证券投资基金", "expected_fund_code": "159777", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-548", "query": "创科技ETF国联安2025年年度报告", "expected_fund_code": "159777", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-549", "query": "国联安创业板科技交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159777", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-550", "query": "159777_创科技ETF国联安_国联安创业板科技交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159777", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-551", "query": "科创创业50ETF南方", "expected_fund_code": "159780", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-552", "query": "南方中证科创创业50交易型开放式指数证券投资基金", "expected_fund_code": "159780", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-553", "query": "科创创业50ETF南方2025年年度报告", "expected_fund_code": "159780", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-554", "query": "南方中证科创创业 50 交易型开放式指数证券投资基金 2025 年年度报告", "expected_fund_code": "159780", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-555", "query": "159780_科创创业50ETF南方_南方中证科创创业50交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159780", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-556", "query": "双创50ETF银华", "expected_fund_code": "159782", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-557", "query": "银华中证科创创业50交易型开放式指数证券投资基金", "expected_fund_code": "159782", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-558", "query": "双创50ETF银华2025年年度报告", "expected_fund_code": "159782", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-559", "query": "银华中证科创创业50交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159782", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-560", "query": "159782_双创50ETF银华_银华中证科创创业50交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159782", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-561", "query": "科创创业50ETF华夏", "expected_fund_code": "159783", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-562", "query": "华夏中证科创创业50交易型开放式指数证券投资基金", "expected_fund_code": "159783", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-563", "query": "科创创业50ETF华夏2025年年度报告", "expected_fund_code": "159783", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-564", "query": "华夏中证科创创业 50 交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159783", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-565", "query": "159783_科创创业50ETF华夏_华夏中证科创创业50交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159783", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-566", "query": "碳中和ETF华夏", "expected_fund_code": "159790", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-567", "query": "华夏中证内地低碳经济主题交易型开放式指数证券投资基金", "expected_fund_code": "159790", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-568", "query": "碳中和ETF华夏2025年年度报告", "expected_fund_code": "159790", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-569", "query": "华夏中证内地低碳经济主题交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159790", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-570", "query": "159790_碳中和ETF华夏_华夏中证内地低碳经济主题交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159790", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-571", "query": "300ESGETF华夏", "expected_fund_code": "159791", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-572", "query": "华夏沪深300ESG基准交易型开放式指数证券投资基金", "expected_fund_code": "159791", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-573", "query": "300ESGETF华夏2025年年度报告", "expected_fund_code": "159791", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-574", "query": "华夏沪深 300ESG基准交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159791", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-575", "query": "159791_300ESGETF华夏_华夏沪深300ESG基准交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159791", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-576", "query": "电池ETF汇添富", "expected_fund_code": "159796", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-577", "query": "汇添富中证电池主题交易型开放式指数证券投资基金", "expected_fund_code": "159796", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-578", "query": "电池ETF汇添富2025年年度报告", "expected_fund_code": "159796", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-579", "query": "汇添富中证电池主题交易型开放式指数证券投资基金 2025 年年度报告", "expected_fund_code": "159796", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-580", "query": "159796_电池ETF汇添富_汇添富中证电池主题交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159796", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-581", "query": "医疗器械ETF汇添富", "expected_fund_code": "159797", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-582", "query": "汇添富中证全指医疗器械交易型开放式指数证券投资基金", "expected_fund_code": "159797", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-583", "query": "医疗器械ETF汇添富2025年年度报告", "expected_fund_code": "159797", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-584", "query": "汇添富中证全指医疗器械交易型开放式指数证券投资基金 2025 年年度报告", "expected_fund_code": "159797", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-585", "query": "159797_医疗器械ETF汇添富_汇添富中证全指医疗器械交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159797", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-586", "query": "科技ETF易方达", "expected_fund_code": "159807", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-587", "query": "易方达中证科技50交易型开放式指数证券投资基金", "expected_fund_code": "159807", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-588", "query": "科技ETF易方达2025年年度报告", "expected_fund_code": "159807", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-589", "query": "易方达中证科技 50 交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159807", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-590", "query": "159807_科技ETF易方达_易方达中证科技50交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159807", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-591", "query": "5GETF博时", "expected_fund_code": "159811", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-592", "query": "博时中证5G产业50交易型开放式指数证券投资基金", "expected_fund_code": "159811", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-593", "query": "5GETF博时2025年年度报告", "expected_fund_code": "159811", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-594", "query": "博时中证5G 产业50 交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159811", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-595", "query": "159811_5GETF博时_博时中证5G产业50交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159811", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-596", "query": "中证500ETF天弘", "expected_fund_code": "159820", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-597", "query": "天弘中证500交易型开放式指数证券投资基金", "expected_fund_code": "159820", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-598", "query": "中证500ETF天弘2025年年度报告", "expected_fund_code": "159820", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-599", "query": "天弘中证 500 交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159820", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-600", "query": "159820_中证500ETF天弘_天弘中证500交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159820", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-601", "query": "农业ETF银华", "expected_fund_code": "159827", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-602", "query": "银华中证农业主题交易型开放式指数证券投资基金", "expected_fund_code": "159827", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-603", "query": "农业ETF银华2025年年度报告", "expected_fund_code": "159827", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-604", "query": "银华中证农业主题交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159827", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-605", "query": "159827_农业ETF银华_银华中证农业主题交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159827", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-606", "query": "生物科技ETF易方达", "expected_fund_code": "159837", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-607", "query": "易方达中证生物科技主题交易型开放式指数证券投资基金", "expected_fund_code": "159837", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-608", "query": "生物科技ETF易方达2025年年度报告", "expected_fund_code": "159837", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-609", "query": "易方达中证生物科技主题交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159837", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-610", "query": "159837_生物科技ETF易方达_易方达中证生物科技主题交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159837", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-611", "query": "医药50ETF博时", "expected_fund_code": "159838", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-612", "query": "博时中证医药50交易型开放式指数证券投资基金", "expected_fund_code": "159838", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-613", "query": "医药50ETF博时2025年年度报告", "expected_fund_code": "159838", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-614", "query": "博时中证医药50交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159838", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-615", "query": "159838_医药50ETF博时_博时中证医药50交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159838", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-616", "query": "食品饮料ETF招商", "expected_fund_code": "159843", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-617", "query": "招商国证食品饮料行业交易型开放式指数证券投资基金", "expected_fund_code": "159843", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-618", "query": "食品饮料ETF招商2025年年度报告", "expected_fund_code": "159843", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-619", "query": "招商国证食品饮料行业交易型开放式指数证券投资基金 2025 年年度报告", "expected_fund_code": "159843", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-620", "query": "159843_食品饮料ETF招商_招商国证食品饮料行业交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159843", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-621", "query": "中证1000ETF华夏", "expected_fund_code": "159845", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-622", "query": "华夏中证1000交易型开放式指数证券投资基金", "expected_fund_code": "159845", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-623", "query": "中证1000ETF华夏2025年年度报告", "expected_fund_code": "159845", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-624", "query": "华夏中证1000 交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159845", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-625", "query": "159845_中证1000ETF华夏_华夏中证1000交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159845", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-626", "query": "生物科技ETF招商", "expected_fund_code": "159849", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-627", "query": "招商中证生物科技主题交易型开放式指数证券投资基金", "expected_fund_code": "159849", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-628", "query": "生物科技ETF招商2025年年度报告", "expected_fund_code": "159849", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-629", "query": "招商中证生物科技主题交易型开放式指数证券投资基金 2025 年年度报告", "expected_fund_code": "159849", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-630", "query": "159849_生物科技ETF招商_招商中证生物科技主题交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159849", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-631", "query": "恒生国企ETF华夏", "expected_fund_code": "159850", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-632", "query": "华夏恒生中国企业交易型开放式指数证券投资基金（QDII）", "expected_fund_code": "159850", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-633", "query": "恒生国企ETF华夏2025年年度报告", "expected_fund_code": "159850", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-634", "query": "华夏恒生中国企业交易型开放式指数证券投资基金（QDII）2025 年年度报告", "expected_fund_code": "159850", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-635", "query": "159850_恒生国企ETF华夏_华夏恒生中国企业交易型开放式指数证券投资基金（QDII）2025年年度报告", "expected_fund_code": "159850", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-636", "query": "金融科技ETF华宝", "expected_fund_code": "159851", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-637", "query": "华宝中证金融科技主题交易型开放式指数证券投资基金", "expected_fund_code": "159851", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-638", "query": "金融科技ETF华宝2025年年度报告", "expected_fund_code": "159851", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-639", "query": "华宝中证金融科技主题交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159851", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-640", "query": "159851_金融科技ETF华宝_华宝中证金融科技主题交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159851", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-641", "query": "光伏ETF天弘", "expected_fund_code": "159857", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-642", "query": "天弘中证光伏产业交易型开放式指数证券投资基金", "expected_fund_code": "159857", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-643", "query": "光伏ETF天弘2025年年度报告", "expected_fund_code": "159857", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-644", "query": "天弘中证光伏产业交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159857", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-645", "query": "159857_光伏ETF天弘_天弘中证光伏产业交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159857", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-646", "query": "碳中和50ETF国泰", "expected_fund_code": "159861", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-647", "query": "国泰中证环保产业50交易型开放式指数证券投资基金", "expected_fund_code": "159861", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-648", "query": "碳中和50ETF国泰2025年年度报告", "expected_fund_code": "159861", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-649", "query": "国泰中证环保产业 50 交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159861", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-650", "query": "159861_碳中和50ETF国泰_国泰中证环保产业50交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159861", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-651", "query": "食品饮料ETF银华", "expected_fund_code": "159862", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-652", "query": "银华中证细分食品饮料产业主题交易型开放式指数证券投资基金", "expected_fund_code": "159862", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-653", "query": "食品饮料ETF银华2025年年度报告", "expected_fund_code": "159862", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-654", "query": "银华中证细分食品饮料产业主题交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159862", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-655", "query": "159862_食品饮料ETF银华_银华中证细分食品饮料产业主题交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159862", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-656", "query": "光伏ETF鹏华", "expected_fund_code": "159863", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-657", "query": "鹏华中证光伏产业交易型开放式指数证券投资基金", "expected_fund_code": "159863", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-658", "query": "光伏ETF鹏华2025年年度报告", "expected_fund_code": "159863", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-659", "query": "鹏华中证光伏产业交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159863", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-660", "query": "159863_光伏ETF鹏华_鹏华中证光伏产业交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159863", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-661", "query": "光伏ETF国泰", "expected_fund_code": "159864", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-662", "query": "国泰中证光伏产业交易型开放式指数证券投资基金", "expected_fund_code": "159864", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-663", "query": "光伏ETF国泰2025年年度报告", "expected_fund_code": "159864", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-664", "query": "国泰中证光伏产业交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159864", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-665", "query": "159864_光伏ETF国泰_国泰中证光伏产业交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159864", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-666", "query": "日经ETF工银", "expected_fund_code": "159866", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-667", "query": "工银瑞信大和日经225交易型开放式指数证券投资基金（QDII）", "expected_fund_code": "159866", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-668", "query": "日经ETF工银2025年年度报告", "expected_fund_code": "159866", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-669", "query": "工银瑞信大和日经 225 交易型开放式指数证券投资基金（QDII）2025 年年度报告", "expected_fund_code": "159866", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-670", "query": "159866_日经ETF工银_工银瑞信大和日经225交易型开放式指数证券投资基金（QDII）2025年年度报告", "expected_fund_code": "159866", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-671", "query": "游戏ETF华夏", "expected_fund_code": "159869", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-672", "query": "华夏中证动漫游戏交易型开放式指数证券投资基金", "expected_fund_code": "159869", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-673", "query": "游戏ETF华夏2025年年度报告", "expected_fund_code": "159869", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-674", "query": "华夏中证动漫游戏交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159869", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-675", "query": "159869_游戏ETF华夏_华夏中证动漫游戏交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159869", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-676", "query": "医疗器械ETF永赢", "expected_fund_code": "159883", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-677", "query": "永赢中证全指医疗器械交易型开放式指数证券投资基金", "expected_fund_code": "159883", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-678", "query": "医疗器械ETF永赢2025年年度报告", "expected_fund_code": "159883", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-679", "query": "永赢中证全指医疗器械交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159883", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-680", "query": "159883_医疗器械ETF永赢_永赢中证全指医疗器械交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159883", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-681", "query": "智能汽车ETF华夏", "expected_fund_code": "159888", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-682", "query": "华夏中证智能汽车主题交易型开放式指数证券投资基金", "expected_fund_code": "159888", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-683", "query": "智能汽车ETF华夏2025年年度报告", "expected_fund_code": "159888", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-684", "query": "华夏中证智能汽车主题交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159888", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-685", "query": "159888_智能汽车ETF华夏_华夏中证智能汽车主题交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159888", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-686", "query": "恒生医药ETF华夏", "expected_fund_code": "159892", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-687", "query": "华夏恒生生物科技交易型开放式指数证券投资基金（QDII）", "expected_fund_code": "159892", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-688", "query": "恒生医药ETF华夏2025年年度报告", "expected_fund_code": "159892", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-689", "query": "华夏恒生生物科技交易型开放式指数证券投资基金（QDII）2025 年年度报告", "expected_fund_code": "159892", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-690", "query": "159892_恒生医药ETF华夏_华夏恒生生物科技交易型开放式指数证券投资基金（QDII）2025年年度报告", "expected_fund_code": "159892", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-691", "query": "医疗器械ETF招商", "expected_fund_code": "159898", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-692", "query": "招商中证全指医疗器械交易型开放式指数证券投资基金", "expected_fund_code": "159898", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-693", "query": "医疗器械ETF招商2025年年度报告", "expected_fund_code": "159898", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-694", "query": "招商中证全指医疗器械交易型开放式指数证券投资基金 2025 年年度报告", "expected_fund_code": "159898", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-695", "query": "159898_医疗器械ETF招商_招商中证全指医疗器械交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159898", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-696", "query": "中小100ETF华夏", "expected_fund_code": "159902", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-697", "query": "中小企业100交易型开放式指数基金", "expected_fund_code": "159902", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-698", "query": "中小100ETF华夏2025年年度报告", "expected_fund_code": "159902", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-699", "query": "中小企业 100 交易型开放式指数基金2025 年年度报告", "expected_fund_code": "159902", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-700", "query": "159902_中小100ETF华夏_中小企业100交易型开放式指数基金2025年年度报告", "expected_fund_code": "159902", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-701", "query": "TMT50ETF招商", "expected_fund_code": "159909", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-702", "query": "深证电子信息传媒产业(TMT)50交易型开放式指数证券投资基金", "expected_fund_code": "159909", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-703", "query": "TMT50ETF招商2025年年度报告", "expected_fund_code": "159909", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-704", "query": "深证电子信息传媒产业(TMT)50交易型开放式指数证券投资基金 2025 年年度报告", "expected_fund_code": "159909", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-705", "query": "159909_TMT50ETF招商_深证电子信息传媒产业(TMT)50交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159909", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-706", "query": "恒生ETF华夏", "expected_fund_code": "159920", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-707", "query": "恒生交易型开放式指数证券投资基金", "expected_fund_code": "159920", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-708", "query": "恒生ETF华夏2025年年度报告", "expected_fund_code": "159920", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-709", "query": "恒生交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159920", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-710", "query": "159920_恒生ETF华夏_恒生交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159920", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-711", "query": "中证500ETF嘉实", "expected_fund_code": "159922", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-712", "query": "嘉实中证500交易型开放式指数证券投资基金", "expected_fund_code": "159922", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-713", "query": "中证500ETF嘉实2025年年度报告", "expected_fund_code": "159922", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-714", "query": "嘉实中证 500 交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159922", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-715", "query": "159922_中证500ETF嘉实_嘉实中证500交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159922", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-716", "query": "可选消费ETF广发", "expected_fund_code": "159936", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-717", "query": "广发中证全指可选消费交易型开放式指数证券投资基金", "expected_fund_code": "159936", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-718", "query": "可选消费ETF广发2025年年度报告", "expected_fund_code": "159936", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-719", "query": "广发中证全指可选消费交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159936", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-720", "query": "159936_可选消费ETF广发_广发中证全指可选消费交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159936", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-721", "query": "信息技术ETF广发", "expected_fund_code": "159939", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-722", "query": "广发中证全指信息技术交易型开放式指数证券投资基金", "expected_fund_code": "159939", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-723", "query": "信息技术ETF广发2025年年度报告", "expected_fund_code": "159939", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-724", "query": "广发中证全指信息技术交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159939", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-725", "query": "159939_信息技术ETF广发_广发中证全指信息技术交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159939", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-726", "query": "纳指ETF广发", "expected_fund_code": "159941", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-727", "query": "广发纳斯达克100交易型开放式指数证券投资基金", "expected_fund_code": "159941", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-728", "query": "纳指ETF广发2025年年度报告", "expected_fund_code": "159941", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-729", "query": "广发纳斯达克100 交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159941", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-730", "query": "159941_纳指ETF广发_广发纳斯达克100交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159941", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-731", "query": "创业板50ETF华安", "expected_fund_code": "159949", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-732", "query": "华安创业板50交易型开放式指数证券投资基金", "expected_fund_code": "159949", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-733", "query": "创业板50ETF华安2025年年度报告", "expected_fund_code": "159949", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-734", "query": "华安创业板50交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159949", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-735", "query": "159949_创业板50ETF华安_华安创业板50交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159949", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-736", "query": "创业板ETF华夏", "expected_fund_code": "159957", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-737", "query": "华夏创业板交易型开放式指数证券投资基金", "expected_fund_code": "159957", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-738", "query": "创业板ETF华夏2025年年度报告", "expected_fund_code": "159957", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-739", "query": "华夏创业板交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159957", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-740", "query": "159957_创业板ETF华夏_华夏创业板交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159957", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-741", "query": "央视50ETF国联", "expected_fund_code": "159965", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-742", "query": "国联央视财经50交易型开放式指数证券投资基金", "expected_fund_code": "159965", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-743", "query": "央视50ETF国联2025年年度报告", "expected_fund_code": "159965", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-744", "query": "国联央视财经 50 交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159965", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-745", "query": "159965_央视50ETF国联_国联央视财经50交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159965", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-746", "query": "创业板价值ETF华夏", "expected_fund_code": "159966", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-747", "query": "华夏创业板低波价值交易型开放式指数证券投资基金", "expected_fund_code": "159966", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-748", "query": "创业板价值ETF华夏2025年年度报告", "expected_fund_code": "159966", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-749", "query": "华夏创业板低波价值交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159966", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-750", "query": "159966_创业板价值ETF华夏_华夏创业板低波价值交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159966", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-751", "query": "创业板成长ETF华夏", "expected_fund_code": "159967", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-752", "query": "华夏创业板动量成长交易型开放式指数证券投资基金", "expected_fund_code": "159967", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-753", "query": "创业板成长ETF华夏2025年年度报告", "expected_fund_code": "159967", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-754", "query": "华夏创业板动量成长交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159967", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-755", "query": "159967_创业板成长ETF华夏_华夏创业板动量成长交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159967", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-756", "query": "中证500ETF博时", "expected_fund_code": "159968", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-757", "query": "博时中证500交易型开放式指数证券投资基金", "expected_fund_code": "159968", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-758", "query": "中证500ETF博时2025年年度报告", "expected_fund_code": "159968", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-759", "query": "博时中证500 交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159968", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-760", "query": "159968_中证500ETF博时_博时中证500交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159968", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-761", "query": "中证500ETF鹏华", "expected_fund_code": "159982", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-762", "query": "鹏华中证500交易型开放式指数证券投资基金", "expected_fund_code": "159982", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-763", "query": "中证500ETF鹏华2025年年度报告", "expected_fund_code": "159982", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-764", "query": "鹏华中证 500 交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159982", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-765", "query": "159982_中证500ETF鹏华_鹏华中证500交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159982", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-766", "query": "豆粕ETF华夏", "expected_fund_code": "159985", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-767", "query": "华夏饲料豆粕期货交易型开放式证券投资基金", "expected_fund_code": "159985", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-768", "query": "豆粕ETF华夏2025年年度报告", "expected_fund_code": "159985", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-769", "query": "华夏饲料豆粕期货交易型开放式证券投资基金2025 年年度报告", "expected_fund_code": "159985", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-770", "query": "159985_豆粕ETF华夏_华夏饲料豆粕期货交易型开放式证券投资基金2025年年度报告", "expected_fund_code": "159985", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-771", "query": "芯片ETF华夏", "expected_fund_code": "159995", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-772", "query": "华夏国证半导体芯片交易型开放式指数证券投资基金", "expected_fund_code": "159995", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-773", "query": "芯片ETF华夏2025年年度报告", "expected_fund_code": "159995", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-774", "query": "华夏国证半导体芯片交易型开放式指数证券投资基金2025 年年度报告", "expected_fund_code": "159995", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-775", "query": "159995_芯片ETF华夏_华夏国证半导体芯片交易型开放式指数证券投资基金2025年年度报告", "expected_fund_code": "159995", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-776", "query": "500ETF联接LOF", "expected_fund_code": "160119", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-777", "query": "南方中证500交易型开放式指数证券投资基金联接基金(LOF)", "expected_fund_code": "160119", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-778", "query": "500ETF联接LOF2025年年度报告", "expected_fund_code": "160119", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-779", "query": "南方中证 500 交易型开放式指数证券投资基金联接基金(LOF)2025 年年度报告", "expected_fund_code": "160119", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-780", "query": "160119_500ETF联接LOF_南方中证500交易型开放式指数证券投资基金联接基金(LOF)2025年年度报告", "expected_fund_code": "160119", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-781", "query": "食品LOF", "expected_fund_code": "160222", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-782", "query": "国泰国证食品饮料行业指数证券投资基金", "expected_fund_code": "160222", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-783", "query": "食品LOF2025年年度报告", "expected_fund_code": "160222", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-784", "query": "国泰国证食品饮料行业指数证券投资基金2025 年年度报告", "expected_fund_code": "160222", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-785", "query": "160222_食品LOF_国泰国证食品饮料行业指数证券投资基金2025年年度报告", "expected_fund_code": "160222", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-786", "query": "华夏蓝筹LOF", "expected_fund_code": "160311", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-787", "query": "华夏蓝筹核心混合型证券投资基金（LOF）", "expected_fund_code": "160311", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-788", "query": "华夏蓝筹LOF2025年年度报告", "expected_fund_code": "160311", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-789", "query": "华夏蓝筹核心混合型证券投资基金（LOF）2025 年年度报告", "expected_fund_code": "160311", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-790", "query": "160311_华夏蓝筹LOF_华夏蓝筹核心混合型证券投资基金（LOF）2025年年度报告", "expected_fund_code": "160311", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-791", "query": "华夏行业LOF", "expected_fund_code": "160314", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-792", "query": "华夏行业精选混合型证券投资基金（LOF）", "expected_fund_code": "160314", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-793", "query": "华夏行业LOF2025年年度报告", "expected_fund_code": "160314", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-794", "query": "华夏行业精选混合型证券投资基金（LOF）2025 年年度报告", "expected_fund_code": "160314", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-795", "query": "160314_华夏行业LOF_华夏行业精选混合型证券投资基金（LOF）2025年年度报告", "expected_fund_code": "160314", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-796", "query": "港股精选LOF", "expected_fund_code": "160322", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-797", "query": "华夏港股通精选股票型发起式证券投资基金（LOF）", "expected_fund_code": "160322", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-798", "query": "港股精选LOF2025年年度报告", "expected_fund_code": "160322", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-799", "query": "华夏港股通精选股票型发起式证券投资基金（LOF）2025 年年度报告", "expected_fund_code": "160322", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-800", "query": "160322_港股精选LOF_华夏港股通精选股票型发起式证券投资基金（LOF）2025年年度报告", "expected_fund_code": "160322", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-801", "query": "华夏磐泰LOF", "expected_fund_code": "160323", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-802", "query": "华夏磐泰混合型证券投资基金（LOF）", "expected_fund_code": "160323", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-803", "query": "华夏磐泰LOF2025年年度报告", "expected_fund_code": "160323", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-804", "query": "华夏磐泰混合型证券投资基金（LOF）2025 年年度报告", "expected_fund_code": "160323", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-805", "query": "160323_华夏磐泰LOF_华夏磐泰混合型证券投资基金（LOF）2025年年度报告", "expected_fund_code": "160323", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-806", "query": "华夏磐晟LOF", "expected_fund_code": "160324", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-807", "query": "华夏磐晟灵活配置混合型证券投资基金（LOF）", "expected_fund_code": "160324", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-808", "query": "华夏磐晟LOF2025年年度报告", "expected_fund_code": "160324", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-809", "query": "华夏磐晟灵活配置混合型证券投资基金（LOF）2025 年年度报告", "expected_fund_code": "160324", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-810", "query": "160324_华夏磐晟LOF_华夏磐晟灵活配置混合型证券投资基金（LOF）2025年年度报告", "expected_fund_code": "160324", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-811", "query": "华夏创业板定开", "expected_fund_code": "160325", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-812", "query": "华夏创业板两年定期开放混合型证券投资基金", "expected_fund_code": "160325", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-813", "query": "华夏创业板定开2025年年度报告", "expected_fund_code": "160325", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-814", "query": "华夏创业板两年定期开放混合型证券投资基金2025 年年度报告", "expected_fund_code": "160325", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-815", "query": "160325_华夏创业板定开_华夏创业板两年定期开放混合型证券投资基金2025年年度报告", "expected_fund_code": "160325", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-816", "query": "优选配置FOF-LOF", "expected_fund_code": "160326", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-817", "query": "华夏优选配置股票型基金中基金（FOF-LOF）", "expected_fund_code": "160326", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-818", "query": "优选配置FOF-LOF2025年年度报告", "expected_fund_code": "160326", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-819", "query": "华夏优选配置股票型基金中基金（FOF-LOF）2025 年年度报告", "expected_fund_code": "160326", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-820", "query": "160326_优选配置FOF-LOF_华夏优选配置股票型基金中基金（FOF-LOF）2025年年度报告", "expected_fund_code": "160326", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-821", "query": "银行指数基金", "expected_fund_code": "160517", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-822", "query": "博时中证银行指数证券投资基金（LOF）", "expected_fund_code": "160517", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-823", "query": "银行指数基金2025年年度报告", "expected_fund_code": "160517", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-824", "query": "博时中证银行指数证券投资基金（LOF）2025 年年度报告", "expected_fund_code": "160517", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-825", "query": "160517_银行指数基金_博时中证银行指数证券投资基金（LOF）2025年年度报告", "expected_fund_code": "160517", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-826", "query": "鹏华500LOF", "expected_fund_code": "160616", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-827", "query": "鹏华中证500指数证券投资基金（LOF）", "expected_fund_code": "160616", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-828", "query": "鹏华500LOF2025年年度报告", "expected_fund_code": "160616", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-829", "query": "鹏华中证 500 指数证券投资基金（LOF）2025 年年度报告", "expected_fund_code": "160616", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-830", "query": "160616_鹏华500LOF_鹏华中证500指数证券投资基金（LOF）2025年年度报告", "expected_fund_code": "160616", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-831", "query": "信息LOF", "expected_fund_code": "160626", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-832", "query": "鹏华中证信息技术指数型证券投资基金(LOF)", "expected_fund_code": "160626", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-833", "query": "信息LOF2025年年度报告", "expected_fund_code": "160626", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-834", "query": "鹏华中证信息技术指数型证券投资基金(LOF)2025 年年度报告", "expected_fund_code": "160626", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-835", "query": "160626_信息LOF_鹏华中证信息技术指数型证券投资基金(LOF)2025年年度报告", "expected_fund_code": "160626", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-836", "query": "银行LOF基金", "expected_fund_code": "160631", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-837", "query": "鹏华中证银行指数型证券投资基金(LOF)", "expected_fund_code": "160631", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-838", "query": "银行LOF基金2025年年度报告", "expected_fund_code": "160631", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-839", "query": "鹏华中证银行指数型证券投资基金(LOF)2025 年年度报告", "expected_fund_code": "160631", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-840", "query": "160631_银行LOF基金_鹏华中证银行指数型证券投资基金(LOF)2025年年度报告", "expected_fund_code": "160631", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-841", "query": "科技LOF", "expected_fund_code": "160646", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-842", "query": "鹏华中证沪港深科技龙头指数证券投资基金（LOF）", "expected_fund_code": "160646", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-843", "query": "科技LOF2025年年度报告", "expected_fund_code": "160646", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-844", "query": "鹏华中证沪港深科技龙头指数证券投资基金（LOF）2025 年年度报告", "expected_fund_code": "160646", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-845", "query": "160646_科技LOF_鹏华中证沪港深科技龙头指数证券投资基金（LOF）2025年年度报告", "expected_fund_code": "160646", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-846", "query": "生物科技LOF", "expected_fund_code": "161122", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-847", "query": "易方达中证万得生物科技指数证券投资基金（LOF）", "expected_fund_code": "161122", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-848", "query": "生物科技LOF2025年年度报告", "expected_fund_code": "161122", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-849", "query": "易方达中证万得生物科技指数证券投资基金（LOF）2025 年年度报告", "expected_fund_code": "161122", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-850", "query": "161122_生物科技LOF_易方达中证万得生物科技指数证券投资基金（LOF）2025年年度报告", "expected_fund_code": "161122", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-851", "query": "标普生物科技LOF", "expected_fund_code": "161127", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-852", "query": "易方达标普生物科技指数证券投资基金（LOF）", "expected_fund_code": "161127", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-853", "query": "标普生物科技LOF2025年年度报告", "expected_fund_code": "161127", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-854", "query": "易方达标普生物科技指数证券投资基金（LOF）2025 年年度报告", "expected_fund_code": "161127", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-855", "query": "161127_标普生物科技LOF_易方达标普生物科技指数证券投资基金（LOF）2025年年度报告", "expected_fund_code": "161127", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-856", "query": "标普信息科技LOF", "expected_fund_code": "161128", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-857", "query": "易方达标普信息科技指数证券投资基金（LOF）", "expected_fund_code": "161128", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-858", "query": "标普信息科技LOF2025年年度报告", "expected_fund_code": "161128", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-859", "query": "易方达标普信息科技指数证券投资基金（LOF）2025 年年度报告", "expected_fund_code": "161128", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-860", "query": "161128_标普信息科技LOF_易方达标普信息科技指数证券投资基金（LOF）2025年年度报告", "expected_fund_code": "161128", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-861", "query": "纳斯达克100LOF", "expected_fund_code": "161130", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-862", "query": "易方达纳斯达克100交易型开放式指数证券投资基金联接基金（LOF）", "expected_fund_code": "161130", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-863", "query": "纳斯达克100LOF2025年年度报告", "expected_fund_code": "161130", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-864", "query": "易方达纳斯达克 100 交易型开放式指数证券投资基金联接基金（LOF）2025 年年度报告", "expected_fund_code": "161130", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-865", "query": "161130_纳斯达克100LOF_易方达纳斯达克100交易型开放式指数证券投资基金联接基金（LOF）2025年年度报告", "expected_fund_code": "161130", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-866", "query": "银行基金", "expected_fund_code": "161723", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-867", "query": "招商中证银行指数证券投资基金", "expected_fund_code": "161723", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-868", "query": "银行基金2025年年度报告", "expected_fund_code": "161723", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-869", "query": "招商中证银行指数证券投资基金 2025年年度报告", "expected_fund_code": "161723", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-870", "query": "161723_银行基金_招商中证银行指数证券投资基金2025年年度报告", "expected_fund_code": "161723", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-871", "query": "宏利500增强LOF", "expected_fund_code": "162216", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-872", "query": "宏利中证500指数增强型证券投资基金(LOF)", "expected_fund_code": "162216", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-873", "query": "宏利500增强LOF2025年年度报告", "expected_fund_code": "162216", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-874", "query": "宏利中证 500 指数增强型证券投资基金(LOF)2025 年年度报告", "expected_fund_code": "162216", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-875", "query": "162216_宏利500增强LOF_宏利中证500指数增强型证券投资基金(LOF)2025年年度报告", "expected_fund_code": "162216", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-876", "query": "中证500LOF", "expected_fund_code": "162711", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-877", "query": "广发中证500交易型开放式指数证券投资基金联接基金（LOF）", "expected_fund_code": "162711", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-878", "query": "中证500LOF2025年年度报告", "expected_fund_code": "162711", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-879", "query": "广发中证 500 交易型开放式指数证券投资基金联接基金（LOF）2025 年年度报告", "expected_fund_code": "162711", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-880", "query": "162711_中证500LOF_广发中证500交易型开放式指数证券投资基金联接基金（LOF）2025年年度报告", "expected_fund_code": "162711", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-881", "query": "农业精选LOF", "expected_fund_code": "164403", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-882", "query": "前海开源沪港深农业主题精选灵活配置混合型证券投资基金（LOF）", "expected_fund_code": "164403", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-883", "query": "农业精选LOF2025年年度报告", "expected_fund_code": "164403", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-884", "query": "前海开源沪港深农业主题精选灵活配置混合型证券投资基金2025 年年度报告", "expected_fund_code": "164403", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-885", "query": "164403_农业精选LOF_前海开源沪港深农业主题精选灵活配置混合型证券投资基金（LOF）2025年年度报告", "expected_fund_code": "164403", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-886", "query": "中信保诚500LOF", "expected_fund_code": "165511", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-887", "query": "中信保诚中证500指数型证券投资基金（LOF）", "expected_fund_code": "165511", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-888", "query": "中信保诚500LOF2025年年度报告", "expected_fund_code": "165511", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-889", "query": "中信保诚中证 500 指数型证券投资基金（LOF）2025 年年度报告", "expected_fund_code": "165511", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-890", "query": "165511_中信保诚500LOF_中信保诚中证500指数型证券投资基金（LOF）2025年年度报告", "expected_fund_code": "165511", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-891", "query": "医药生物科技LOF", "expected_fund_code": "165519", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-892", "query": "中信保诚中证800医药指数型证券投资基金（LOF）", "expected_fund_code": "165519", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-893", "query": "医药生物科技LOF2025年年度报告", "expected_fund_code": "165519", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-894", "query": "中信保诚中证 800 医药指数型证券投资基金（LOF）", "expected_fund_code": "165519", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-895", "query": "165519_医药生物科技LOF_中信保诚中证800医药指数型证券投资基金（LOF）2025年年度报告", "expected_fund_code": "165519", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-896", "query": "安信深圳科技LOF", "expected_fund_code": "167506", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-897", "query": "安信中证深圳科技创新主题指数型证券投资基金(LOF)", "expected_fund_code": "167506", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-898", "query": "安信深圳科技LOF2025年年度报告", "expected_fund_code": "167506", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-899", "query": "安信中证深圳科技创新主题指数型证券投资基金(LOF)2025 年年度报告", "expected_fund_code": "167506", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-900", "query": "167506_安信深圳科技LOF_安信中证深圳科技创新主题指数型证券投资基金(LOF)2025年年度报告", "expected_fund_code": "167506", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-901", "query": "金融科技LOF", "expected_fund_code": "168701", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-902", "query": "合煦智远国证香蜜湖金融科技指数证券投资基金(LOF)", "expected_fund_code": "168701", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-903", "query": "金融科技LOF2025年年度报告", "expected_fund_code": "168701", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-904", "query": "合煦智远国证香蜜湖金融科技指数证券投资基金(LOF)2025 年年度报告", "expected_fund_code": "168701", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-905", "query": "168701_金融科技LOF_合煦智远国证香蜜湖金融科技指数证券投资基金(LOF)2025年年度报告", "expected_fund_code": "168701", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-906", "query": "华夏合肥高新REIT", "expected_fund_code": "180102", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-907", "query": "华夏合肥高新创新产业园封闭式基础设施证券投资基金", "expected_fund_code": "180102", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-908", "query": "华夏合肥高新REIT2025年年度报告", "expected_fund_code": "180102", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-909", "query": "华夏合肥高新创新产业园封闭式基础设施证券投资基金2025 年年度报告", "expected_fund_code": "180102", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-910", "query": "180102_华夏合肥高新REIT_华夏合肥高新创新产业园封闭式基础设施证券投资基金2025年年度报告", "expected_fund_code": "180102", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-911", "query": "华夏和达高科REIT", "expected_fund_code": "180103", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-912", "query": "华夏杭州和达高科产业园封闭式基础设施证券投资基金", "expected_fund_code": "180103", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-913", "query": "华夏和达高科REIT2025年年度报告", "expected_fund_code": "180103", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-914", "query": "华夏杭州和达高科产业园封闭式基础设施证券投资基金2025 年年度报告", "expected_fund_code": "180103", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-915", "query": "180103_华夏和达高科REIT_华夏杭州和达高科产业园封闭式基础设施证券投资基金2025年年度报告", "expected_fund_code": "180103", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-916", "query": "华夏越秀高速REIT", "expected_fund_code": "180202", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-917", "query": "华夏越秀高速公路封闭式基础设施证券投资基金", "expected_fund_code": "180202", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-918", "query": "华夏越秀高速REIT2025年年度报告", "expected_fund_code": "180202", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-919", "query": "华夏越秀高速公路封闭式基础设施证券投资基金2025 年年度报告", "expected_fund_code": "180202", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-920", "query": "180202_华夏越秀高速REIT_华夏越秀高速公路封闭式基础设施证券投资基金2025年年度报告", "expected_fund_code": "180202", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-921", "query": "华夏深国际REIT", "expected_fund_code": "180302", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-922", "query": "华夏深国际仓储物流封闭式基础设施证券投资基金", "expected_fund_code": "180302", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-923", "query": "华夏深国际REIT2025年年度报告", "expected_fund_code": "180302", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-924", "query": "华夏深国际仓储物流封闭式基础设施证券投资基金2025 年年度报告", "expected_fund_code": "180302", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-925", "query": "180302_华夏深国际REIT_华夏深国际仓储物流封闭式基础设施证券投资基金2025年年度报告", "expected_fund_code": "180302", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-926", "query": "华夏华润商业REIT", "expected_fund_code": "180601", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-927", "query": "华夏华润商业资产封闭式基础设施证券投资基金", "expected_fund_code": "180601", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-928", "query": "华夏华润商业REIT2025年年度报告", "expected_fund_code": "180601", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-929", "query": "华夏华润商业资产封闭式基础设施证券投资基金2025 年年度报告", "expected_fund_code": "180601", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-930", "query": "180601_华夏华润商业REIT_华夏华润商业资产封闭式基础设施证券投资基金2025年年度报告", "expected_fund_code": "180601", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-931", "query": "华夏大悦城商业REIT", "expected_fund_code": "180603", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-932", "query": "华夏大悦城购物中心封闭式基础设施证券投资基金", "expected_fund_code": "180603", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-933", "query": "华夏大悦城商业REIT2025年年度报告", "expected_fund_code": "180603", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-934", "query": "华夏大悦城购物中心封闭式基础设施证券投资基金2025 年年度报告", "expected_fund_code": "180603", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-935", "query": "180603_华夏大悦城商业REIT_华夏大悦城购物中心封闭式基础设施证券投资基金2025年年度报告", "expected_fund_code": "180603", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-936", "query": "华夏中海商业REIT", "expected_fund_code": "180607", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-937", "query": "华夏中海商业资产封闭式基础设施证券投资基金", "expected_fund_code": "180607", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-938", "query": "华夏中海商业REIT2025年年度报告", "expected_fund_code": "180607", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-939", "query": "华夏中海商业资产封闭式基础设施证券投资基金2025 年年度报告", "expected_fund_code": "180607", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-940", "query": "180607_华夏中海商业REIT_华夏中海商业资产封闭式基础设施证券投资基金2025年年度报告", "expected_fund_code": "180607", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}
+{"id": "name-res-941", "query": "南方润泽科技数据中心REIT", "expected_fund_code": "180901", "category": "short_name", "note": "目录中的基金短名"}
+{"id": "name-res-942", "query": "南方润泽科技数据中心封闭式基础设施证券投资基金", "expected_fund_code": "180901", "category": "full_name", "note": "目录报告标题去除年度报告后缀"}
+{"id": "name-res-943", "query": "南方润泽科技数据中心REIT2025年年度报告", "expected_fund_code": "180901", "category": "short_report_title", "note": "基金短名加年度报告后缀"}
+{"id": "name-res-944", "query": "南方润泽科技数据中心封闭式基础设施证券投资基金 2025 年年度报告", "expected_fund_code": "180901", "category": "markdown_title", "note": "Markdown _analyzed.md 的一级主标题"}
+{"id": "name-res-945", "query": "180901_南方润泽科技数据中心REIT_南方润泽科技数据中心封闭式基础设施证券投资基金2025年年度报告", "expected_fund_code": "180901", "category": "source_title", "note": "markdown_mineru 中的报告子目录标题"}

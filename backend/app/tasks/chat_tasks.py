@@ -17,6 +17,7 @@ from app.core.celery_app import celery_app
 from app.core.config import get_settings
 from app.core.worker_lifecycle import run_coro
 from app.models.chat import ChatMessage, ChatRequest
+from app.services.rag_result_parser import parse_rag_search_result, tool_output_to_text
 from app.services.task_events import publish_event
 
 # 锁自动过期时间必须大于 AGENT_TIMEOUT，确保即使任务超时，finally 块也有机会
@@ -92,6 +93,7 @@ async def _run_chat_turn(run_id: str, req: ChatRequest, user_id: int) -> None:
             logger.info("[chat_task] 开始流式处理...")
             event_count = 0
             seen_run_ids: set[str] = set()
+            _route_emitted = False
             _plan_emitted = False
 
             async for event in app.astream_events(input_state, config=config, version="v2"):
@@ -141,6 +143,19 @@ async def _run_chat_turn(run_id: str, req: ChatRequest, user_id: int) -> None:
                     metadata = event.get("metadata", {})
                     node_name = metadata.get("langgraph_node")
                     is_node_level_event = event.get("name") == node_name
+
+                    if node_name == "route" and is_node_level_event and not _route_emitted:
+                        output = event.get("data", {}).get("output")
+                        route_result = output.get("route_result") if isinstance(output, dict) else None
+                        intent = (
+                            route_result.get("intent")
+                            if isinstance(route_result, dict)
+                            else getattr(route_result, "intent", None)
+                        )
+                        if intent:
+                            _route_emitted = True
+                            logger.info(f"[chat_task] event: route_result -> intent={intent}")
+                            publish_event(run_id, "route_result", {"intent": intent})
 
                     if node_name == "supervisor" and is_node_level_event and not _plan_emitted:
                         output = event.get("data", {}).get("output")
@@ -220,9 +235,20 @@ async def _run_chat_turn(run_id: str, req: ChatRequest, user_id: int) -> None:
 
                 elif kind == "on_tool_end":
                     output = event["data"].get("output")
-                    output_str = output.content if hasattr(output, "content") else str(output)
+                    output_str = tool_output_to_text(output)
                     logger.info(f"[chat_task] event: tool_result -> {event['name']}")
                     publish_event(run_id, "tool_result", {"name": event["name"], "output": output_str})
+                    if event["name"] == "rag_search":
+                        chunks = parse_rag_search_result(output_str)
+                        parent_node = event.get("metadata", {}).get("langgraph_node")
+                        logger.info(
+                            f"[chat_task] event: retrieval_result -> {len(chunks)} chunks"
+                        )
+                        publish_event(run_id, "retrieval_result", {
+                            "name": event["name"],
+                            "agent_name": parent_node or "",
+                            "chunks": chunks,
+                        })
 
             while not retry_events.empty():
                 evt_type, evt_data = retry_events.get_nowait()

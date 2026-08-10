@@ -42,6 +42,13 @@ class EvalSettings(BaseSettings):
     # ===== 执行 =====
     EVAL_MAX_CONCURRENCY: int = 1
 
+    # ===== Answer 服务评测 =====
+    ANSWER_SERVICE_BASE_URL: str = "http://127.0.0.1:8800"
+    ANSWER_SERVICE_USERNAME: str = "answer_eval"
+    ANSWER_SERVICE_PASSWORD: str = "AnswerEval123!"
+    ANSWER_SERVICE_TIMEOUT_SECONDS: float = 300.0
+    ANSWER_SERVICE_AUTO_REGISTER: bool = True
+
     # ===== MCP 配置 =====
     ENABLE_CN_FUNDS_MCP: bool = True  # 是否启用 cn-funds-mcp（可通过命令行参数覆盖）
 

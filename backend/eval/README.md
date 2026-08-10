@@ -7,7 +7,7 @@
 | 层面 | Target | 关注点 |
 |---|---|---|
 | RAG 检索 | `targets/rag_target.py`（直连 GPU `/fund_reports/search`） | 检索器本身的召回 & 排序质量 |
-| Agent 端到端 | `targets/agent_target.py`（驱动 LangGraph） | 路由→工具调用→回答 全链路 |
+| Agent 端到端 | `targets/service_target.py`（调用 Docker 后端） | 路由→工具调用→回答 全链路 |
 
 ## 指标
 
@@ -77,10 +77,19 @@
   "reference_answer": "159103 是汇添富中证金融科技主题 ETF，...",
   "expected_fund_codes": ["159103"],
   "key_facts": ["金融科技", "被动", "指数"],
+  "relevant_chunk_ids": ["778279457f99a750795ed1dec5d4c072"],
   "should_refuse": false,
   "intent": "fund_query"
 }
 ```
+
+完整回答评测会从 `retrieval_result` SSE 事件收集 RAG 子 Agent 实际命中的
+Milvus chunk，并计算与直接 RAG 相同的 `hit_rate`、`mrr`、`ndcg`。多次
+`rag_search` 的结果按调用顺序合并，相同 chunk 只保留首次出现的位置。
+服务 target 会按 `--concurrency` 创建同等数量的评测用户，每个并发槽位独占
+一个 MCP 限流桶。评测使用服务的真实按用户限流，不会重置 MCP 调用计数；
+若样本触发限流，将按实际服务错误记录。使用 `--no-service-auto-register`
+时需预先创建这些带 `_1`、`_2` 后缀的评测用户。
 
 从数据库导出后，按上述结构写入 jsonl 即可。
 
@@ -98,11 +107,8 @@ python -m eval.runners.upload_dataset --kind all --mode append
 # 2) 跑 RAG 检索评测
 python -m eval.runners.run_retrieval_eval --experiment-prefix v1-baseline
 
-# 3) 跑 Agent 端到端评测（启动 MCP，并发建议 1~2）
+# 3) 跑 Agent 端到端评测（默认调用 http://127.0.0.1:8800）
 python -m eval.runners.run_answer_eval --experiment-prefix v1-baseline --concurrency 2
-
-# 单独测试 RAG 部分（禁用 cn-funds-mcp，Agent 只能用 rag_search）
-python -m eval.runners.run_answer_eval --experiment-prefix v1-rag-only --concurrency 2 --no-cn-funds-mcp
 
 # 跳过 LLM-judge 仅跑规则指标（更快、零成本）
 python -m eval.runners.run_retrieval_eval --no-judge
@@ -120,11 +126,11 @@ LangSmith 完成，因此始终需要有效的 `LANGSMITH_API_KEY`。
 ## 设计取舍
 
 1. **Judge LLM 与业务 LLM 解耦**：用单独的 `JUDGE_LLM_*` 配置，避免同源偏差。建议 judge 用更强模型。
-2. **Agent target 用 MemorySaver**：评测期会话不污染生产 PG checkpoint。
+2. **服务 target 使用独立 UUID 会话**：每条样本通过完整 FastAPI + Celery + MCP 链路执行，互不共享上下文。
 3. **相关性判定多级兜底**：精确 chunk_id → 基金代码+关键词 → 仅关键词，对应标注成本由高到低。
 4. **`fund_code_recall` 单独成项**：专门给 `filter_fund_code` 改造做回归——若该值下降说明硬注入失效。
 5. **规则指标 + LLM-judge 双轨**：规则指标确定性强可用作 CI gate；LLM-judge 给细粒度信号。
-6. **`--no-cn-funds-mcp` 选项**：用于单独测试 RAG 部分，避免 Agent 通过 `get_fund_list` 等工具获取额外信息，导致 `faithfulness` / `context_relevance` 等指标失真。
+6. **Answer 评测只调用服务**：MCP 开关与 worker 数量由 Docker 部署配置控制，评测进程不再维护独立 Agent 运行时。
 
 ## 后续可加
 

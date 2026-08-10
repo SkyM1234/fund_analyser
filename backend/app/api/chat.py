@@ -6,11 +6,14 @@
 - token          LLM 生成的增量文本 {"delta": "..."}，追加到当前消息
 - retry_notice   合规检查未通过，即将重新生成 {"reason": "..."}；
                  随后必然紧跟一个新的 message_start
+- route_result   路由识别完成 {"intent": "..."}
 - plan_created   Supervisor 完成规划 {"plan": [...], "reasoning": "..."}
 - agent_start    子 Agent 节点开始执行 {"agent_name": "...", "task_id": "...", "description": "..."}
 - agent_end      子 Agent 节点执行完毕 {"agent_name": "...", "task_id": "...", "status": "completed|failed"}
 - tool_call      Agent 决定调用工具 {"name": "...", "args": {...}, "agent_name": "..."}
 - tool_result    工具返回结果 {"name": "...", "output": "..."}
+- retrieval_result RAG 工具返回的结构化 chunk metadata
+                   {"name": "rag_search", "agent_name": "...", "chunks": [...]}
 - tool_retry     Agent 内部触发重试 {"agent_name": "...", "task_id": "...", "attempt": 2, "reason": "..."}
 - done           结束 {"finish_reason": "stop"}
 - error          异常 {"message": "..."}
@@ -107,4 +110,3 @@ async def chat_stream(
     )
 
     return EventSourceResponse(_relay_from_task(run_id, async_result.id, request))
-

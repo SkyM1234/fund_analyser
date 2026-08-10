@@ -4,20 +4,17 @@ LangSmith evaluator 约定：函数签名 (run, example) → dict / EvaluationRe
 - run.outputs: target 返回值（这里是 {"results": [chunk_dict,...]}）
 - example.outputs: 数据集 ground truth（RetrievalExample.dict）
 
-每条 chunk_dict 应至少包含：
+参与 chunk 排名指标的每条 chunk_dict 应至少包含：
     - fund_code: str
     - content: str
-    - id: 可选；若 schema 没暴露 id，可用 (fund_code, chunk_index) 拼出
+    - id: Milvus chunk 主键
+
+没有 relevant_chunk_ids Ground Truth 的样本不参与 hit_rate / MRR / NDCG 聚合。
 """
 from __future__ import annotations
 
 import math
-import re
 from typing import Any
-
-from sympy import N
-
-
 
 def _get_results(run: Any) -> list[dict]:
     outputs = getattr(run, "outputs", None) or {}
@@ -59,38 +56,17 @@ def _should_skip_retrieval(run: Any) -> tuple[bool, str]:
 def _chunk_relevance(chunk: dict, truth: dict) -> bool:
     """判断单个检索 chunk 是否相关。
 
-    优先用 relevant_chunk_ids 精确匹配；其次用 expected_fund_codes；
-    最后兜底用 relevant_keywords 子串匹配。
+    仅使用 relevant_chunk_ids 做精确匹配，确保直接 RAG 与 Agentic RAG
+    使用同一套 chunk 级 Ground Truth。
     """
     relevant_ids = set(truth.get("relevant_chunk_ids") or [])
+    chunk_id = chunk.get("id") or f"{chunk.get('fund_code')}_{chunk.get('chunk_index')}"
+    return chunk_id in relevant_ids
 
-    # 当ground_truth没有，则直接返回True
-    if not relevant_ids:
-        return True
-    
-    if relevant_ids:
-        chunk_id = chunk.get("id") or f"{chunk.get('fund_code')}_{chunk.get('chunk_index')}"
-        if chunk_id in relevant_ids:
-            return True
-    
 
-    # expected_codes = set(truth.get("expected_fund_codes") or [])
-    # if expected_codes:
-    #     if chunk.get("fund_code") in expected_codes:
-    #         # 基金匹配只算"基金级"相关；若同时有 keywords，进一步要求 keyword 命中
-    #         keywords = truth.get("relevant_keywords") or []
-    #         if not keywords:
-    #             return True
-    #         content = chunk.get("content", "") or ""
-    #         return any(kw in content for kw in keywords)
-
-    # # 完全没有 expected_codes 时（全局/筛选），仅靠 keywords
-    # keywords = truth.get("relevant_keywords") or []
-    # if keywords:
-    #     content = chunk.get("content", "") or ""
-    #     return any(kw in content for kw in keywords)
-
-    return False
+def _missing_chunk_truth(truth: dict) -> bool:
+    """Chunk ranking metrics require exact chunk-level ground truth."""
+    return not truth.get("relevant_chunk_ids")
 
 
 def hit_rate(run: Any, example: Any) -> dict:
@@ -101,6 +77,12 @@ def hit_rate(run: Any, example: Any) -> dict:
 
     results = _get_results(run)
     truth = _get_truth(example)
+    if _missing_chunk_truth(truth):
+        return {
+            "key": "hit_rate",
+            "score": None,
+            "comment": "no relevant_chunk_ids ground truth",
+        }
     hit = any(_chunk_relevance(c, truth) for c in results)
     return {"key": "hit_rate", "score": 1.0 if hit else 0.0}
 
@@ -113,6 +95,12 @@ def mrr(run: Any, example: Any) -> dict:
 
     results = _get_results(run)
     truth = _get_truth(example)
+    if _missing_chunk_truth(truth):
+        return {
+            "key": "mrr",
+            "score": None,
+            "comment": "no relevant_chunk_ids ground truth",
+        }
     for idx, c in enumerate(results, start=1):
         if _chunk_relevance(c, truth):
             return {"key": "mrr", "score": 1.0 / idx}
@@ -127,6 +115,12 @@ def ndcg(run: Any, example: Any) -> dict:
 
     results = _get_results(run)
     truth = _get_truth(example)
+    if _missing_chunk_truth(truth):
+        return {
+            "key": "ndcg",
+            "score": None,
+            "comment": "no relevant_chunk_ids ground truth",
+        }
     if not results:
         return {"key": "ndcg", "score": 0.0}
 

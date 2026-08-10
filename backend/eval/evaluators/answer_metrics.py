@@ -38,6 +38,7 @@ def _get_truth(example: Any) -> dict:
         "key_facts": outputs.get("key_facts") or [],
         "should_refuse": outputs.get("should_refuse", False),
         "intent": outputs.get("intent"),
+        "relevant_chunk_ids": outputs.get("relevant_chunk_ids") or [],
         "expected_tool_calls": outputs.get("expected_tool_calls") or [],
     }
 
