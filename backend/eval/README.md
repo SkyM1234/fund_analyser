@@ -139,7 +139,7 @@ LangSmith 完成，因此始终需要有效的 `LANGSMITH_API_KEY`。
 - `cost_per_query`：基于 token 计数
 - 数据集生成脚手架：从问答日志半自动生成 ground truth
 
-## 构建数据集的提示词
+## 构建 retrieval 数据集的提示词
 
   请继续构建本项目的 RAG retrieval（检索）评测数据集。请直接检查代码、Markdown、现有数据集和 Milvus 后执行，不要只给方案
   或问题列表。

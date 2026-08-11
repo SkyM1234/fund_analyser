@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 
 from pymilvus import MilvusClient
@@ -16,6 +17,7 @@ from pymilvus import MilvusClient
 EVAL_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_RETRIEVAL_PATH = EVAL_DIR / "datasets" / "retrieval.jsonl"
 DEFAULT_ANSWER_PATH = EVAL_DIR / "datasets" / "answer.jsonl"
+FUND_CODE_RE = re.compile(r"(?<!\d)\d{6}(?!\d)")
 
 SELECTED_RETRIEVAL_IDS = [
     "retrieval-002",
@@ -175,6 +177,25 @@ def validate_single_fund_query(source: dict) -> None:
         )
 
 
+def build_expected_tool_calls(query: str, fund_code: str) -> list[dict]:
+    """Return the expected RAG workflow for a single-fund query."""
+    calls = []
+    if not FUND_CODE_RE.search(query):
+        calls.append(
+            {
+                "name": "rag_identify_funds",
+                "args": {"query": query},
+            }
+        )
+    calls.append(
+        {
+            "name": "rag_search",
+            "args": {"filter_fund_code": fund_code},
+        }
+    )
+    return calls
+
+
 def build_strategy_examples(
     retrieval_rows: list[dict],
     chunks_by_id: dict[str, dict],
@@ -226,12 +247,7 @@ def build_strategy_examples(
                 "category": "single_fund_strategy",
                 "relevant_keywords": source["relevant_keywords"],
                 "relevant_chunk_ids": source["relevant_chunk_ids"],
-                "expected_tool_calls": [
-                    {
-                        "name": "rag_search",
-                        "args": {"filter_fund_code": fund_code},
-                    }
-                ],
+                "expected_tool_calls": build_expected_tool_calls(source["query"], fund_code),
                 "note": f"来源 {retrieval_id}；{source_note}；{chunk_note}",
             }
         )
