@@ -15,6 +15,7 @@ frontend/dist/
 *.log
 /backend/eval/reports/
 /milvus-docker/volumes/
+/backend\scripts\chunk.txt
 
 # Large local datasets, models, and archives
 /embedding_model/
