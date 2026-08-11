@@ -3,14 +3,18 @@
 支持稠密向量 + 神经稀疏向量（Learned Sparse Retrieval）的混合检索
 """
 import re
+from html import unescape
+from io import StringIO
 from pathlib import Path
 from typing import List, Dict
 from tqdm import tqdm
 from FlagEmbedding import BGEM3FlagModel
 from pymilvus import MilvusClient, DataType
 from langchain_text_splitters import MarkdownHeaderTextSplitter
+import pandas as pd
 import hashlib
 import warnings
+import os
 
 # 抑制transformers的性能警告
 warnings.filterwarnings('ignore', message='.*fast tokenizer.*')
@@ -282,6 +286,7 @@ class FundVectorizer:
             # 当前章节很短，尝试与后续的兄弟章节合并
             merge_group = [current_chunk]
             merge_total_length = current_length
+            merge_has_anchor = self._contains_anchor(current_chunk['content'])
             j = i + 1
 
             # 查找可合并的相邻短章节
@@ -291,9 +296,14 @@ class FundVectorizer:
                 # 判断是否为兄弟章节（共享相同的父标题）
                 if self._are_sibling_sections(current_chunk, next_chunk):
                     # 如果下一个章节也很短，加入合并组
-                    if len(next_chunk['content']) < min_length:
+                    next_has_anchor = self._contains_anchor(next_chunk['content'])
+                    if (
+                        len(next_chunk['content']) < min_length
+                        and not (merge_has_anchor and next_has_anchor)
+                    ):
                         merge_group.append(next_chunk)
                         merge_total_length += len(next_chunk['content'])
+                        merge_has_anchor = merge_has_anchor or next_has_anchor
                         j += 1
                     else:
                         # 下一个章节不短，停止合并
@@ -313,6 +323,13 @@ class FundVectorizer:
                 i = j
 
         return merged
+
+    def _contains_anchor(self, content: str) -> bool:
+        """判断内容是否包含表格或图片结构锚点。"""
+        return bool(
+            RE_TABLE_BLOCK.search(content)
+            or RE_IMAGE_BLOCK.search(content)
+        )
 
     def _are_sibling_sections(self, chunk1: Dict, chunk2: Dict) -> bool:
         """
@@ -629,7 +646,11 @@ class FundVectorizer:
                     # 第一个子块：尝试合并到 current（保留前文累积）
                     first_sub = sub_chunks[0]
                     first_projected = current_length + (SEP_LEN if current_parts else 0) + len(first_sub)
-                    if current_parts and first_projected <= hard_max:
+                    if (
+                        current_parts
+                        and not current_has_anchor
+                        and first_projected <= hard_max
+                    ):
                         # 前文累积 + 第一个子块 合并为一个 chunk
                         append_to_current(first_sub, is_anchor=True)
                         flush()
@@ -662,7 +683,7 @@ class FundVectorizer:
                         # 当前 chunk 为空，直接加入
                         append_to_current(seg_text, is_anchor=True)
                         current_start_pos = seg['start']
-                    elif projected_length <= hard_max:
+                    elif not current_has_anchor and projected_length <= hard_max:
                         # 含锚点允许扩展到 hard_max
                         append_to_current(seg_text, is_anchor=True)
                     else:
@@ -1193,14 +1214,167 @@ class FundVectorizer:
 
         return result
 
+    @staticmethod
+    def _normalize_table_cell(value) -> str:
+        """将 DataFrame 单元格值标准化为单行文本。"""
+        if value is None:
+            return ""
+
+        text = str(value)
+        if text.lower() == "nan":
+            return ""
+
+        return re.sub(r'\s+', ' ', text).strip()
+
+    def _is_vertical_key_value_table(self, rows: List[List[str]]) -> bool:
+        """判断两列表格是否符合“字段: 值”的纵向键值结构。"""
+        if len(rows) < 2 or any(len(row) != 2 for row in rows):
+            return False
+
+        keys = [row[0] for row in rows]
+        values = [row[1] for row in rows]
+        if not all(keys) or not all(values):
+            return False
+
+        unique_key_ratio = len(set(keys)) / len(keys)
+        average_key_length = sum(len(key) for key in keys) / len(keys)
+        return unique_key_ratio >= 0.8 and average_key_length <= 30
+
+    def _looks_like_header_row(self, row: List[str]) -> bool:
+        """判断一行是否足够像表头，避免把明显的数据行误作字段名。"""
+        if not row or not all(row):
+            return False
+
+        average_length = sum(len(cell) for cell in row) / len(row)
+        has_number = any(re.search(r'\d', cell) for cell in row)
+        return average_length <= 30 and not has_number
+
+    def _infer_header_row_count(self, rows: List[List[str]]) -> int:
+        """
+        推断横向表的表头行数。
+
+        多级表头通常会因 rowspan 展开而与后一行共享多个单元格，
+        因此仅在相邻短文本行有足够重复列时继续合并表头。
+        """
+        if len(rows) < 2 or not self._looks_like_header_row(rows[0]):
+            return 0
+
+        header_rows = 1
+        previous_row = rows[0]
+        max_header_rows = min(3, len(rows) - 1)
+
+        while header_rows < max_header_rows:
+            candidate = rows[header_rows]
+            if not self._looks_like_header_row(candidate):
+                break
+
+            repeated_columns = sum(
+                previous == current
+                for previous, current in zip(previous_row, candidate)
+                if previous
+            )
+            if repeated_columns < max(1, int(len(candidate) * 0.4)):
+                break
+
+            header_rows += 1
+            previous_row = candidate
+
+        return header_rows
+
+    @staticmethod
+    def _format_row_fallback(row: List[str]) -> str:
+        """无法可靠识别表头时，按行保留单元格内容。"""
+        return "表格行: " + " | ".join(cell for cell in row if cell)
+
+    def _dataframe_to_embedding_text(self, dataframe) -> str:
+        """将 pandas DataFrame 转换为适合向量化的表格文本。"""
+        rows = [
+            [self._normalize_table_cell(value) for value in row]
+            for row in dataframe.fillna("").values.tolist()
+        ]
+        rows = [row for row in rows if any(row)]
+        if not rows:
+            return ""
+
+        if self._is_vertical_key_value_table(rows):
+            return "\n".join(f"{key}: {value}" for key, value in rows)
+
+        header_row_count = self._infer_header_row_count(rows)
+        if not header_row_count or header_row_count >= len(rows):
+            return "\n".join(self._format_row_fallback(row) for row in rows)
+
+        headers = []
+        for column_index in range(len(rows[0])):
+            header_parts = []
+            for header_row in rows[:header_row_count]:
+                value = header_row[column_index]
+                if value and value not in header_parts:
+                    header_parts.append(value)
+            headers.append(" > ".join(header_parts) or f"列{column_index + 1}")
+
+        formatted_rows = []
+        for row in rows[header_row_count:]:
+            fields = [
+                f"{header}: {value}"
+                for header, value in zip(headers, row)
+                if value
+            ]
+            if fields:
+                formatted_rows.append("；".join(fields))
+
+        return "\n".join(formatted_rows) or "\n".join(
+            self._format_row_fallback(row) for row in rows
+        )
+
+    def _fallback_table_to_embedding_text(self, table_html: str) -> str:
+        """pandas 无法解析时，移除 HTML 后按原始行输出单元格。"""
+        row_matches = re.findall(r'<tr[^>]*>(.*?)</tr>', table_html, re.DOTALL | re.IGNORECASE)
+        formatted_rows = []
+
+        for row_html in row_matches:
+            cell_matches = re.findall(
+                r'<t[dh][^>]*>(.*?)</t[dh]>',
+                row_html,
+                re.DOTALL | re.IGNORECASE,
+            )
+            cells = [
+                re.sub(r'\s+', ' ', unescape(re.sub(r'<[^>]+>', ' ', cell))).strip()
+                for cell in cell_matches
+            ]
+            if any(cells):
+                formatted_rows.append(self._format_row_fallback(cells))
+
+        if formatted_rows:
+            return "\n".join(formatted_rows)
+
+        plain_text = unescape(re.sub(r'<[^>]+>', ' ', table_html))
+        plain_text = RE_TABLE_START.sub('', plain_text)
+        plain_text = RE_TABLE_END.sub('', plain_text)
+        return re.sub(r'\s+', ' ', plain_text).strip()
+
+    def _table_to_embedding_text(self, table_html: str) -> str:
+        """使用 pandas 展开 HTML 表格，并生成检索友好的行式文本。"""
+        try:
+            dataframes = pd.read_html(
+                StringIO(table_html),
+                header=None,
+                keep_default_na=False,
+            )
+        except Exception:
+            return self._fallback_table_to_embedding_text(table_html)
+
+        table_texts = [
+            self._dataframe_to_embedding_text(dataframe)
+            for dataframe in dataframes
+        ]
+        return "\n".join(table_text for table_text in table_texts if table_text)
+
     def _clean_content_for_embedding(self, text: str) -> str:
         """
-        清洗文本内容，移除 HTML 注释标记和图片 markdown 标记，用于向量化
+        清洗文本内容并将 HTML 表格转换为行式文本，用于向量化
 
-        移除内容：
-        1. TABLE_START/END 注释：<!-- TABLE_START id=... --> 和 <!-- TABLE_END -->
-        2. IMAGE_START/END 注释：<!-- IMAGE_START id=... --> 和 <!-- IMAGE_END -->
-        3. 图片 markdown 语法：![图片](images/...)
+        表格保留单元格文本和行列语义，但不保留 HTML 标签。
+        无法可靠识别表头时，按行使用 " | " 分隔单元格。
 
         Args:
             text: 输入文本
@@ -1208,6 +1382,11 @@ class FundVectorizer:
         Returns:
             清洗后的文本
         """
+        text = RE_TABLE_BLOCK.sub(
+            lambda match: self._table_to_embedding_text(match.group()),
+            text,
+        )
+
         # 使用预编译的正则表达式移除各类标记
         text = RE_TABLE_START.sub('', text)
         text = RE_TABLE_END.sub('', text)
@@ -1479,106 +1658,6 @@ class FundVectorizer:
         if all_data:
             print(f"\n插入剩余 {len(all_data)} 条数据...")
             self.batch_insert(all_data, batch_size=insert_batch_size)
-
-    def search(self, query: str, top_k: int = 5, search_type: str = "hybrid") -> List[Dict]:
-        """
-        搜索相似内容
-
-        Args:
-            query: 查询文本
-            top_k: 返回top k结果
-            search_type: 搜索类型 - "dense"(仅稠密), "sparse"(仅神经稀疏), "hybrid"(混合RRF)
-
-        Returns:
-            搜索结果列表
-        """
-        if search_type == "dense":
-            # 仅稠密向量检索
-            return self._search_dense(query, top_k)
-        elif search_type == "sparse":
-            # 仅稀疏向量检索
-            return self._search_sparse(query, top_k)
-        elif search_type == "hybrid":
-            # 混合检索 + RRF融合
-            return self._search_hybrid(query, top_k)
-        else:
-            raise ValueError(f"不支持的搜索类型: {search_type}")
-
-    def _search_dense(self, query: str, top_k: int = 5) -> List[Dict]:
-        """仅使用稠密向量检索"""
-        # 生成查询向量
-        query_embedding = self.model.encode([query], return_dense=True, return_sparse=False)['dense_vecs'][0].tolist()
-
-        # 搜索
-        results = self.client.search(
-            collection_name=self.collection_name,
-            data=[query_embedding],
-            anns_field="embedding",
-            limit=top_k,
-            output_fields=["fund_code", "fund_name", "content", "chunk_index", "header_1", "header_2", "header_3", "header_4", "header_5", "header_6"]
-        )
-
-        return self._format_results(results)
-
-    def _search_sparse(self, query: str, top_k: int = 5) -> List[Dict]:
-        """仅使用神经稀疏向量检索 (Learned Sparse Retrieval)"""
-        # 生成稀疏向量
-        query_sparse = self.model.encode([query], return_dense=False, return_sparse=True)['lexical_weights'][0]
-
-        # 搜索
-        results = self.client.search(
-            collection_name=self.collection_name,
-            data=[query_sparse],
-            anns_field="sparse_embedding",
-            limit=top_k,
-            output_fields=["fund_code", "fund_name", "content", "chunk_index", "header_1", "header_2", "header_3", "header_4", "header_5", "header_6"]
-        )
-
-        return self._format_results(results)
-
-    def _search_hybrid(self, query: str, top_k: int = 5) -> List[Dict]:
-        """混合检索：稠密+稀疏 RRF融合"""
-        from hybrid_search import rrf_fusion, deduplicate_results
-
-        # 获取2倍的结果用于融合
-        dense_results = self._search_dense(query, top_k * 2)
-        sparse_results = self._search_sparse(query, top_k * 2)
-
-        # RRF融合
-        fused_results = rrf_fusion(
-            dense_results=dense_results,
-            sparse_results=sparse_results,
-            k=60,
-            dense_weight=0.5,
-            sparse_weight=0.5
-        )
-
-        # 去重
-        dedup_results = deduplicate_results(fused_results)
-
-        # 返回top_k
-        return dedup_results[:top_k]
-
-    def _format_results(self, results) -> List[Dict]:
-        """格式化Milvus搜索结果"""
-        formatted_results = []
-        for hits in results:
-            for hit in hits:
-                formatted_results.append({
-                    "fund_code": hit.get("entity", {}).get("fund_code", hit.get("fund_code")),
-                    "fund_name": hit.get("entity", {}).get("fund_name", hit.get("fund_name")),
-                    "content": hit.get("entity", {}).get("content", hit.get("content")),
-                    "chunk_index": hit.get("entity", {}).get("chunk_index", hit.get("chunk_index")),
-                    "header_1": hit.get("entity", {}).get("header_1", hit.get("header_1", "")),
-                    "header_2": hit.get("entity", {}).get("header_2", hit.get("header_2", "")),
-                    "header_3": hit.get("entity", {}).get("header_3", hit.get("header_3", "")),
-                    "header_4": hit.get("entity", {}).get("header_4", hit.get("header_4", "")),
-                    "header_5": hit.get("entity", {}).get("header_5", hit.get("header_5", "")),
-                    "header_6": hit.get("entity", {}).get("header_6", hit.get("header_6", "")),
-                    "score": hit.get("distance", 0)
-                })
-        return formatted_results
-
 
 class FundIndexBuilder:
     """基金识别索引构建器（两级RAG的第一级）
@@ -1893,7 +1972,7 @@ def main():
         encode_batch_size=ENCODE_BATCH_SIZE,
         insert_batch_size=INSERT_BATCH_SIZE,
         accumulate_threshold=ACCUMULATE_THRESHOLD,
-        force_codes=["160323","160314","159663","180202"]
+        force_codes=["ALL"] # ALL 表示全量重建，慎用
     )
 
     # ── 第二步：构建基金识别索引（两级RAG第一级）──

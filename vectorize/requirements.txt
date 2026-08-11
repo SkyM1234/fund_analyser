@@ -12,6 +12,8 @@ pymilvus>=3.0.0
 langchain-text-splitters>=1.1.0
 tqdm>=4.67.0
 numpy>=1.24.0
+pandas>=2.0.0
+lxml>=5.0.0
 
 # ── PDF 批量解析 ──
 httpx>=0.27.0
