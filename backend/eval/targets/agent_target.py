@@ -26,7 +26,25 @@ from app.agent.multi_agent_controller import build_multi_agent_graph
 
 logger = logging.getLogger(__name__)
 
-FUND_CODE_RE = re.compile(r"\b\d{6}\b")
+FUND_CODE_RE = re.compile(r"(?<!\d)\d{6}(?!\d)")
+
+
+def _extract_tool_fund_codes(tool_calls: list[dict]) -> list[str]:
+    codes: set[str] = set()
+    for tool_call in tool_calls:
+        if tool_call.get("name") != "rag_search":
+            continue
+        fund_codes = (tool_call.get("args") or {}).get("filter_fund_code")
+        if isinstance(fund_codes, str):
+            fund_codes = [fund_codes]
+        if not isinstance(fund_codes, list):
+            continue
+        codes.update(
+            code
+            for code in fund_codes
+            if isinstance(code, str) and FUND_CODE_RE.fullmatch(code)
+        )
+    return sorted(codes)
 
 # 每个进程独立的 checkpointer 和 graph
 _eval_checkpointer = MemorySaver()
@@ -136,12 +154,11 @@ async def agent_target(inputs: dict) -> dict:
     route_result = state.get("route_result")
     intent = route_result.intent if route_result is not None else None
 
-    cited_codes = sorted(set(FUND_CODE_RE.findall(final_answer)))
-
     tool_calls = [
         {"name": entry.get("name"), "args": entry.get("args")}
         for entry in state.get("tool_call_log", [])
     ]
+    cited_codes = _extract_tool_fund_codes(tool_calls)
 
     return {
         "answer": final_answer,

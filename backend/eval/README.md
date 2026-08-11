@@ -394,10 +394,7 @@ vectorize/vectorize_to_milvus.py
 
 [
   {
-    "name": "rag_identify_funds",
-    "args": {
-      "query": "原始 query"
-    }
+    "name": "rag_identify_funds"
   },
   {
     "name": "rag_search",
@@ -419,7 +416,7 @@ vectorize/vectorize_to_milvus.py
 ]
 
 3. 六位代码检测不能依赖只适用于英文的单词边界；必须正确识别类似“159128报告期内……”这种数字与中文直接相连的情况。
-4. rag_identify_funds 的 expected args 只标注 query，不要额外强行标注默认的 top_k 或 min_score。
+4. rag_identify_funds 只要求工具名被调用，不要标注或比较 args；Agent 可能改写用于识别的 query。
 5. expected_tool_calls 表示期望的工具调用链，不要因为普通 RAG 和 Agentic RAG 的结果不同而删除工具调用标注。
 
 七、Agentic RAG Ground Truth

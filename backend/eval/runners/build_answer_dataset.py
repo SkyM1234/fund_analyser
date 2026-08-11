@@ -184,7 +184,6 @@ def build_expected_tool_calls(query: str, fund_code: str) -> list[dict]:
         calls.append(
             {
                 "name": "rag_identify_funds",
-                "args": {"query": query},
             }
         )
     calls.append(

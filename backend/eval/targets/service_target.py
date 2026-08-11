@@ -9,7 +9,25 @@ from collections.abc import AsyncIterator
 
 import httpx
 
-FUND_CODE_RE = re.compile(r"\b\d{6}\b")
+FUND_CODE_RE = re.compile(r"(?<!\d)\d{6}(?!\d)")
+
+
+def _extract_tool_fund_codes(tool_calls: list[dict]) -> list[str]:
+    codes: set[str] = set()
+    for tool_call in tool_calls:
+        if tool_call.get("name") != "rag_search":
+            continue
+        fund_codes = (tool_call.get("args") or {}).get("filter_fund_code")
+        if isinstance(fund_codes, str):
+            fund_codes = [fund_codes]
+        if not isinstance(fund_codes, list):
+            continue
+        codes.update(
+            code
+            for code in fund_codes
+            if isinstance(code, str) and FUND_CODE_RE.fullmatch(code)
+        )
+    return sorted(codes)
 
 
 async def _iter_sse(response: httpx.Response) -> AsyncIterator[tuple[str, str]]:
@@ -199,7 +217,7 @@ class AnswerServiceTarget:
         answer = "".join(answer_parts)
         return {
             "answer": answer,
-            "cited_fund_codes": sorted(set(FUND_CODE_RE.findall(answer))),
+            "cited_fund_codes": _extract_tool_fund_codes(tool_calls),
             "intent": intent,
             "tool_calls": tool_calls,
             "retrieved_chunks": retrieved_chunks,

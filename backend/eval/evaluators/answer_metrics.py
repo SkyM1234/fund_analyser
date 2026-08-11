@@ -13,7 +13,7 @@ import re
 from typing import Any
 
 # 中国基金代码：6 位数字
-FUND_CODE_RE = re.compile(r"\b\d{6}\b")
+FUND_CODE_RE = re.compile(r"(?<!\d)\d{6}(?!\d)")
 
 # 触发"拒绝"语义的关键词（需与 multi_agent_controller.handle_compliance_failure 的拒答文案保持兼容）
 REFUSAL_MARKERS = (
@@ -44,12 +44,23 @@ def _get_truth(example: Any) -> dict:
 
 
 def _extract_cited_codes(outputs: dict) -> set[str]:
-    """优先用 target 已抽好的，其次从回答正则提取。"""
-    cited = outputs.get("cited_fund_codes")
-    if isinstance(cited, list):
-        return {c for c in cited if c}
-    answer = outputs.get("answer") or ""
-    return set(FUND_CODE_RE.findall(answer))
+    """只从实际 rag_search 的 filter_fund_code 参数提取基金代码。"""
+    cited: set[str] = set()
+    for tool_call in outputs.get("tool_calls") or []:
+        if not isinstance(tool_call, dict) or tool_call.get("name") != "rag_search":
+            continue
+        args = tool_call.get("args") or {}
+        fund_codes = args.get("filter_fund_code")
+        if isinstance(fund_codes, str):
+            fund_codes = [fund_codes]
+        if not isinstance(fund_codes, list):
+            continue
+        cited.update(
+            code
+            for code in fund_codes
+            if isinstance(code, str) and FUND_CODE_RE.fullmatch(code)
+        )
+    return cited
 
 
 def citation_accuracy(run: Any, example: Any) -> dict:
@@ -143,9 +154,12 @@ def _tool_call_matches(actual: dict, expected: dict) -> bool:
 
     name 必须相等；args 只要求 expected 里列出的键值对在 actual 里也存在
     （允许 expected 只标注关键参数，不要求列全 actual 的所有参数）。
+    rag_identify_funds 只验证工具是否被调用，因为 Agent 可能改写识别查询。
     """
     if actual.get("name") != expected.get("name"):
         return False
+    if expected.get("name") == "rag_identify_funds":
+        return True
     expected_args = expected.get("args") or {}
     actual_args = actual.get("args") or {}
     return all(actual_args.get(k) == v for k, v in expected_args.items())
