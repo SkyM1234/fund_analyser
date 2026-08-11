@@ -134,6 +134,20 @@ def ndcg(run: Any, example: Any) -> dict:
     return {"key": "ndcg", "score": dcg / idcg if idcg > 0 else 0.0}
 
 
+def session_mrr(run: Any, example: Any) -> dict:
+    """端到端对话级 MRR：对该会话合并后的检索结果计算首个相关 chunk 的倒数排名。"""
+    result = mrr(run, example)
+    result["key"] = "session_mrr"
+    return result
+
+
+def session_ndcg(run: Any, example: Any) -> dict:
+    """端到端对话级 NDCG：对该会话合并后的检索结果计算排序质量。"""
+    result = ndcg(run, example)
+    result["key"] = "session_ndcg"
+    return result
+
+
 def fund_code_recall(run: Any, example: Any) -> dict:
     """目标基金代码召回率：expected_fund_codes 中有多少在结果里出现。
 

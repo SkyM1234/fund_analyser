@@ -41,8 +41,8 @@
 | Key | 类型 | 含义 |
 |---|---|---|
 | `hit_rate` | 规则 | top-K 是否包含至少 1 个相关 chunk |
-| `mrr` | 规则 | 首个相关结果排名的倒数 |
-| `ndcg` | 规则 | 折损累计增益 |
+| `session_mrr` | 规则 | 会话内合并检索结果中首个相关 chunk 排名的倒数 |
+| `session_ndcg` | 规则 | 会话内合并检索结果的折损累计增益 |
 | `fund_code_recall` | 规则 | 期望基金代码被召回的比例 |
 | `context_relevance` | LLM-judge | 整体片段对问题的语义相关性 |
 
@@ -84,7 +84,7 @@
 ```
 
 完整回答评测会从 `retrieval_result` SSE 事件收集 RAG 子 Agent 实际命中的
-Milvus chunk，并计算与直接 RAG 相同的 `hit_rate`、`mrr`、`ndcg`。多次
+Milvus chunk，并计算 `hit_rate`、`session_mrr`、`session_ndcg`。多次
 `rag_search` 的结果按调用顺序合并，相同 chunk 只保留首次出现的位置。
 服务 target 会按 `--concurrency` 创建同等数量的评测用户，每个并发槽位独占
 一个 MCP 限流桶。评测使用服务的真实按用户限流，不会重置 MCP 调用计数；

@@ -304,6 +304,36 @@ class SearchResponse(BaseModel):
     total: int
 
 
+class RerankScoreRequest(BaseModel):
+    """计算查询与任意文本内容之间的 Reranker 分数。"""
+    query: str
+    contents: List[str]
+
+
+class RerankScoreResponse(BaseModel):
+    query: str
+    scores: List[float]
+
+
+@app.post("/rerank/score", response_model=RerankScoreResponse)
+async def score_reranker(request: RerankScoreRequest):
+    """计算任意 query-content 对的标准化 BGE Reranker 分数。"""
+    if batch_reranker is None:
+        raise HTTPException(status_code=503, detail="Reranker 服务未就绪")
+
+    query = request.query.strip()
+    if not query:
+        raise HTTPException(status_code=400, detail="query 不能为空")
+    if not request.contents:
+        raise HTTPException(status_code=400, detail="contents 不能为空")
+    if any(not content.strip() for content in request.contents):
+        raise HTTPException(status_code=400, detail="contents 中不能包含空文本")
+
+    pairs = [[query, content] for content in request.contents]
+    scores = await batch_reranker.compute(pairs)
+    return RerankScoreResponse(query=query, scores=scores)
+
+
 @app.post("/fund_reports/search", response_model=SearchResponse)
 async def search_funds(request: SearchRequest):
     """

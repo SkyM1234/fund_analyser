@@ -46,8 +46,8 @@ def _get_evaluators(use_judge: bool) -> list:
         am.intent_accuracy,
         am.tool_call_accuracy,
         rm.hit_rate,
-        rm.mrr,
-        rm.ndcg,
+        rm.session_mrr,
+        rm.session_ndcg,
     ]
     if use_judge:
         evaluators.extend([judge.correctness, judge.answer_relevance])
