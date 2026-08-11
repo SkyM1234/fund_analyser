@@ -15,8 +15,8 @@ frontend/dist/
 *.log
 /backend/eval/reports/
 /milvus-docker/volumes/
-/backend/ripts/hunk.txt
-vectorize/able.html
+/backend/scripts/chunk.txt
+/vectorize/table.html
 
 # Large local datasets, models, and archives
 /embedding_model/
