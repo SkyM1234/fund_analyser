@@ -283,3 +283,189 @@ LangSmith 完成，因此始终需要有效的 `LANGSMITH_API_KEY`。
   5. 修改过的文件列表。
 
   请持续执行到数据集成功生成并验证完成，不要停留在方案、问题草稿或未解决的构建报错。
+## 构建 answer 数据集的提示词
+
+请继续构建本项目的 answer 评测数据集。不要只给方案，请直接检查代码、修改必要文件、生成数据并完成验证。
+
+项目目录：
+E:\pythonprojects\fund_analyser
+
+一、先检查上下文
+
+1. 检查当前 git/worktree 状态，保留已有用户修改，不要 reset、checkout 或覆盖无关改动。
+2. 阅读以下文件，理解现有字段、构建逻辑、评测逻辑和服务调用链：
+   - backend/eval/README.md
+   - backend/eval/datasets/answer.jsonl
+   - backend/eval/datasets/retrieval.jsonl
+   - backend/eval/runners/build_answer_dataset.py
+   - backend/eval/runners/run_answer_eval.py
+   - backend/eval/targets/service_target.py
+   - backend/eval/evaluators/answer_metrics.py
+   - backend/app/agent/rag_agent.py
+   - backend/app/services/rag_result_parser.py
+   - backend/mcp/rag-mcp/src/server.py
+   - vectorize/vectorize_to_milvus.py
+3. 如果已有构建脚本或数据，不要另起一个重复脚本；优先在现有脚本上增量修改。
+4. 如果发现当前代码已经实现了某项要求，先验证其行为，再避免重复修改。
+
+二、当前 answer 数据集的目标
+
+本次优先构建：
+
+- intent = "fund_query"
+- category = "single_fund_strategy"
+- 数据来源优先使用 retrieval.jsonl 中已经存在且经过验证的问题。
+
+默认先处理 retrieval.jsonl 中尚未用于 answer 的合适样本；如果已有 answer 样本，应按现有 ID、顺序和去重逻辑继续，不要重复添加相同 query。
+
+三、问题筛选规则
+
+1. single_fund_strategy 的 query 必须明确指向一个基金。
+2. 优先选择：
+   - query 中直接出现六位基金代码；或
+   - query 中出现完整基金名称；或
+   - query 中出现经过核验、能够唯一映射到该基金的简称/别名。
+3. 不要仅凭相邻数据、基金代码顺序或常识推断 query 指向的基金。
+4. 如果 query 不能唯一确定某个基金，跳过该样本，换用下一个合适样本。
+5. 不要选择同时指向多个基金、泛泛询问基金类别、或无法由单一基金报告内容回答的问题。
+6. 如果某个候选样本质量不合适，应明确跳过并记录原因。例如，single_fund_strategy 不应使用没有明确基金指向的 query。
+
+四、Milvus Ground Truth
+
+Milvus 地址：
+http://localhost:19595
+
+主要 collection：
+fund_reports_mineru
+
+必须参考：
+vectorize/vectorize_to_milvus.py
+
+要求：
+
+1. 直接查询当前 Milvus，使用真实存在的 chunk、主键 id 和 metadata。
+2. 不要猜测、编造或根据 Markdown 内容自行生成 chunk ID。
+3. relevant_chunk_ids 必须填写 Milvus 中真实的 id，不能用 chunk_index 替代。
+4. 每个 relevant_chunk_id 必须：
+   - 在 Milvus 中存在；
+   - 属于 expected_fund_codes 对应的基金；
+   - 内容能够直接支持 query 的答案。
+5. 优先选择能够完整回答问题的最少 chunk。
+6. 只有问题确实需要多个章节或多个事实时，才添加多个 relevant_chunk_ids。
+7. 不要把只有相同关键词、但不能支持答案的 chunk 标为 Ground Truth。
+8. 不要混入其他基金的 chunk。
+9. 核对 metadata 中的 fund_code、file_path、chunk_index 等字段，发现不一致时先定位数据问题，不要带着冲突继续生成。
+10. 可以使用现有辅助脚本查询原始 chunk；如果辅助脚本不可用，做最小必要修复，不要另建重复工具。
+
+五、answer.jsonl 字段要求
+
+每行必须是一个合法 JSON 对象，至少包含：
+
+{
+  "id": "answer-001",
+  "query": "...",
+  "reference_answer": "...",
+  "expected_fund_codes": ["159xxx"],
+  "key_facts": ["..."],
+  "should_refuse": false,
+  "intent": "fund_query",
+  "category": "single_fund_strategy",
+  "relevant_keywords": ["..."],
+  "relevant_chunk_ids": ["真实 Milvus chunk id"],
+  "expected_tool_calls": [],
+  "note": "来源、选择理由、chunk_index 和 chunk id"
+}
+
+字段规则：
+
+1. reference_answer 必须严格依据 relevant_chunk_ids 中的内容撰写，不要凭常识补充报告中没有的事实。
+2. expected_fund_codes 必须与 query 和相关 chunk 的基金一致。
+3. key_facts 应是答案中应明确出现的关键事实、数字、指数名称、策略或风险；不要填泛化词。
+4. relevant_keywords 必须是相关 chunk 原文中真实存在的短语，并且能够证明语义相关性。
+5. note 应说明 retrieval 来源、基金、问题主题、chunk_index 和真实 chunk id。
+6. 保持现有 answer.jsonl 的字段风格、编码和 JSONL 格式。
+7. 保留其他 category 的既有样本，不要因为重建 strategy 样本而删除它们。
+
+六、expected_tool_calls 规则
+
+必须根据 query 是否直接包含六位基金代码生成：
+
+1. query 不直接包含六位基金代码时，expected_tool_calls 必须按以下顺序包含：
+
+[
+  {
+    "name": "rag_identify_funds",
+    "args": {
+      "query": "原始 query"
+    }
+  },
+  {
+    "name": "rag_search",
+    "args": {
+      "filter_fund_code": "最终确定的基金代码"
+    }
+  }
+]
+
+2. query 直接包含六位基金代码时，只需要：
+
+[
+  {
+    "name": "rag_search",
+    "args": {
+      "filter_fund_code": "基金代码"
+    }
+  }
+]
+
+3. 六位代码检测不能依赖只适用于英文的单词边界；必须正确识别类似“159128报告期内……”这种数字与中文直接相连的情况。
+4. rag_identify_funds 的 expected args 只标注 query，不要额外强行标注默认的 top_k 或 min_score。
+5. expected_tool_calls 表示期望的工具调用链，不要因为普通 RAG 和 Agentic RAG 的结果不同而删除工具调用标注。
+
+七、Agentic RAG Ground Truth
+
+1. answer 评测通过 Docker 中已经启动的完整后端服务执行，不要把 answer 评测改回本机 local-agent。
+2. 不要新增或保留 --target local-agent 作为 answer 评测目标。
+3. service_target 应通过服务的完整对话流程收集实际 retrieval_result SSE 事件中的 chunk IDs。
+4. 如果当前流程无法收集子 RAG Agent 实际命中的 chunk IDs，应优先修复 SSE/结果解析/target 链路，使 relevant_chunk_ids 能用于 Agentic RAG 的 hit_rate、MRR、NDCG 比较。
+5. 不要伪造 Agentic RAG 的 chunk IDs，也不要只从最终答案中反推 chunk IDs。
+6. 不要在评测前调用 MCP reset-stats；保留服务真实的按用户限流行为。
+7. 不要为了评测创建独立 Docker 环境或禁用限流，除非用户明确要求。
+8. --concurrency 表示同时运行的评测样本数；服务端应有相匹配数量的可用 worker/并发槽位。不要把它误解成每个样本内部的工具调用数。
+
+八、构建与验证
+
+1. 运行现有 build_answer_dataset.py 生成或更新 answer.jsonl。
+2. 如果脚本需要访问 Milvus，使用：
+
+python backend/eval/runners/build_answer_dataset.py --milvus-uri http://localhost:19595 --collection fund_reports_mineru
+
+3. 运行以下检查：
+   - 每行都是合法 JSON；
+   - id 连续且没有重复；
+   - query 没有重复；
+   - expected_fund_codes、基金名称和 relevant_chunk_ids 一致；
+   - 所有 relevant_chunk_ids 都能在 Milvus 查询到；
+   - 所有 Ground Truth chunk 都属于目标基金；
+   - relevant_keywords 出现在对应 chunk 内容中；
+   - reference_answer 能由 Ground Truth chunk 支持；
+   - 未写出不应存在的 local-agent target；
+   - query 不含六位代码的样本均包含 rag_identify_funds -> rag_search；
+   - query 含六位代码的样本仅包含 rag_search；
+   - 构建脚本可以重复运行，不会重复追加或破坏既有数据；
+   - Python 语法检查通过。
+4. 如果构建过程出现 chunk 不存在、metadata 不一致、关键词缺失或 query 不明确，不要绕过校验；查询 Milvus 后修正样本或更换候选样本。
+5. 如果 Docker、Milvus、Python 依赖或权限导致某项验证无法执行，明确记录实际失败步骤和原因，同时完成不依赖该外部服务的其他校验。
+
+九、完成时报告
+
+完成后简要报告：
+
+1. 修改了哪些文件；
+2. 新增或更新了多少条 answer 样本；
+3. 使用了哪些 retrieval 样本、基金代码和 chunk IDs；
+4. expected_tool_calls 规则验证结果；
+5. Milvus、JSONL、重复数据、语法和构建幂等性验证结果；
+6. 仍存在的外部依赖或未完成验证。
+
+请持续执行到数据集生成和验证完成，不要停留在方案、问题列表或未解决的构建报错上。
