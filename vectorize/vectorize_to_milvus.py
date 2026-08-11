@@ -1227,7 +1227,7 @@ class FundVectorizer:
         return re.sub(r'\s+', ' ', text).strip()
 
     def _is_vertical_key_value_table(self, rows: List[List[str]]) -> bool:
-        """判断两列表格是否符合“字段: 值”的纵向键值结构。"""
+        """判断两列表格是否符合“字段：值”的纵向键值结构。"""
         if len(rows) < 2 or any(len(row) != 2 for row in rows):
             return False
 
@@ -1284,7 +1284,7 @@ class FundVectorizer:
     @staticmethod
     def _format_row_fallback(row: List[str]) -> str:
         """无法可靠识别表头时，按行保留单元格内容。"""
-        return "表格行: " + " | ".join(cell for cell in row if cell)
+        return "表格行：" + " | ".join(cell for cell in row if cell)
 
     def _dataframe_to_embedding_text(self, dataframe) -> str:
         """将 pandas DataFrame 转换为适合向量化的表格文本。"""
@@ -1297,7 +1297,7 @@ class FundVectorizer:
             return ""
 
         if self._is_vertical_key_value_table(rows):
-            return "\n".join(f"{key}: {value}" for key, value in rows)
+            return "\n".join(f"{key}：{value}" for key, value in rows)
 
         header_row_count = self._infer_header_row_count(rows)
         if not header_row_count or header_row_count >= len(rows):
@@ -1315,12 +1315,12 @@ class FundVectorizer:
         formatted_rows = []
         for row in rows[header_row_count:]:
             fields = [
-                f"{header}: {value}"
+                f"{header}：{value}"
                 for header, value in zip(headers, row)
                 if value
             ]
             if fields:
-                formatted_rows.append("；".join(fields))
+                formatted_rows.append(" | ".join(fields))
 
         return "\n".join(formatted_rows) or "\n".join(
             self._format_row_fallback(row) for row in rows

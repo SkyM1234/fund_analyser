@@ -84,7 +84,7 @@ def infer_header_row_count(rows: list[list[str]]) -> int:
 
 
 def format_row_fallback(row: list[str]) -> str:
-    return "表格行: " + " | ".join(cell for cell in row if cell)
+    return "表格行：" + " | ".join(cell for cell in row if cell)
 
 
 def dataframe_to_text(dataframe: pd.DataFrame) -> str:
@@ -97,7 +97,7 @@ def dataframe_to_text(dataframe: pd.DataFrame) -> str:
         return ""
 
     if is_vertical_key_value_table(rows):
-        return "\n".join(f"{key}: {value}" for key, value in rows)
+        return "\n".join(f"{key}：{value}" for key, value in rows)
 
     header_row_count = infer_header_row_count(rows)
     if not header_row_count or header_row_count >= len(rows):
@@ -115,12 +115,12 @@ def dataframe_to_text(dataframe: pd.DataFrame) -> str:
     normalized_rows = []
     for row in rows[header_row_count:]:
         fields = [
-            f"{header}: {value}"
+            f"{header}：{value}"
             for header, value in zip(headers, row)
             if value
         ]
         if fields:
-            normalized_rows.append("；".join(fields))
+            normalized_rows.append(" | ".join(fields))
 
     return "\n".join(normalized_rows) or "\n".join(
         format_row_fallback(row) for row in rows
