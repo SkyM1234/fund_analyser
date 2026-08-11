@@ -27,14 +27,14 @@ from eval.config import get_eval_settings
 from eval.evaluators import answer_metrics as am
 from eval.evaluators import llm_judge as judge
 from eval.evaluators import retrieval_metrics as rm
+from eval.reporting import build_aggregate_report
 from eval.schemas import AnswerExample
 from eval.targets.service_target import AnswerServiceTarget
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
-REPORT_DIR = Path(__file__).resolve().parent.parent / "reports"
-REPORT_DIR.mkdir(exist_ok=True)
+REPORT_DIR = Path(__file__).resolve().parent.parent / "reports" / "answer"
 DATASET_PATH = Path(__file__).resolve().parent.parent / "datasets" / "answer.jsonl"
 
 
@@ -214,19 +214,16 @@ async def _run_jsonl(concurrency: int, use_judge: bool, target) -> list[dict]:
     return rows
 
 
-def _log_aggregate(rows: list[dict]) -> None:
-    if not rows:
-        return
-
-    agg: dict[str, list[float]] = {}
-    for row in rows:
-        for key, value in row["scores"].items():
-            if isinstance(value.get("score"), (int, float)):
-                agg.setdefault(key, []).append(float(value["score"]))
-
+def _log_aggregate(aggregate: dict) -> None:
     logger.info("聚合得分：")
-    for key, values in agg.items():
-        logger.info("  %-24s: mean=%.3f n=%d", key, sum(values) / len(values), len(values))
+    for key, metric in aggregate["metrics"].items():
+        logger.info("  %-24s: mean=%.3f n=%d", key, metric["mean"], metric["count"])
+    logger.info(
+        "样本：total=%d successful=%d failed=%d",
+        aggregate["sample_count"],
+        aggregate["successful_sample_count"],
+        aggregate["failed_sample_count"],
+    )
 
 
 async def run(
@@ -263,12 +260,24 @@ async def run(
     finally:
         await service_target.aclose()
 
-    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    generated_at = datetime.now()
+    stamp = generated_at.strftime("%Y%m%d-%H%M%S")
     suffix = f"-jsonl-{stamp}" if no_langsmith else f"-{stamp}"
     out_path = REPORT_DIR / f"answer-{experiment_prefix}{suffix}.json"
-    _log_aggregate(rows)
+    summary_path = out_path.with_name(f"{out_path.stem}-summary.json")
+    aggregate = build_aggregate_report(
+        report_type="answer",
+        experiment_prefix=experiment_prefix,
+        run_mode="jsonl" if no_langsmith else "langsmith",
+        rows=rows,
+        generated_at=generated_at,
+    )
+    REPORT_DIR.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(rows, ensure_ascii=False, indent=2), encoding="utf-8")
+    summary_path.write_text(json.dumps(aggregate, ensure_ascii=False, indent=2), encoding="utf-8")
     logger.info(f"[OK] 报告已落盘: {out_path}")
+    logger.info(f"[OK] 聚合得分已落盘: {summary_path}")
+    _log_aggregate(aggregate)
 
 
 def main():

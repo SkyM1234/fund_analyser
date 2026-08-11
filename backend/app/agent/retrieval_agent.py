@@ -4,15 +4,16 @@
     from app.agent.retrieval_agent import make_retrieval_node, AgentConfig
     node_fn = make_retrieval_node(AgentConfig(...))
 """
+import asyncio
 import logging
+import re
 import time
 from dataclasses import dataclass
 from typing import Any
 
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
-from langgraph.prebuilt import ToolNode
 
 from app.core.config import get_settings
 from app.core.llm_concurrency import llm_ainvoke
@@ -22,6 +23,7 @@ from app.tools.token_usage import record_usage
 from app.agent.reflection_agent import agent_self_check, _improve_query, MAX_REFLECTION_RETRIES
 
 logger = logging.getLogger(__name__)
+FUND_CODE_RE = re.compile(r"(?<!\d)\d{6}(?!\d)")
 
 
 @dataclass
@@ -76,6 +78,124 @@ def _mark_finished(task: dict) -> None:
     started_at = task.get("started_at")
     if started_at is not None:
         task["duration_ms"] = (finished_at - started_at) * 1000
+
+
+def _latest_user_fund_codes(messages: list) -> set[str]:
+    """提取当前用户消息中明确给出的6位基金代码。"""
+    for message in reversed(messages):
+        if isinstance(message, HumanMessage):
+            return set(FUND_CODE_RE.findall(str(message.content)))
+    return set()
+
+
+def _normalize_filter_fund_codes(value: Any) -> set[str]:
+    if isinstance(value, str):
+        return {value} if FUND_CODE_RE.fullmatch(value) else set()
+    if isinstance(value, list):
+        return {
+            code
+            for code in value
+            if isinstance(code, str) and FUND_CODE_RE.fullmatch(code)
+        }
+    return set()
+
+
+def _tool_output_text(output: Any) -> str:
+    return output if isinstance(output, str) else str(output)
+
+
+async def _execute_tool_calls(
+    *,
+    response,
+    tools_by_name: dict[str, Any],
+    agent_name: str,
+    task_id: str,
+    allowed_fund_codes: set[str],
+    tool_call_log: list[dict],
+) -> list[ToolMessage]:
+    """执行工具调用，并校验 RAG 基金代码的来源。"""
+    valid_calls: list[dict] = []
+    tool_messages: list[ToolMessage] = []
+
+    for index, tool_call in enumerate(response.tool_calls):
+        tool_name = tool_call.get("name", "")
+        tool_args = tool_call.get("args") or {}
+        tool_call_id = tool_call.get("id") or f"call_{index}"
+
+        if (
+            agent_name == "rag_agent"
+            and tool_name == "rag_search"
+            and tool_args.get("filter_fund_code") not in (None, "", [])
+        ):
+            requested_codes = _normalize_filter_fund_codes(
+                tool_args.get("filter_fund_code")
+            )
+            if not requested_codes or not requested_codes.issubset(allowed_fund_codes):
+                logger.warning(
+                    "[%s] 已拦截使用未确认基金代码的 rag_search：%s；允许代码=%s",
+                    agent_name,
+                    tool_args.get("filter_fund_code"),
+                    sorted(allowed_fund_codes),
+                )
+                tool_messages.append(
+                    ToolMessage(
+                        tool_call_id=tool_call_id,
+                        name=tool_name,
+                        content=(
+                            "基金代码未确认，未执行 rag_search。filter_fund_code 只能来自"
+                            "用户原始问题中明确给出的6位代码，或本任务 rag_identify_funds 的返回结果。"
+                        ),
+                        status="error",
+                    )
+                )
+                continue
+
+        if tool_name not in tools_by_name:
+            tool_messages.append(
+                ToolMessage(
+                    tool_call_id=tool_call_id,
+                    name=tool_name,
+                    content=f"工具不可用：{tool_name}",
+                    status="error",
+                )
+            )
+            continue
+
+        valid_calls.append(
+            {"name": tool_name, "args": tool_args, "id": tool_call_id}
+        )
+        tool_call_log.append(
+            {
+                "agent": agent_name,
+                "task_id": task_id,
+                "name": tool_name,
+                "args": tool_args,
+            }
+        )
+
+    async def invoke(tool_call: dict) -> ToolMessage:
+        try:
+            output = await tools_by_name[tool_call["name"]].ainvoke(tool_call["args"])
+            content = _tool_output_text(output)
+            if agent_name == "rag_agent" and tool_call["name"] == "rag_identify_funds":
+                allowed_fund_codes.update(FUND_CODE_RE.findall(content))
+            return ToolMessage(
+                tool_call_id=tool_call["id"],
+                name=tool_call["name"],
+                content=content,
+            )
+        except Exception as exc:
+            logger.exception("[%s] 工具 %s 调用失败", agent_name, tool_call["name"])
+            return ToolMessage(
+                tool_call_id=tool_call["id"],
+                name=tool_call["name"],
+                content=f"工具调用失败：{exc}",
+                status="error",
+            )
+
+    if valid_calls:
+        tool_messages.extend(await asyncio.gather(*(invoke(call) for call in valid_calls)))
+    return tool_messages
 
 
 def _build_task_message(current_task: dict, agent_name: str, query: str | None = None) -> str:
@@ -143,7 +263,7 @@ def make_retrieval_node(config: AgentConfig):
             temperature=0.3,
         )
         llm_with_tools = llm.bind_tools(tools)
-        tool_node = ToolNode(tools)
+        tools_by_name = {tool.name: tool for tool in tools}
 
         history_messages = get_recent_messages_for_agent(
             state.get("messages", []), rounds=2, exclude_current_human=True
@@ -152,6 +272,7 @@ def make_retrieval_node(config: AgentConfig):
         token_usage: dict[str, dict[str, int]] = {}
         tool_call_log: list[dict] = []
         task_query = current_task.get("query", "")
+        allowed_fund_codes = _latest_user_fund_codes(state.get("messages", []))
         retry_count = 0
 
         try:
@@ -222,15 +343,15 @@ def make_retrieval_node(config: AgentConfig):
                         }
 
                     logger.info(f"[{label}] Executing {len(response.tool_calls)} tool calls")
-                    for tc in response.tool_calls:
-                        tool_call_log.append({
-                            "agent": label,
-                            "task_id": current_task_id,
-                            "name": tc.get("name"),
-                            "args": tc.get("args"),
-                        })
-                    tool_messages = await tool_node.ainvoke({"messages": messages})
-                    messages.extend(tool_messages["messages"])
+                    tool_messages = await _execute_tool_calls(
+                        response=response,
+                        tools_by_name=tools_by_name,
+                        agent_name=label,
+                        task_id=current_task_id,
+                        allowed_fund_codes=allowed_fund_codes,
+                        tool_call_log=tool_call_log,
+                    )
+                    messages.extend(tool_messages)
 
                 # 超出最大迭代：重试预算未用完时，改写 query 原地重跑一轮；用完预算才真正判定为 failed。
                 # 同一分支内部完成，不涉及跨节点/跨并行分支的状态传递，避免 Send fan-out 场景下 reflection 类下游节点无法可靠定位"这次是哪个 task_id"的问题。

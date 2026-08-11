@@ -120,7 +120,7 @@ LangSmith 完成，因此始终需要有效的 `LANGSMITH_API_KEY`。
 
 每次运行后：
 - 结果同步到 LangSmith 项目 `fund-analyser-eval`
-- 本地落盘 JSON 到 `eval/reports/`
+- 本地落盘 JSON 到 `eval/reports/<评测类型>/`；每次运行同时生成明细报告和 `-summary.json` 聚合得分报告
 - 控制台打印每个指标的均值
 
 ## 设计取舍
