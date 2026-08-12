@@ -4,7 +4,7 @@
 
 用法:
     python scripts/score_rag_pair.py "基金的复制策略是什么？" "本基金采用完全复制法..."
-    python scripts/score_rag_pair.py "基金经理是谁？" --content-file E:\tmp\chunk.txt
+    python scripts/score_rag_pair.py "基金经理是谁？" --content-file scripts\chunk.txt 
 """
 from __future__ import annotations
 
