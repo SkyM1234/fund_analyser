@@ -143,11 +143,13 @@ async def _load_session_detail(thread_id: str) -> SessionDetail:
                             tools.append({
                                 "name": tc.get("name", ""),
                                 "args": tc.get("args", {}),
+                                "tool_call_id": tc.get("id", ""),
                             })
                         elif hasattr(tc, "get"):
                             tools.append({
                                 "name": tc.get("name", ""),
                                 "args": tc.get("args", {}),
+                                "tool_call_id": tc.get("id", ""),
                             })
 
                 if str(content).strip() or tools:
@@ -159,9 +161,23 @@ async def _load_session_detail(thread_id: str) -> SessionDetail:
             elif role == "tool":
                 if formatted_messages and formatted_messages[-1]["role"] == "assistant":
                     tool_name = msg.name if hasattr(msg, "name") else msg.get("name", "") if isinstance(msg, dict) else ""
+                    tool_call_id = (
+                        msg.tool_call_id
+                        if hasattr(msg, "tool_call_id")
+                        else msg.get("tool_call_id", "")
+                        if isinstance(msg, dict)
+                        else ""
+                    )
                     output = str(content)
                     for tool in formatted_messages[-1]["tools"]:
-                        if tool["name"] == tool_name and "output" not in tool:
+                        if (
+                            tool_call_id
+                            and tool.get("tool_call_id") == tool_call_id
+                        ) or (
+                            not tool_call_id
+                            and tool["name"] == tool_name
+                            and "output" not in tool
+                        ):
                             tool["output"] = output
                             break
 

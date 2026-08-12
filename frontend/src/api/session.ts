@@ -13,7 +13,7 @@ export interface SessionItem {
 
 export interface SessionDetail {
   thread_id: string
-  messages: Array<{ role: string; content: string; tools?: Array<{ name: string; args: any; output?: string; agent_name?: string; retry_attempt?: number }>; agents?: Array<{ agent_name: string; task_id: string; description: string; status: string }> }>
+  messages: Array<{ role: string; content: string; tools?: Array<{ name: string; args: any; tool_call_id?: string; output?: string; agent_name?: string; retry_attempt?: number }>; agents?: Array<{ agent_name: string; task_id: string; description: string; status: string }> }>
   checkpoint_count: number
 }
 

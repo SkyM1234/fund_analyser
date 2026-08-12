@@ -227,7 +227,13 @@ async def _run_chat_turn(run_id: str, req: ChatRequest, user_id: int) -> None:
                     tool_name = event["name"]
                     tool_args = event["data"].get("input", {})
                     parent_node = event.get("metadata", {}).get("langgraph_node")
-                    payload: dict = {"name": tool_name, "args": tool_args}
+                    # LangChain 为同一次工具执行的 start/end 事件使用同一个 run_id。
+                    # 透传该 ID，避免并发同名工具按到达顺序在前端错误配对。
+                    payload: dict = {
+                        "name": tool_name,
+                        "args": tool_args,
+                        "tool_call_id": str(event.get("run_id", "")),
+                    }
                     if parent_node and parent_node in worker_agent_names:
                         payload["agent_name"] = parent_node
                     logger.info(f"[chat_task] event: tool_call -> {tool_name}" + (f" (agent={parent_node})" if parent_node else ""))
@@ -237,7 +243,11 @@ async def _run_chat_turn(run_id: str, req: ChatRequest, user_id: int) -> None:
                     output = event["data"].get("output")
                     output_str = tool_output_to_text(output)
                     logger.info(f"[chat_task] event: tool_result -> {event['name']}")
-                    publish_event(run_id, "tool_result", {"name": event["name"], "output": output_str})
+                    publish_event(run_id, "tool_result", {
+                        "name": event["name"],
+                        "output": output_str,
+                        "tool_call_id": str(event.get("run_id", "")),
+                    })
                     if event["name"] == "rag_search":
                         chunks = parse_rag_search_result(output_str)
                         parent_node = event.get("metadata", {}).get("langgraph_node")

@@ -5,6 +5,7 @@ import { sendChatStream, type ChatHistoryItem } from '../api/chat'
 export interface ToolStep {
   name: string
   args: unknown
+  tool_call_id?: string
   output?: string
   agent_name?: string
   retry_attempt?: number
@@ -159,21 +160,24 @@ export const useChatStore = defineStore('chat', () => {
             assistant.content = ''
             assistant.retryNotice = reason
           },
-          onToolCall: (name, args, agentName) => {
+          onToolCall: (name, args, agentName, toolCallId) => {
             const step: ToolStep = { name, args }
             if (agentName) step.agent_name = agentName
+            if (toolCallId) step.tool_call_id = toolCallId
             if (pendingRetry) {
               step.retry_attempt = pendingRetry.attempt
               pendingRetry = null
             }
             assistant.tools.push(step)
           },
-          onToolResult: (name, output) => {
-            const step = [...assistant.tools]
-              .reverse()
-              .find((tool) => tool.name === name && !tool.output)
+          onToolResult: (name, output, toolCallId) => {
+            const step = toolCallId
+              ? assistant.tools.find((tool) => tool.tool_call_id === toolCallId)
+              : [...assistant.tools]
+                .reverse()
+                .find((tool) => tool.name === name && !tool.output)
             if (step) step.output = output
-            else assistant.tools.push({ name, args: null, output })
+            else assistant.tools.push({ name, args: null, output, tool_call_id: toolCallId })
           },
           onAgentStart: (agent_name, task_id, description) => {
             assistant.agents.push({
@@ -273,6 +277,7 @@ export const useChatStore = defineStore('chat', () => {
           tools: (message.tools || []).map((tool) => ({
             name: tool.name,
             args: tool.args,
+            tool_call_id: tool.tool_call_id,
             output: tool.output,
             agent_name: tool.agent_name,
             retry_attempt: tool.retry_attempt,
