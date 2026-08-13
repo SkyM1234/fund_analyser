@@ -151,8 +151,8 @@ class AnswerServiceTarget:
 
         answer_parts: list[str] = []
         tool_calls: list[dict] = []
-        retrieved_chunks: list[dict] = []
-        seen_chunk_ids: set[str] = set()
+        retrieval_contexts_by_task: dict[str, list[dict]] = {}
+        retrieval_context_task_order: list[str] = []
         intent: str | None = None
         received_done = False
 
@@ -196,13 +196,13 @@ class AnswerServiceTarget:
                             ),
                         }
                     )
-                elif event_name == "retrieval_result":
-                    for chunk in data.get("chunks") or []:
-                        chunk_id = str(chunk.get("id") or "")
-                        if not chunk_id or chunk_id in seen_chunk_ids:
-                            continue
-                        seen_chunk_ids.add(chunk_id)
-                        retrieved_chunks.append(chunk)
+                elif event_name == "retrieval_context":
+                    task_id = str(data.get("task_id") or "")
+                    if not task_id:
+                        continue
+                    if task_id not in retrieval_contexts_by_task:
+                        retrieval_context_task_order.append(task_id)
+                    retrieval_contexts_by_task[task_id] = list(data.get("chunks") or [])
                 elif event_name == "error":
                     raise RuntimeError(data.get("message") or "聊天服务返回 error 事件")
                 elif event_name == "done":
@@ -214,6 +214,11 @@ class AnswerServiceTarget:
         if not received_done:
             raise RuntimeError("聊天服务连接结束但未收到 done 事件")
 
+        retrieved_chunks = [
+            chunk
+            for task_id in retrieval_context_task_order
+            for chunk in retrieval_contexts_by_task[task_id]
+        ]
         answer = "".join(answer_parts)
         return {
             "answer": answer,
@@ -222,6 +227,13 @@ class AnswerServiceTarget:
             "tool_calls": tool_calls,
             "retrieved_chunks": retrieved_chunks,
             "retrieved_chunk_ids": [chunk["id"] for chunk in retrieved_chunks],
+            "retrieved_chunk_scores": [
+                {
+                    "id": chunk["id"],
+                    "score": chunk.get("score"),
+                }
+                for chunk in retrieved_chunks
+            ],
         }
 
 

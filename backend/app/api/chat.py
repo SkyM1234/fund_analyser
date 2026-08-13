@@ -12,8 +12,8 @@
 - agent_end      子 Agent 节点执行完毕 {"agent_name": "...", "task_id": "...", "status": "completed|failed"}
 - tool_call      Agent 决定调用工具 {"name": "...", "args": {...}, "agent_name": "..."}
 - tool_result    工具返回结果 {"name": "...", "output": "..."}
-- retrieval_result RAG 工具返回的结构化 chunk metadata
-                   {"name": "rag_search", "agent_name": "...", "chunks": [...]}
+- retrieval_context RAG Agent 实际传给 LLM 的最终 chunk metadata
+                   {"agent_name": "...", "task_id": "...", "chunks": [...]}
 - tool_retry     Agent 内部触发重试 {"agent_name": "...", "task_id": "...", "attempt": 2, "reason": "..."}
 - done           结束 {"finish_reason": "stop"}
 - error          异常 {"message": "..."}

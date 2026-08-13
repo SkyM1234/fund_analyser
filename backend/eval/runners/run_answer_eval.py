@@ -99,6 +99,7 @@ async def _run_langsmith(
                 "cited_fund_codes": outputs.get("cited_fund_codes"),
                 "tool_calls": outputs.get("tool_calls"),
                 "retrieved_chunk_ids": outputs.get("retrieved_chunk_ids"),
+                "retrieved_chunk_scores": outputs.get("retrieved_chunk_scores"),
                 "scores": scores,
             }
         )
@@ -136,6 +137,7 @@ def _format_jsonl_row(
         "cited_fund_codes": outputs.get("cited_fund_codes"),
         "tool_calls": outputs.get("tool_calls"),
         "retrieved_chunk_ids": outputs.get("retrieved_chunk_ids"),
+        "retrieved_chunk_scores": outputs.get("retrieved_chunk_scores"),
         "scores": scores,
     }
     if outputs.get("error"):

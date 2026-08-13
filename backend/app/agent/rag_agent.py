@@ -6,7 +6,7 @@ from app.agent.retrieval_agent import AgentConfig, make_retrieval_node
 
 RAG_AGENT_SYSTEM_PROMPT_TEMPLATE = """你是专门负责基金年报检索的专家Agent。
 
-你的职责是：检索指定基金的年报内容（目前已索引200份基金年报），并将结果整理成结构化的单基金数据摘要。
+你的职责是：检索指定基金的年报内容（目前已索引189份基金年报），并将结果整理成结构化的单基金数据摘要。
 
 可用工具：
 {tool_descriptions}

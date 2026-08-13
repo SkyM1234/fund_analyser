@@ -83,7 +83,7 @@
 }
 ```
 
-完整回答评测会从 `retrieval_result` SSE 事件收集 RAG 子 Agent 实际命中的
+完整回答评测会从 `retrieval_context` SSE 事件收集 RAG 子 Agent 实际传给 LLM 的
 Milvus chunk，并计算 `hit_rate`、`session_mrr`、`session_ndcg`。多次
 `rag_search` 的结果按调用顺序合并，相同 chunk 只保留首次出现的位置。
 服务 target 会按 `--concurrency` 创建同等数量的评测用户，每个并发槽位独占
@@ -424,7 +424,7 @@ vectorize/vectorize_to_milvus.py
 
 1. answer 评测通过 Docker 中已经启动的完整后端服务执行，不要把 answer 评测改回本机 local-agent。
 2. 不要新增或保留 --target local-agent 作为 answer 评测目标。
-3. service_target 应通过服务的完整对话流程收集实际 retrieval_result SSE 事件中的 chunk IDs。
+3. service_target 应通过服务的完整对话流程收集实际 retrieval_context SSE 事件中的 chunk IDs。
 4. 如果当前流程无法收集子 RAG Agent 实际命中的 chunk IDs，应优先修复 SSE/结果解析/target 链路，使 relevant_chunk_ids 能用于 Agentic RAG 的 hit_rate、MRR、NDCG 比较。
 5. 不要伪造 Agentic RAG 的 chunk IDs，也不要只从最终答案中反推 chunk IDs。
 6. 不要在评测前调用 MCP reset-stats；保留服务真实的按用户限流行为。

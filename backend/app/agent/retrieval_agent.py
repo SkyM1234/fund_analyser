@@ -9,7 +9,7 @@ import logging
 import re
 import time
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
@@ -21,7 +21,10 @@ from app.agent.multi_agent_state import MultiAgentState
 from app.tools.conversation_utils import get_recent_messages_for_agent
 from app.tools.token_usage import record_usage
 from app.agent.reflection_agent import agent_self_check, _improve_query, MAX_REFLECTION_RETRIES
-from app.services.rag_result_parser import parse_rag_search_sections
+from app.services.rag_result_parser import (
+    parse_rag_search_result,
+    parse_rag_search_sections,
+)
 
 logger = logging.getLogger(__name__)
 FUND_CODE_RE = re.compile(r"(?<!\d)\d{6}(?!\d)")
@@ -122,6 +125,9 @@ async def _execute_tool_calls(
     allowed_fund_codes: set[str],
     tool_call_log: list[dict],
     rag_tool_contexts: list[_RagToolContext],
+    final_rag_context_callback: Callable[
+        [str, str, list[dict]], Awaitable[None]
+    ] | None = None,
 ) -> list[ToolMessage]:
     """执行工具调用，并校验 RAG 基金代码的来源。"""
     valid_calls: list[dict] = []
@@ -212,25 +218,27 @@ async def _execute_tool_calls(
                         _RagToolContext(message=message, output=str(message.content))
                     )
             _deduplicate_rag_tool_context(rag_tool_contexts)
+            if final_rag_context_callback and rag_tool_contexts:
+                final_chunks = parse_rag_search_result(
+                    str(rag_tool_contexts[0].message.content)
+                )
+                await final_rag_context_callback(agent_name, task_id, final_chunks)
     return tool_messages
 
 
 def _deduplicate_rag_tool_context(contexts: list[_RagToolContext]) -> None:
     """Keep one copy of each retrieved chunk in the agent prompt context.
 
-    A chunk keeps the position of its first occurrence. A later result with a
-    higher score replaces the text at that original position without reordering
-    the context.
+    A later result with a higher score replaces the earlier version. The final
+    unique chunks are placed in descending score order.
     """
     occurrences = []
     for context_index, context in enumerate(contexts):
         for section_index, section in enumerate(parse_rag_search_sections(context.output)):
             occurrences.append((context_index, section_index, section))
 
-    first_occurrence: dict[str, tuple[int, int]] = {}
     best_sections = {}
     for context_index, section_index, section in occurrences:
-        first_occurrence.setdefault(section.chunk_id, (context_index, section_index))
         current_best = best_sections.get(section.chunk_id)
         if (
             current_best is None
@@ -241,21 +249,21 @@ def _deduplicate_rag_tool_context(contexts: list[_RagToolContext]) -> None:
         ):
             best_sections[section.chunk_id] = section
 
-    for context_index, context in enumerate(contexts):
-        sections = parse_rag_search_sections(context.output)
-        if not sections:
-            continue
+    ranked_sections = sorted(
+        best_sections.values(),
+        key=lambda section: section.score is not None and section.score,
+        reverse=True,
+    )
+    if not ranked_sections:
+        return
 
-        kept_sections = [
-            best_sections[section.chunk_id].text
-            for section_index, section in enumerate(sections)
-            if first_occurrence[section.chunk_id] == (context_index, section_index)
-        ]
-        context.message.content = (
-            "\n".join(kept_sections)
-            if kept_sections
-            else "Duplicate RAG chunks omitted from context."
-        )
+    # Tool messages must remain one-per-tool-call, so place the globally ranked
+    # context in the first RAG message and mark the remaining messages empty.
+    contexts[0].message.content = "\n".join(
+        section.text for section in ranked_sections
+    )
+    for context in contexts[1:]:
+        context.message.content = "Duplicate RAG chunks omitted from context."
 
 
 def _build_task_message(current_task: dict, agent_name: str, query: str | None = None) -> str:
@@ -287,11 +295,11 @@ def _build_task_message(current_task: dict, agent_name: str, query: str | None =
     return f"任务：{task_hint}\n返回查询到的原始数据即可。"
 
 
-def make_retrieval_node(config: AgentConfig):
+def make_retrieval_node(agent_config: AgentConfig):
     """工厂函数：返回绑定到特定 AgentConfig 的 LangGraph 节点函数。"""
 
-    async def _node(state: MultiAgentState, run_config: RunnableConfig | None = None) -> dict[str, Any]:
-        label = config.agent_name
+    async def _node(state: MultiAgentState, config: RunnableConfig | None = None) -> dict[str, Any]:
+        label = agent_config.agent_name
         current_task_id = state.get("current_task_id")
         if not current_task_id:
             logger.error(f"[{label}] No current_task_id")
@@ -311,7 +319,7 @@ def make_retrieval_node(config: AgentConfig):
         if not tools:
             return {"sub_results": {current_task_id: f"错误：{label} 没有可用工具"}}
 
-        system_prompt = config.system_prompt.format(
+        system_prompt = agent_config.system_prompt.format(
             tool_descriptions=_build_tool_descriptions(tools)
         )
 
@@ -335,15 +343,22 @@ def make_retrieval_node(config: AgentConfig):
         task_query = current_task.get("query", "")
         allowed_fund_codes = _latest_user_fund_codes(state.get("messages", []))
         retry_count = 0
+        final_rag_context_callback = (
+            (config.get("configurable", {}) if config else {}).get(
+                "_sse_final_rag_context_callback"
+            )
+        )
 
         try:
             while True:
                 rag_tool_contexts.clear()
+                if final_rag_context_callback:
+                    await final_rag_context_callback(label, current_task_id, [])
                 messages = [SystemMessage(content=system_prompt)] + history_messages
-                messages.append(HumanMessage(content=_build_task_message(current_task, config.agent_name, task_query)))
+                messages.append(HumanMessage(content=_build_task_message(current_task, agent_config.agent_name, task_query)))
 
                 iteration = 0
-                while iteration < config.max_iterations:
+                while iteration < agent_config.max_iterations:
                     iteration += 1
                     logger.info(f"[{label}] Iteration {iteration}")
 
@@ -367,8 +382,8 @@ def make_retrieval_node(config: AgentConfig):
                                 existing[field] = existing.get(field, 0) + val
 
                         # 自检发现事实矛盾 → 追加反馈消息并回到工具调用循环
-                        if recheck_query and iteration < config.max_iterations:
-                            logger.info(f"[{label}] Self-check triggered recheck, iter={iteration}/{config.max_iterations}")
+                        if recheck_query and iteration < agent_config.max_iterations:
+                            logger.info(f"[{label}] Self-check triggered recheck, iter={iteration}/{agent_config.max_iterations}")
                             messages.append(HumanMessage(
                                 content=(
                                     f"自检发现以下数据矛盾需要重新查证：{recheck_query}\n"
@@ -413,6 +428,7 @@ def make_retrieval_node(config: AgentConfig):
                         allowed_fund_codes=allowed_fund_codes,
                         tool_call_log=tool_call_log,
                         rag_tool_contexts=rag_tool_contexts,
+                        final_rag_context_callback=final_rag_context_callback,
                     )
                     messages.extend(tool_messages)
 
@@ -425,7 +441,7 @@ def make_retrieval_node(config: AgentConfig):
                 retry_count += 1
 
                 # 通知 SSE 流式层：即将触发子Agent内部重试
-                retry_cb = (run_config.get("configurable", {}) if run_config else {}).get("_sse_retry_callback")
+                retry_cb = (config.get("configurable", {}) if config else {}).get("_sse_retry_callback")
                 if retry_cb:
                     try:
                         await retry_cb(label, current_task_id, retry_count,
@@ -501,5 +517,5 @@ def make_retrieval_node(config: AgentConfig):
                 "tool_call_log": tool_call_log,
             }
 
-    _node.__name__ = f"{config.agent_name}_node"
+    _node.__name__ = f"{agent_config.agent_name}_node"
     return _node
