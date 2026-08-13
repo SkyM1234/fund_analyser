@@ -40,7 +40,7 @@ class AgentConfig:
 
 @dataclass
 class _RagToolContext:
-    """A RAG ToolMessage and its original MCP response."""
+    """RAG 的 ToolMessage 及其原始 MCP 返回内容。"""
 
     message: ToolMessage
     output: str
@@ -227,10 +227,10 @@ async def _execute_tool_calls(
 
 
 def _deduplicate_rag_tool_context(contexts: list[_RagToolContext]) -> None:
-    """Keep one copy of each retrieved chunk in the agent prompt context.
+    """在 Agent 提示词上下文中，每个检索 chunk 只保留一份。
 
-    A later result with a higher score replaces the earlier version. The final
-    unique chunks are placed in descending score order.
+    若后续结果的分数更高，则替换此前版本。最终将去重后的 chunk
+    按 score 降序放入上下文。
     """
     occurrences = []
     for context_index, context in enumerate(contexts):
@@ -257,8 +257,8 @@ def _deduplicate_rag_tool_context(contexts: list[_RagToolContext]) -> None:
     if not ranked_sections:
         return
 
-    # Tool messages must remain one-per-tool-call, so place the globally ranked
-    # context in the first RAG message and mark the remaining messages empty.
+    # ToolMessage 必须与工具调用一一对应，因此将全局排序后的上下文放入第一条
+    # RAG 消息，并将其余消息标记为空上下文。
     contexts[0].message.content = "\n".join(
         section.text for section in ranked_sections
     )
