@@ -62,7 +62,7 @@
   "filter_fund_code": ["159103"],
   "top_k": 5,
   "expected_fund_codes": ["159103"],
-  "relevant_chunk_ids": [],
+  "relevant_chunk_ids": ["778279457f99a750795ed1dec5d4c072"],
   "relevant_keywords": ["金融科技", "指数"],
   "category": "single_fund"
 }

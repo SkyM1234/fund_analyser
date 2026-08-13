@@ -2,7 +2,17 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from typing import Any
+
+
+@dataclass(frozen=True)
+class RagSearchChunkSection:
+    """One chunk block from a rag-mcp text response."""
+
+    chunk_id: str
+    score: float | None
+    text: str
 
 _RESULT_SPLIT_RE = re.compile(r"^--- 结果\s+\d+\s+\(相似度:\s*([^)]+)\)\s+---$", re.MULTILINE)
 
@@ -38,6 +48,34 @@ def parse_rag_search_result(text: str) -> list[dict]:
         chunks.append(chunk)
 
     return chunks
+
+
+def parse_rag_search_sections(text: str) -> list[RagSearchChunkSection]:
+    """Return chunk blocks with original text for prompt-context de-duplication."""
+    matches = list(_RESULT_SPLIT_RE.finditer(text or ""))
+    sections: list[RagSearchChunkSection] = []
+
+    for index, match in enumerate(matches):
+        section_end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        block = text[match.start():section_end].strip()
+        chunk_id = _field(block, "Chunk ID")
+        if not chunk_id:
+            continue
+
+        try:
+            score = float(match.group(1).strip())
+        except ValueError:
+            score = None
+
+        sections.append(
+            RagSearchChunkSection(
+                chunk_id=chunk_id,
+                score=score,
+                text=block,
+            )
+        )
+
+    return sections
 
 
 def tool_output_to_text(output: Any) -> str:

@@ -23,8 +23,14 @@ warnings.filterwarnings('ignore', message='.*fast tokenizer.*')
 MAX_HEADER_LEVELS = 6  # 最大标题层级数
 MIN_SECTION_LENGTH = 500  # 短章节合并的最小长度阈值
 TOC_DOT_THRESHOLD = 3  # 目录判定的点号数量阈值
+
+CHUNK_SIZE = 2000  # 目标块大小
+OVERLAP = 200  # 重叠大小
 CONTENT_MAX_LENGTH = 3000  # content 字段的最大长度（匹配 Milvus schema），注意Milvus中长度按UTF-8编码计算
 OVERLAP_MIN_LENGTH = 20  # overlap 文本的最小有效长度
+TABLE_ROW_GROUP_MIN_LENGTH = 300  # 表格短行累计到该长度后形成一个向量记录
+TABLE_ROW_GROUP_MAX_LENGTH = 800  # 表格短行组的最大长度
+TABLE_SHORT_PREFIX_MAX_LENGTH = 120  # 可附加到后续长行的短行组最大长度
 
 # 预编译的正则表达式
 RE_PAGE_MARKER = re.compile(r'<!--\s*第\s*\d+\s*页\s*-->\s*')
@@ -129,6 +135,107 @@ class FundVectorizer:
         for i in range(1, MAX_HEADER_LEVELS + 1):
             chunk_dict[f'header_{i}'] = metadata.get(f'Header {i}', '')
         return chunk_dict
+
+    def _build_embedding_records(self, chunk_dicts: List[Dict]) -> List[Dict]:
+        """
+        将分块结果展开为待向量化记录。
+
+        表格先标准化为行文本，再将连续短行打包为适度大小的记录；
+        长行保持独立，避免被同表其他长行稀释。表格行记录的 content
+        与 embedding_text 保持一致，避免同一原始 HTML 表格在检索结果中重复出现。
+        """
+        records = []
+
+        for chunk_dict in chunk_dicts:
+            content = chunk_dict['content']
+            header_path_parts = [
+                chunk_dict.get(f'header_{i}', '')
+                for i in range(1, MAX_HEADER_LEVELS + 1)
+            ]
+            header_path_parts = [header for header in header_path_parts if header]
+            header_prefix = self._build_header_prefix(header_path_parts)
+
+            # 普通正文单独保留，避免与表格行共用一个 embedding。
+            non_table_content = RE_TABLE_BLOCK.sub('', content).strip()
+            if header_prefix and non_table_content.startswith(header_prefix.strip()):
+                non_table_content = non_table_content[len(header_prefix.strip()):].strip()
+            non_table_embedding = self._clean_content_for_embedding(non_table_content)
+            if non_table_embedding:
+                records.append({
+                    'chunk_dict': chunk_dict,
+                    'content': f"{header_prefix}{non_table_content}".strip(),
+                    'embedding_text': f"{header_prefix}{non_table_embedding}".strip(),
+                })
+
+            # 表格行按长度打包。纵向字段表会合并连续短字段，横向数据行
+            # 也会仅在它们都很短时合并；较长的行维持独立向量。
+            for table_match in RE_TABLE_BLOCK.finditer(content):
+                table_content = table_match.group()
+                table_text = self._table_to_embedding_text(table_content)
+                table_rows = [
+                    line.strip()
+                    for line in table_text.splitlines()
+                    if line.strip()
+                ]
+                for table_row_group in self._pack_table_rows(table_rows):
+                    table_row_with_header = (
+                        f"{header_prefix}{table_row_group}"
+                    ).strip()
+                    records.append({
+                        'chunk_dict': chunk_dict,
+                        'content': table_row_with_header,
+                        'embedding_text': table_row_with_header,
+                    })
+
+        return records
+
+    @staticmethod
+    def _pack_table_rows(table_rows: List[str]) -> List[str]:
+        """
+        对规范化后的表格行进行轻量打包。
+
+        连续短行合并以减少碎片；达到最小长度后立即输出。长行原则上独立，
+        仅接收紧邻、极短的前缀行，保留字段和值的局部上下文。
+        """
+        groups = []
+        current_rows = []
+        current_length = 0
+
+        def flush():
+            nonlocal current_rows, current_length
+            if current_rows:
+                groups.append("\n".join(current_rows))
+            current_rows = []
+            current_length = 0
+
+        for row in table_rows:
+            row_length = len(row)
+            separator_length = 1 if current_rows else 0
+            projected_length = current_length + separator_length + row_length
+
+            if row_length >= TABLE_ROW_GROUP_MIN_LENGTH:
+                if (
+                    current_rows
+                    and current_length <= TABLE_SHORT_PREFIX_MAX_LENGTH
+                    and projected_length <= TABLE_ROW_GROUP_MAX_LENGTH
+                ):
+                    current_rows.append(row)
+                    flush()
+                else:
+                    flush()
+                    groups.append(row)
+                continue
+
+            if current_rows and projected_length > TABLE_ROW_GROUP_MAX_LENGTH:
+                flush()
+
+            current_rows.append(row)
+            current_length += (1 if current_length else 0) + row_length
+            if current_length >= TABLE_ROW_GROUP_MIN_LENGTH:
+                flush()
+
+        flush()
+        return groups
 
     def _setup_collection(self):
         """设置Milvus集合（仅在不存在时创建，不删除已有数据）"""
@@ -1226,68 +1333,13 @@ class FundVectorizer:
 
         return re.sub(r'\s+', ' ', text).strip()
 
-    def _is_vertical_key_value_table(self, rows: List[List[str]]) -> bool:
-        """判断两列表格是否符合“字段：值”的纵向键值结构。"""
-        if len(rows) < 2 or any(len(row) != 2 for row in rows):
-            return False
-
-        keys = [row[0] for row in rows]
-        values = [row[1] for row in rows]
-        if not all(keys) or not all(values):
-            return False
-
-        unique_key_ratio = len(set(keys)) / len(keys)
-        average_key_length = sum(len(key) for key in keys) / len(keys)
-        return unique_key_ratio >= 0.8 and average_key_length <= 30
-
-    def _looks_like_header_row(self, row: List[str]) -> bool:
-        """判断一行是否足够像表头，避免把明显的数据行误作字段名。"""
-        if not row or not all(row):
-            return False
-
-        average_length = sum(len(cell) for cell in row) / len(row)
-        has_number = any(re.search(r'\d', cell) for cell in row)
-        return average_length <= 30 and not has_number
-
-    def _infer_header_row_count(self, rows: List[List[str]]) -> int:
-        """
-        推断横向表的表头行数。
-
-        多级表头通常会因 rowspan 展开而与后一行共享多个单元格，
-        因此仅在相邻短文本行有足够重复列时继续合并表头。
-        """
-        if len(rows) < 2 or not self._looks_like_header_row(rows[0]):
-            return 0
-
-        header_rows = 1
-        previous_row = rows[0]
-        max_header_rows = min(3, len(rows) - 1)
-
-        while header_rows < max_header_rows:
-            candidate = rows[header_rows]
-            if not self._looks_like_header_row(candidate):
-                break
-
-            repeated_columns = sum(
-                previous == current
-                for previous, current in zip(previous_row, candidate)
-                if previous
-            )
-            if repeated_columns < max(1, int(len(candidate) * 0.4)):
-                break
-
-            header_rows += 1
-            previous_row = candidate
-
-        return header_rows
-
     @staticmethod
     def _format_row_fallback(row: List[str]) -> str:
-        """无法可靠识别表头时，按行保留单元格内容。"""
-        return "表格行：" + " | ".join(cell for cell in row if cell)
+        """按行保留单元格内容，单元格之间统一使用 | 分隔。"""
+        return " | ".join(cell for cell in row if cell)
 
     def _dataframe_to_embedding_text(self, dataframe) -> str:
-        """将 pandas DataFrame 转换为适合向量化的表格文本。"""
+        """将 DataFrame 按原始行转换为适合向量化的表格文本。"""
         rows = [
             [self._normalize_table_cell(value) for value in row]
             for row in dataframe.fillna("").values.tolist()
@@ -1296,35 +1348,7 @@ class FundVectorizer:
         if not rows:
             return ""
 
-        if self._is_vertical_key_value_table(rows):
-            return "\n".join(f"{key}：{value}" for key, value in rows)
-
-        header_row_count = self._infer_header_row_count(rows)
-        if not header_row_count or header_row_count >= len(rows):
-            return "\n".join(self._format_row_fallback(row) for row in rows)
-
-        headers = []
-        for column_index in range(len(rows[0])):
-            header_parts = []
-            for header_row in rows[:header_row_count]:
-                value = header_row[column_index]
-                if value and value not in header_parts:
-                    header_parts.append(value)
-            headers.append(" > ".join(header_parts) or f"列{column_index + 1}")
-
-        formatted_rows = []
-        for row in rows[header_row_count:]:
-            fields = [
-                f"{header}：{value}"
-                for header, value in zip(headers, row)
-                if value
-            ]
-            if fields:
-                formatted_rows.append(" | ".join(fields))
-
-        return "\n".join(formatted_rows) or "\n".join(
-            self._format_row_fallback(row) for row in rows
-        )
+        return "\n".join(self._format_row_fallback(row) for row in rows)
 
     def _fallback_table_to_embedding_text(self, table_html: str) -> str:
         """pandas 无法解析时，移除 HTML 后按原始行输出单元格。"""
@@ -1425,10 +1449,11 @@ class FundVectorizer:
         # 使用新的多阶段分块策略
         chunk_dicts = self.chunk_text_with_headers(content, chunk_size=chunk_size, overlap=overlap)
 
-        # 准备向量化内容：对 content 进行清洗，移除 HTML 注释和图片标记
+        # 展开表格行为独立向量记录，普通正文仍按原 chunk 编码。
+        embedding_records = self._build_embedding_records(chunk_dicts)
         chunks_content_for_embedding = [
-            self._clean_content_for_embedding(chunk_dict['content'])
-            for chunk_dict in chunk_dicts
+            record['embedding_text']
+            for record in embedding_records
         ]
 
         # 分批生成向量（稠密+稀疏），避免内存溢出
@@ -1445,14 +1470,16 @@ class FundVectorizer:
 
         # 准备数据
         data_list = []
-        for i, (chunk_dict, dense_emb, sparse_emb) in enumerate(zip(chunk_dicts, all_dense_embeddings, all_sparse_embeddings)):
+        for i, (record, dense_emb, sparse_emb) in enumerate(zip(embedding_records, all_dense_embeddings, all_sparse_embeddings)):
+            chunk_dict = record['chunk_dict']
+            original_content = record['content']
+
             # 生成唯一ID
-            unique_str = f"{fund_code}_{i}_{chunk_dict['content'][:50]}"
+            unique_str = f"{fund_code}_{i}_{original_content[:50]}_{record['embedding_text'][:100]}"
             doc_id = hashlib.md5(unique_str.encode()).hexdigest()[:32]
 
             # 确保 content 长度不超过 schema 限制
             # 注意：现在 content 已经包含了标题路径前缀，可能会更长
-            original_content = chunk_dict['content']
             if len(original_content) > CONTENT_MAX_LENGTH:
                 # 如果超长，截断并添加省略提示
                 truncated_content = original_content[:CONTENT_MAX_LENGTH - 50] + "\n\n[内容因长度限制被截断...]"
@@ -1935,10 +1962,6 @@ def main():
     MILVUS_PORT = int(os.getenv("MILVUS_PORT", "19595"))
     COLLECTION_NAME = "fund_reports_mineru"
     MODEL_PATH = str(Path(__file__).parent.parent / "embedding_model" / "bge-m3")
-
-    # 分块参数
-    CHUNK_SIZE = 2000  # 目标块大小
-    OVERLAP = 200  # 重叠大小
 
     # 自动检测设备
     import torch

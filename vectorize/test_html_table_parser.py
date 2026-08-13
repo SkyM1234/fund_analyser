@@ -33,58 +33,8 @@ def normalize_cell(value) -> str:
     return re.sub(r'\s+', ' ', text).strip()
 
 
-def is_vertical_key_value_table(rows: list[list[str]]) -> bool:
-    if len(rows) < 2 or any(len(row) != 2 for row in rows):
-        return False
-
-    keys = [row[0] for row in rows]
-    values = [row[1] for row in rows]
-    if not all(keys) or not all(values):
-        return False
-
-    unique_key_ratio = len(set(keys)) / len(keys)
-    average_key_length = sum(len(key) for key in keys) / len(keys)
-    return unique_key_ratio >= 0.8 and average_key_length <= 30
-
-
-def looks_like_header_row(row: list[str]) -> bool:
-    if not row or not all(row):
-        return False
-
-    average_length = sum(len(cell) for cell in row) / len(row)
-    has_number = any(re.search(r'\d', cell) for cell in row)
-    return average_length <= 30 and not has_number
-
-
-def infer_header_row_count(rows: list[list[str]]) -> int:
-    if len(rows) < 2 or not looks_like_header_row(rows[0]):
-        return 0
-
-    header_rows = 1
-    previous_row = rows[0]
-    max_header_rows = min(3, len(rows) - 1)
-
-    while header_rows < max_header_rows:
-        candidate = rows[header_rows]
-        if not looks_like_header_row(candidate):
-            break
-
-        repeated_columns = sum(
-            previous == current
-            for previous, current in zip(previous_row, candidate)
-            if previous
-        )
-        if repeated_columns < max(1, int(len(candidate) * 0.4)):
-            break
-
-        header_rows += 1
-        previous_row = candidate
-
-    return header_rows
-
-
 def format_row_fallback(row: list[str]) -> str:
-    return "表格行：" + " | ".join(cell for cell in row if cell)
+    return " | ".join(cell for cell in row if cell)
 
 
 def dataframe_to_text(dataframe: pd.DataFrame) -> str:
@@ -96,35 +46,7 @@ def dataframe_to_text(dataframe: pd.DataFrame) -> str:
     if not rows:
         return ""
 
-    if is_vertical_key_value_table(rows):
-        return "\n".join(f"{key}：{value}" for key, value in rows)
-
-    header_row_count = infer_header_row_count(rows)
-    if not header_row_count or header_row_count >= len(rows):
-        return "\n".join(format_row_fallback(row) for row in rows)
-
-    headers = []
-    for column_index in range(len(rows[0])):
-        header_parts = []
-        for header_row in rows[:header_row_count]:
-            value = header_row[column_index]
-            if value and value not in header_parts:
-                header_parts.append(value)
-        headers.append(" > ".join(header_parts) or f"列{column_index + 1}")
-
-    normalized_rows = []
-    for row in rows[header_row_count:]:
-        fields = [
-            f"{header}：{value}"
-            for header, value in zip(headers, row)
-            if value
-        ]
-        if fields:
-            normalized_rows.append(" | ".join(fields))
-
-    return "\n".join(normalized_rows) or "\n".join(
-        format_row_fallback(row) for row in rows
-    )
+    return "\n".join(format_row_fallback(row) for row in rows)
 
 
 def fallback_table_to_text(table_html: str) -> str:

@@ -21,6 +21,7 @@ from app.agent.multi_agent_state import MultiAgentState
 from app.tools.conversation_utils import get_recent_messages_for_agent
 from app.tools.token_usage import record_usage
 from app.agent.reflection_agent import agent_self_check, _improve_query, MAX_REFLECTION_RETRIES
+from app.services.rag_result_parser import parse_rag_search_sections
 
 logger = logging.getLogger(__name__)
 FUND_CODE_RE = re.compile(r"(?<!\d)\d{6}(?!\d)")
@@ -32,6 +33,14 @@ class AgentConfig:
     agent_name: str          # 与 SubTask.assigned_agent 保持一致，用于日志和 token bucket
     system_prompt: str       # 完整 system prompt 模板（含 {tool_descriptions} 占位符）
     max_iterations: int = 5  # ReAct 循环最大轮次
+
+
+@dataclass
+class _RagToolContext:
+    """A RAG ToolMessage and its original MCP response."""
+
+    message: ToolMessage
+    output: str
 
 
 def _build_tool_descriptions(tools: list) -> str:
@@ -112,6 +121,7 @@ async def _execute_tool_calls(
     task_id: str,
     allowed_fund_codes: set[str],
     tool_call_log: list[dict],
+    rag_tool_contexts: list[_RagToolContext],
 ) -> list[ToolMessage]:
     """执行工具调用，并校验 RAG 基金代码的来源。"""
     valid_calls: list[dict] = []
@@ -195,7 +205,57 @@ async def _execute_tool_calls(
 
     if valid_calls:
         tool_messages.extend(await asyncio.gather(*(invoke(call) for call in valid_calls)))
+        if agent_name == "rag_agent":
+            for message in tool_messages:
+                if message.name == "rag_search" and message.status != "error":
+                    rag_tool_contexts.append(
+                        _RagToolContext(message=message, output=str(message.content))
+                    )
+            _deduplicate_rag_tool_context(rag_tool_contexts)
     return tool_messages
+
+
+def _deduplicate_rag_tool_context(contexts: list[_RagToolContext]) -> None:
+    """Keep one copy of each retrieved chunk in the agent prompt context.
+
+    A chunk keeps the position of its first occurrence. A later result with a
+    higher score replaces the text at that original position without reordering
+    the context.
+    """
+    occurrences = []
+    for context_index, context in enumerate(contexts):
+        for section_index, section in enumerate(parse_rag_search_sections(context.output)):
+            occurrences.append((context_index, section_index, section))
+
+    first_occurrence: dict[str, tuple[int, int]] = {}
+    best_sections = {}
+    for context_index, section_index, section in occurrences:
+        first_occurrence.setdefault(section.chunk_id, (context_index, section_index))
+        current_best = best_sections.get(section.chunk_id)
+        if (
+            current_best is None
+            or (
+                section.score is not None
+                and (current_best.score is None or section.score > current_best.score)
+            )
+        ):
+            best_sections[section.chunk_id] = section
+
+    for context_index, context in enumerate(contexts):
+        sections = parse_rag_search_sections(context.output)
+        if not sections:
+            continue
+
+        kept_sections = [
+            best_sections[section.chunk_id].text
+            for section_index, section in enumerate(sections)
+            if first_occurrence[section.chunk_id] == (context_index, section_index)
+        ]
+        context.message.content = (
+            "\n".join(kept_sections)
+            if kept_sections
+            else "Duplicate RAG chunks omitted from context."
+        )
 
 
 def _build_task_message(current_task: dict, agent_name: str, query: str | None = None) -> str:
@@ -271,12 +331,14 @@ def make_retrieval_node(config: AgentConfig):
 
         token_usage: dict[str, dict[str, int]] = {}
         tool_call_log: list[dict] = []
+        rag_tool_contexts: list[_RagToolContext] = []
         task_query = current_task.get("query", "")
         allowed_fund_codes = _latest_user_fund_codes(state.get("messages", []))
         retry_count = 0
 
         try:
             while True:
+                rag_tool_contexts.clear()
                 messages = [SystemMessage(content=system_prompt)] + history_messages
                 messages.append(HumanMessage(content=_build_task_message(current_task, config.agent_name, task_query)))
 
@@ -350,6 +412,7 @@ def make_retrieval_node(config: AgentConfig):
                         task_id=current_task_id,
                         allowed_fund_codes=allowed_fund_codes,
                         tool_call_log=tool_call_log,
+                        rag_tool_contexts=rag_tool_contexts,
                     )
                     messages.extend(tool_messages)
 
