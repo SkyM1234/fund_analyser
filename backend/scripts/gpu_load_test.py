@@ -56,7 +56,7 @@ def _build_payload(args: argparse.Namespace) -> dict:
         return {
             "query": args.query,
             "top_k": args.top_k,
-            "min_score": args.min_score if args.min_score is not None else 0.5,
+            "min_score": args.index_min_score,
         }
 
     return {
@@ -66,7 +66,6 @@ def _build_payload(args: argparse.Namespace) -> dict:
         "search_type": args.search_type,
         "use_reranker": not args.no_reranker,
         "rerank_top_k": args.rerank_top_k,
-        "min_score": args.min_score,
     }
 
 
@@ -152,7 +151,12 @@ async def main():
         help="报告检索类型",
     )
     parser.add_argument("--no-reranker", action="store_true", help="关闭报告检索重排")
-    parser.add_argument("--min-score", type=float, default=None, help="最低结果分数")
+    parser.add_argument(
+        "--index-min-score",
+        type=float,
+        default=0.5,
+        help="基金名称识别最低置信度，仅用于 --endpoint index",
+    )
     parser.add_argument("--timeout", type=float, default=120.0, help="单个请求超时（秒）")
     args = parser.parse_args()
 

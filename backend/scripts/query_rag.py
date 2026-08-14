@@ -38,8 +38,6 @@ def _build_payload(args: argparse.Namespace) -> dict[str, Any]:
     }
     if args.fund_code:
         payload["filter_fund_code"] = args.fund_code
-    if args.min_score is not None:
-        payload["min_score"] = args.min_score
     return payload
 
 
@@ -101,7 +99,6 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help="重排前候选数，默认 top_k 的两倍",
     )
-    parser.add_argument("--min-score", type=float, default=None, help="最低结果分数")
     parser.add_argument("--timeout", type=float, default=60.0, help="请求超时秒数")
     parser.add_argument(
         "--output",

@@ -40,9 +40,6 @@ async def rag_search_target(inputs: dict) -> dict:
     filter_codes = inputs.get("filter_fund_code")
     if filter_codes:
         payload["filter_fund_code"] = filter_codes
-    if inputs.get("min_score") is not None:
-        payload["min_score"] = inputs["min_score"]
-
     url = f"{s.gpu_base_url}/fund_reports/search"
     async with httpx.AsyncClient(timeout=60.0) as client:
         resp = await client.post(url, json=payload)

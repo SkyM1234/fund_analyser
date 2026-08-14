@@ -44,7 +44,6 @@ class RagClient:
         filter_fund_code: str | None = None,
         search_type: str = "hybrid",
         use_reranker: bool = True,
-        min_score: float | None = None,
     ) -> list[dict[str, Any]]:
         """检索基金报告内容
 
@@ -54,8 +53,6 @@ class RagClient:
             filter_fund_code: 单基金代码过滤，如 "159103"；None 表示全局检索
             search_type: 检索类型 - "dense"(仅稠密), "sparse"(仅稀疏), "hybrid"(混合RRF，推荐)
             use_reranker: 是否使用BGE-Reranker-v2-m3重排（推荐开启）
-            min_score: 可选的分数阈值，低于该值的结果丢弃（避免凑数）
-
         Returns:
             检索结果列表，每个结果包含：
             - content: 文档内容
@@ -71,9 +68,6 @@ class RagClient:
             "use_reranker": use_reranker,
             "rerank_top_k": top_k * 2,  # 重排前获取2倍候选
         }
-        if min_score is not None:
-            payload["min_score"] = min_score
-
         r = await self._client.post("/fund_reports/search", json=payload)
         r.raise_for_status()
         return r.json().get("results", [])

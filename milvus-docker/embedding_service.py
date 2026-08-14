@@ -280,7 +280,6 @@ class SearchRequest(BaseModel):
     search_type: str = "hybrid"  # "dense", "sparse", "hybrid"
     use_reranker: bool = True
     rerank_top_k: int = 20
-    min_score: Optional[float] = None
 
 
 class SearchResult(BaseModel):
@@ -382,10 +381,6 @@ async def search_funds(request: SearchRequest):
         else:
             # 不使用reranker时，截取top_k
             results = results[:request.top_k]
-
-        # 第三阶段：分数阈值过滤（避免凑数低质量结果）
-        if request.min_score is not None:
-            results = [r for r in results if r.score >= request.min_score]
 
         return SearchResponse(
             results=results,

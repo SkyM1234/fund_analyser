@@ -52,10 +52,6 @@ async def list_tools() -> list[Tool]:
                     },
                     "search_type": {"type": "string", "enum": ["dense", "sparse", "hybrid"], "default": "hybrid"},
                     "use_reranker": {"type": "boolean", "default": True},
-                    "min_score": {
-                        "type": "number",
-                        "description": "分数阈值，低于该值的结果丢弃；推荐 reranker 模式下使用 0.3",
-                    },
                 },
                 "required": ["query"],
             },
@@ -150,7 +146,6 @@ async def handle_rag_search(args: dict) -> Sequence[TextContent]:
         filter_fund_code=args.get("filter_fund_code"),
         search_type=args.get("search_type", "hybrid"),
         use_reranker=args.get("use_reranker", True),
-        min_score=args.get("min_score"),
     )
     if not results:
         return [TextContent(type="text", text="未找到相关内容")]
