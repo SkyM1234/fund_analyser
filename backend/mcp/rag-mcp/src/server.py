@@ -42,7 +42,11 @@ async def list_tools() -> list[Tool]:
                 "type": "object",
                 "properties": {
                     "query": {"type": "string", "description": "查询文本"},
-                    "top_k": {"type": "integer", "description": "返回结果数量，默认 10", "default": 10},
+                    "top_k": {
+                        "type": "integer",
+                        "description": "返回结果数量，默认 10；小于 10 时自动按 10 处理；启用重排时粗排候选数自动为 top_k 的 3 倍",
+                        "default": 10,
+                    },
                     "filter_fund_code": {
                         "description": "单基金代码过滤，如 '159103'；留空表示全局检索",
                         "oneOf": [
@@ -140,9 +144,11 @@ async def handle_rag_search(args: dict) -> Sequence[TextContent]:
         rag_client = RagClient()
 
     # 使用 dict.get(key, default) 而不是 or，避免 False/0 被替换
+    requested_top_k = args.get("top_k", 10)
+    top_k = max(10, requested_top_k)
     results = await rag_client.search(
         query=args["query"],
-        top_k=args.get("top_k", 10),
+        top_k=top_k,
         filter_fund_code=args.get("filter_fund_code"),
         search_type=args.get("search_type", "hybrid"),
         use_reranker=args.get("use_reranker", True),

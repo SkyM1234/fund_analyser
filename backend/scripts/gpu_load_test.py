@@ -65,7 +65,6 @@ def _build_payload(args: argparse.Namespace) -> dict:
         "filter_fund_code": args.fund_code,
         "search_type": args.search_type,
         "use_reranker": not args.no_reranker,
-        "rerank_top_k": args.rerank_top_k,
     }
 
 
@@ -141,8 +140,7 @@ async def main():
         default="金融科技ETF汇添富的基金经理是谁",
         help="每个请求使用的查询文本",
     )
-    parser.add_argument("--top-k", type=int, default=10, help="最终返回结果数")
-    parser.add_argument("--rerank-top-k", type=int, default=20, help="重排前候选结果数")
+    parser.add_argument("--top-k", type=int, default=10, help="最终返回结果数，不能低于 10")
     parser.add_argument("--fund-code", default=None, help="报告检索使用的基金代码过滤条件")
     parser.add_argument(
         "--search-type",
@@ -164,12 +162,8 @@ async def main():
         parser.error("--requests 必须大于 0")
     if args.warmup < 0:
         parser.error("--warmup 不能小于 0")
-    if args.top_k <= 0:
-        parser.error("--top-k 必须大于 0")
-    if args.rerank_top_k <= 0:
-        parser.error("--rerank-top-k 必须大于 0")
-    if args.endpoint == "reports" and args.rerank_top_k < args.top_k:
-        parser.error("--rerank-top-k 不能小于 --top-k")
+    if args.top_k < 10:
+        parser.error("--top-k 不能低于 10")
 
     concurrency = args.concurrency or args.requests
     if concurrency <= 0:

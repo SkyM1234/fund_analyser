@@ -54,6 +54,7 @@ class RagClientMCP:
         Returns:
             检索结果列表（已解析为字典）
         """
+        top_k = max(10, top_k)
         result_text = await self._call_tool("rag_search", {
             "query": query,
             "top_k": top_k,

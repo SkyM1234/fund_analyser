@@ -4,6 +4,12 @@
 """
 from app.agent.retrieval_agent import AgentConfig, make_retrieval_node
 
+RAG_RETRIEVAL_CONTEXT = (
+    "当前知识库已索引 189 份基金年报，共有 47,090 条向量化数据。"
+    "调用向量检索时，top_k 不得低于 10；启用 reranker 时，"
+    "粗排候选数由系统自动设置为最终 top_k 的 3 倍，不要自行传入其他粗排数量。"
+)
+
 RAG_AGENT_SYSTEM_PROMPT_TEMPLATE = """你是专门负责基金年报检索的专家Agent。
 
 停止条件（必须遵守）：
@@ -39,7 +45,7 @@ RAG_AGENT_SYSTEM_PROMPT_TEMPLATE = """你是专门负责基金年报检索的专
 
 _config = AgentConfig(
     agent_name="rag_agent",
-    system_prompt=RAG_AGENT_SYSTEM_PROMPT_TEMPLATE,
+    system_prompt=RAG_RETRIEVAL_CONTEXT + "\n" + RAG_AGENT_SYSTEM_PROMPT_TEMPLATE,
 )
 
 rag_agent_node = make_retrieval_node(_config)

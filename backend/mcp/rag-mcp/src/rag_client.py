@@ -60,13 +60,14 @@ class RagClient:
             - score: 相似度分数
         """
         # 构建请求参数
+        top_k = max(10, top_k)
+
         payload = {
             "query": query,
             "top_k": top_k,
             "filter_fund_code": filter_fund_code,
             "search_type": search_type,
             "use_reranker": use_reranker,
-            "rerank_top_k": top_k * 2,  # 重排前获取2倍候选
         }
         r = await self._client.post("/fund_reports/search", json=payload)
         r.raise_for_status()

@@ -4,7 +4,7 @@
 
 用法：
     python scripts/query_rag.py "159128采用什么复制策略？" --fund-code 159128
-    python scripts/query_rag.py "港股科技ETF天弘的跟踪误差目标" --top-k 5
+    python scripts/query_rag.py "2025年信用债市场分析" --top-k 10
     python scripts/query_rag.py "基金经理是谁" --fund-code 159128 --output json
 """
 from __future__ import annotations
@@ -34,7 +34,6 @@ def _build_payload(args: argparse.Namespace) -> dict[str, Any]:
         "top_k": args.top_k,
         "search_type": args.search_type,
         "use_reranker": not args.no_reranker,
-        "rerank_top_k": args.rerank_top_k or args.top_k * 2,
     }
     if args.fund_code:
         payload["filter_fund_code"] = args.fund_code
@@ -85,7 +84,7 @@ def _parse_args() -> argparse.Namespace:
         help="GPU RAG 服务地址，默认使用 GPU_HOST/GPU_PORT 或 http://localhost:8001",
     )
     parser.add_argument("--fund-code", help="单基金过滤代码（6位数字）")
-    parser.add_argument("--top-k", type=int, default=10, help="最终返回结果数")
+    parser.add_argument("--top-k", type=int, default=10, help="最终返回结果数，不能低于 10")
     parser.add_argument(
         "--search-type",
         choices=["dense", "sparse", "hybrid"],
@@ -93,12 +92,6 @@ def _parse_args() -> argparse.Namespace:
         help="检索类型，默认 hybrid",
     )
     parser.add_argument("--no-reranker", action="store_true", help="关闭 reranker")
-    parser.add_argument(
-        "--rerank-top-k",
-        type=int,
-        default=None,
-        help="重排前候选数，默认 top_k 的两倍",
-    )
     parser.add_argument("--timeout", type=float, default=60.0, help="请求超时秒数")
     parser.add_argument(
         "--output",
@@ -108,10 +101,8 @@ def _parse_args() -> argparse.Namespace:
     )
     args = parser.parse_args()
 
-    if args.top_k <= 0:
-        parser.error("--top-k 必须大于 0")
-    if args.rerank_top_k is not None and args.rerank_top_k < args.top_k:
-        parser.error("--rerank-top-k 不能小于 --top-k")
+    if args.top_k < 10:
+        parser.error("--top-k 不能低于 10")
     if args.timeout <= 0:
         parser.error("--timeout 必须大于 0")
     if args.fund_code and not FUND_CODE_RE.fullmatch(args.fund_code):

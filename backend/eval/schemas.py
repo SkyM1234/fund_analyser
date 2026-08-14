@@ -36,7 +36,7 @@ class RetrievalExample(BaseModel):
     filter_fund_code: Optional[str] = Field(
         None, description="可选：调用 rag_search 时的过滤参数（单基金代码），模拟路由层注入"
     )
-    top_k: int = Field(10, description="检索返回数量")
+    top_k: int = Field(10, ge=10, description="检索返回数量，不能低于 10")
 
     # ---- ground truth ----
     expected_fund_codes: list[str] = Field(

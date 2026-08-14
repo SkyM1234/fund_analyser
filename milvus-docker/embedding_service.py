@@ -11,7 +11,7 @@ from FlagEmbedding import BGEM3FlagModel, FlagReranker
 from pymilvus import MilvusClient
 from pymilvus.client.types import LoadState
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional
 from contextlib import asynccontextmanager
 import uvicorn
@@ -273,13 +273,12 @@ app = FastAPI(title="Fund Query Service", lifespan=lifespan)
 
 class SearchRequest(BaseModel):
     query: str
-    top_k: int = 10
+    top_k: int = Field(10, ge=10)
     # 只接受单基金代码字符串或 None（全局检索）
     filter_fund_code: Optional[str] = None
     collection_name: str = "fund_reports_mineru"
     search_type: str = "hybrid"  # "dense", "sparse", "hybrid"
     use_reranker: bool = True
-    rerank_top_k: int = 20
 
 
 class SearchResult(BaseModel):
@@ -364,7 +363,7 @@ async def search_funds(request: SearchRequest):
 
         # 第一阶段：初步检索
         # 如果使用reranker，先获取更多候选结果
-        initial_top_k = request.rerank_top_k if request.use_reranker else request.top_k
+        initial_top_k = request.top_k * 3 if request.use_reranker else request.top_k
 
         if request.search_type == "dense":
             results = await _search_dense(request, filter_expr, initial_top_k)
