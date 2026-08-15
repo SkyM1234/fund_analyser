@@ -5,7 +5,6 @@
 | 数据集 | 提示词 | 目标 |
 |---|---|---|
 | `retrieval.jsonl` | [build_retrieval_dataset.md](build_retrieval_dataset.md) | 已知基金代码后的单报告 chunk 检索 |
-| `answer.jsonl` | [build_answer_dataset.md](build_answer_dataset.md) | Agent 端到端回答，包括跨报告的比较与筛选 |
+| `answer_single_fund.jsonl` | [build_single_fund_answer_dataset.md](build_single_fund_answer_dataset.md) | Agent 端到端单基金回答 |
+| `answer_cross_fund.jsonl` | [build_cross_fund_answer_dataset.md](build_cross_fund_answer_dataset.md) | 已明确基金或板块范围的跨基金比较与策略回答 |
 | `fund_name_resolution.jsonl` | [build_name_resolution_dataset.md](build_name_resolution_dataset.md) | 名称、别名和报告标题的基金代码识别 |
-
-跨基金、主题和板块问题应优先进入 `answer.jsonl`，避免把路由、跨报告检索和聚合能力混入单报告 retrieval 指标。

@@ -68,7 +68,7 @@
 }
 ```
 
-### `datasets/answer.jsonl`（每行一个 `AnswerExample`）
+### `datasets/answer_single_fund.jsonl`（每行一个 `AnswerExample`）
 
 ```json
 {
@@ -79,19 +79,29 @@
   "key_facts": ["金融科技", "被动", "指数"],
   "relevant_chunk_ids": ["778279457f99a750795ed1dec5d4c072"],
   "should_refuse": false,
-  "intent": "fund_query"
+  "intent": "fund_query",
+  "expected_tool_calls": [],
+  "note": "159103: chunk=... id=..."
 }
 ```
 
-完整回答评测会从 `retrieval_context` SSE 事件收集 RAG 子 Agent 实际传给 LLM 的
-Milvus chunk，并计算 `hit_rate`、`session_mrr`、`session_ndcg`。多次
-`rag_search` 的结果按调用顺序合并，相同 chunk 只保留首次出现的位置。
-服务 target 会按 `--concurrency` 创建同等数量的评测用户，每个并发槽位独占
-一个 MCP 限流桶。评测使用服务的真实按用户限流，不会重置 MCP 调用计数；
-若样本触发限流，将按实际服务错误记录。使用 `--no-service-auto-register`
-时需预先创建这些带 `_1`、`_2` 后缀的评测用户。
+### `datasets/answer_cross_fund.jsonl`（每行一个 `AnswerExample`）
 
-从数据库导出后，按上述结构写入 jsonl 即可。
+```json
+{
+  "id": "answer-002",
+  "query": "截至2025年末，国证港股通科技ETF板块中持有腾讯控股的基金有哪些？各自持仓占基金资产净值的比例是多少？",
+  "reference_answer": "截至2025年末，国证港股通科技ETF板块中，159101、159125、159128、159251和159636均持有腾讯控股，占基金资产净值的比例分别为15.32%、15.31%、15.40%、15.32%和15.38%。",
+  "expected_fund_codes": ["159101", "159125", "159128", "159251", "159636"],
+  "key_facts": ["腾讯控股", "15.32%", "15.31%", "15.40%", "15.38%"],
+  "should_refuse": false,
+  "intent": "cross_fund_query",
+  "category": "cross_fund_strategy",
+  "relevant_keywords": ["腾讯控股", "15.32", "15.31", "15.40", "15.38"],
+  "relevant_chunk_ids": ["28e8098a682ed795ba94cec05956e0c4", "eb38ef52f4555edb5f5dfea90f85355e", "0fee37803dd46eef7a9263b0bec6dba8", "9daeaa5e91cfec3312c27ddd5dabc147", "7eebd2c5ef04fe52cd57d795209d03aa"],
+  "expected_tool_calls": [],
+  "note": "159101: chunk=... id=...；159125: chunk=... id=..."
+}
 
 ## 快速开始
 
@@ -146,5 +156,6 @@ LangSmith 完成，因此始终需要有效的 `LANGSMITH_API_KEY`。
 | 数据集 | 提示词 | 评测边界 |
 |---|---|---|
 | `retrieval.jsonl` | [`build_retrieval_dataset.md`](prompts/build_retrieval_dataset.md) | 已知单只基金后的单报告 chunk 检索 |
-| `answer.jsonl` | [`build_answer_dataset.md`](prompts/build_answer_dataset.md) | Agent 端到端回答，含单基金与跨基金/板块筛选 |
+| `answer_single_fund.jsonl` | [`build_single_fund_answer_dataset.md`](prompts/build_single_fund_answer_dataset.md) | Agent 端到端单基金回答 |
+| `answer_cross_fund.jsonl` | [`build_cross_fund_answer_dataset.md`](prompts/build_cross_fund_answer_dataset.md) | 已明确基金或板块范围的跨基金比较与策略回答 |
 | `fund_name_resolution.jsonl` | [`build_name_resolution_dataset.md`](prompts/build_name_resolution_dataset.md) | 基金名称、别名和报告标题到基金代码的识别 |

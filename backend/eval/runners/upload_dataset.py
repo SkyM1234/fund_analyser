@@ -2,9 +2,9 @@
 
 用法：
     python -m eval.runners.upload_dataset --kind retrieval
-    python -m eval.runners.upload_dataset --kind answer
+    python -m eval.runners.upload_dataset --kind single_fund_answer
     python -m eval.runners.upload_dataset --kind name_resolution
-    python -m eval.runners.upload_dataset --kind all     # 全部三种
+    python -m eval.runners.upload_dataset --kind all     # 全部数据集
 
 若 LangSmith 上同名数据集已存在：
     - --mode append: 追加新样本（按 id 去重）
@@ -37,7 +37,10 @@ def _load_jsonl(path: Path, schema_cls) -> list:
             if not line:
                 continue
             try:
-                items.append(schema_cls.model_validate_json(line))
+                if hasattr(schema_cls, "model_validate_json"):
+                    items.append(schema_cls.model_validate_json(line))
+                else:
+                    items.append(schema_cls.parse_raw(line))
             except ValidationError as e:
                 logger.error(f"{path.name}:{line_no} schema 校验失败: {e}")
                 raise
@@ -50,7 +53,7 @@ def _split_inputs_outputs(item, schema_kind: str) -> tuple[dict, dict]:
     输入：被评测系统真正消费的字段
     输出：ground truth（评测器读取）
     """
-    data = item.model_dump()
+    data = item.model_dump() if hasattr(item, "model_dump") else item.dict()
     if schema_kind == "retrieval":
         inputs = {
             "query": data["query"],
@@ -120,8 +123,20 @@ def upload(kind: str, mode: str = "append") -> None:
     targets = []
     if kind in ("retrieval", "all"):
         targets.append(("retrieval", DATA_DIR / "retrieval.jsonl", RetrievalExample, settings.DATASET_RETRIEVAL_NAME))
-    if kind in ("answer", "all"):
-        targets.append(("answer", DATA_DIR / "answer.jsonl", AnswerExample, settings.DATASET_ANSWER_NAME))
+    if kind in ("single_fund_answer", "all"):
+        targets.append((
+            "single_fund_answer",
+            DATA_DIR / "answer_single_fund.jsonl",
+            AnswerExample,
+            settings.DATASET_SINGLE_FUND_ANSWER_NAME,
+        ))
+    if kind in ("cross_fund_answer", "all"):
+        targets.append((
+            "cross_fund_answer",
+            DATA_DIR / "answer_cross_fund.jsonl",
+            AnswerExample,
+            settings.DATASET_CROSS_FUND_ANSWER_NAME,
+        ))
     if kind in ("name_resolution", "all"):
         targets.append(("name_resolution", DATA_DIR / "fund_name_resolution.jsonl", NameResolutionExample, settings.DATASET_NAME_RESOLUTION_NAME))
 
@@ -154,7 +169,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--kind",
-        choices=["retrieval", "answer", "name_resolution", "all"],
+        choices=["retrieval", "single_fund_answer", "cross_fund_answer", "name_resolution", "all"],
         default="all",
     )
     parser.add_argument("--mode", choices=["append", "replace"], default="append")

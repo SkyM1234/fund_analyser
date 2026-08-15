@@ -35,7 +35,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger(__name__)
 
 REPORT_DIR = Path(__file__).resolve().parent.parent / "reports" / "answer"
-DATASET_PATH = Path(__file__).resolve().parent.parent / "datasets" / "answer.jsonl"
+DATASET_PATH = Path(__file__).resolve().parent.parent / "datasets" / "answer_single_fund.jsonl"
 
 
 def _get_evaluators(use_judge: bool) -> list:
@@ -68,10 +68,10 @@ async def _run_langsmith(
     client = Client()
     evaluators = _get_evaluators(use_judge)
 
-    logger.info(f"开始回答评测：dataset={s.DATASET_ANSWER_NAME} concurrency={concurrency}")
+    logger.info(f"开始单基金回答评测：dataset={s.DATASET_SINGLE_FUND_ANSWER_NAME} concurrency={concurrency}")
     results = await aevaluate(
         target,
-        data=s.DATASET_ANSWER_NAME,
+        data=s.DATASET_SINGLE_FUND_ANSWER_NAME,
         evaluators=evaluators,
         experiment_prefix=experiment_prefix,
         max_concurrency=concurrency,

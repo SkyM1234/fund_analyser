@@ -13,7 +13,7 @@
 - 每条样本只能对应一只基金和一份 `_analyzed.md` 报告。
 - 每条必须有 `filter_fund_code`；它与 `expected_fund_codes` 必须都是同一个基金代码。
 - `relevant_chunk_ids` 只能来自该基金的 Milvus chunk。
-- 跨基金比较、主题/板块范围筛选、"有哪些基金持有某股票"等多报告问题不属于本数据集，应构建到 `answer.jsonl`。
+- 跨基金比较、主题/板块范围筛选、"有哪些基金持有某股票"等多报告问题不属于本数据集，应构建到 `answer_cross_fund.jsonl`。
 
 ## 先检查上下文
 

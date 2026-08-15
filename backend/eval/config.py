@@ -36,7 +36,8 @@ class EvalSettings(BaseSettings):
 
     # ===== 数据集 =====
     DATASET_RETRIEVAL_NAME: str = "fund-rag-retrieval-v1"
-    DATASET_ANSWER_NAME: str = "fund-agent-answer-v1"
+    DATASET_SINGLE_FUND_ANSWER_NAME: str = "fund-agent-single-fund-answer-v1"
+    DATASET_CROSS_FUND_ANSWER_NAME: str = "fund-agent-cross-fund-answer-v1"
     DATASET_NAME_RESOLUTION_NAME: str = "fund-name-resolution-v1"
 
     # ===== 执行 =====
