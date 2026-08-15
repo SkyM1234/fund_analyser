@@ -98,6 +98,8 @@ Milvus：`http://localhost:19595`；collection：`fund_reports_mineru`。
 ```json
 [
   {"name": "rag_identify_funds"},
+  {"name": "rag_search", "args": {"filter_fund_code": "最终确定的基金代码"}},
+  {"name": "rag_identify_funds"},
   {"name": "rag_search", "args": {"filter_fund_code": "最终确定的基金代码"}}
 ]
 ```
@@ -106,6 +108,7 @@ Milvus：`http://localhost:19595`；collection：`fund_reports_mineru`。
 
 ```json
 [
+  {"name": "rag_search", "args": {"filter_fund_code": "基金代码"}},
   {"name": "rag_search", "args": {"filter_fund_code": "基金代码"}}
 ]
 ```
