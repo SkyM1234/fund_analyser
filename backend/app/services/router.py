@@ -25,6 +25,7 @@ class RouteResult(BaseModel):
         "out_of_scope",      # 不在能力范围
         "sensitive",         # 敏感问题（投资建议）
         "fund_query",        # 单/多基金查询
+        "cross_fund_query",  # 多基金/板块基金查询
         "fund_screening",    # 基金筛选（查找符合条件的基金）
         "general_finance",   # 通用金融知识
     ]
@@ -60,8 +61,14 @@ LLM_CLASSIFIER_SYSTEM = """你是基金问答系统的意图分类器。根据�
 - "科创债ETF万家的规模"、"159103的持仓"、"这两只基金哪个费率低"
 - 涉及具体基金名称或代码的查询
 
+**cross_fund_query** - 需要识别多只候选基金的查询
+- "人工智能板块有哪些ETF"、"新能源基金有哪些"
+- "比较华夏国证港股通科技ETF和招商国证港股通科技ETF"
+- 用户明确提出多个基金，或要求查找某个板块/主题下的基金
+
 **fund_screening** - 筛选/查找符合条件的基金（不涉及特定基金）
-- "持有宁德时代的基金有哪些"、"规模超过10亿的新能源基金"、"费率最低的科技基金"
+- "规模超过10亿且费率低于0.5%的新能源基金"、"持有宁德时代且规模超过10亿的基金"
+- 重点是多个客观条件的筛选，不是按板块或主题泛查基金
 
 **general_finance** - 通用金融知识
 - "什么是ETF"、"基金经理如何选股"、"新能源行业前景"
@@ -71,7 +78,7 @@ LLM_CLASSIFIER_SYSTEM = """你是基金问答系统的意图分类器。根据�
 - sensitive 和 fund_query/fund_screening 的区别：前者要求推荐/预测，后者是客观查询
 
 输出 JSON（不要解释）：
-{"intent": "sensitive|fund_query|fund_screening|general_finance"}"""
+{"intent": "sensitive|fund_query|cross_fund_query|fund_screening|general_finance"}"""
 
 
 async def route_query(
@@ -152,7 +159,13 @@ async def _llm_classify(
     try:
         data = json.loads(content)
         intent = data["intent"]
-        if intent in ("sensitive", "fund_query", "fund_screening", "general_finance"):
+        if intent in (
+            "sensitive",
+            "fund_query",
+            "cross_fund_query",
+            "fund_screening",
+            "general_finance",
+        ):
             return RouteResult(intent=intent)
     except Exception:
         pass

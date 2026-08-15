@@ -1995,7 +1995,7 @@ def main():
         encode_batch_size=ENCODE_BATCH_SIZE,
         insert_batch_size=INSERT_BATCH_SIZE,
         accumulate_threshold=ACCUMULATE_THRESHOLD,
-        force_codes=["ALL"] # ALL 表示全量重建，慎用
+        force_codes=[] # ALL 表示全量重建，慎用
     )
 
     # ── 第二步：构建基金识别索引（两级RAG第一级）──

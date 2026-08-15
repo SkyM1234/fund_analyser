@@ -30,7 +30,7 @@ rag-mcp/
 # 直接调 embedding service
 curl -X POST http://localhost:8001/fund_reports/search \
   -H "Content-Type: application/json" \
-  -d '{"query":"投资策略","top_k":3}'
+  -d '{"query":"投资策略","top_k":10}'
 ```
 
 ## 环境变量

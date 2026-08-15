@@ -266,15 +266,27 @@ def _deduplicate_rag_tool_context(contexts: list[_RagToolContext]) -> None:
         context.message.content = "Duplicate RAG chunks omitted from context."
 
 
-def _build_task_message(current_task: dict, agent_name: str, query: str | None = None) -> str:
+def _build_task_message(
+    current_task: dict,
+    agent_name: str,
+    query: str | None = None,
+    cross_fund_query: bool = False,
+) -> str:
     task_query = query if query is not None else current_task.get("query", "")
     fund_codes = current_task.get("fund_codes", [])
+    identify_top_k_hint = (
+        "\n本轮是跨基金/板块查询：调用 rag_identify_funds 时应将 top_k "
+        "从默认 5 提高到通常 10；候选基金范围明显更广时可继续提高。"
+        if agent_name == "rag_agent" and cross_fund_query
+        else ""
+    )
     if fund_codes:
         fund_code = fund_codes[0]
         return (
             f"任务：{task_query}\n"
             f"只检索/查询基金 {fund_code}，不要查询其他基金。\n"
             f"返回检索到的原始数据，不要与其他基金对比。"
+            f"{identify_top_k_hint}"
         )
     # fund_codes 为空时，注入强制识别提醒（与各 agent 的 system prompt 呼应）
     # description 通常比 query 更完整（如"查询万家科创债ETF的当前净值"），直接带给 Agent 作为基金线索
@@ -291,8 +303,9 @@ def _build_task_message(current_task: dict, agent_name: str, query: str | None =
             f"⚠️ 此任务未提供基金代码。若任务涉及特定基金（非全局检索），"
             f"你必须先调用 {_identify_tool} 查询基金代码，确认后再调用 {_search_hint}。\n"
             f"返回查询到的原始数据即可。"
+            f"{identify_top_k_hint}"
         )
-    return f"任务：{task_hint}\n返回查询到的原始数据即可。"
+    return f"任务：{task_hint}\n返回查询到的原始数据即可。{identify_top_k_hint}"
 
 
 def make_retrieval_node(agent_config: AgentConfig):
@@ -342,6 +355,10 @@ def make_retrieval_node(agent_config: AgentConfig):
         rag_tool_contexts: list[_RagToolContext] = []
         task_query = current_task.get("query", "")
         allowed_fund_codes = _latest_user_fund_codes(state.get("messages", []))
+        route_result = state.get("route_result")
+        cross_fund_query = (
+            getattr(route_result, "intent", None) == "cross_fund_query"
+        )
         retry_count = 0
         final_rag_context_callback = (
             (config.get("configurable", {}) if config else {}).get(
@@ -355,7 +372,12 @@ def make_retrieval_node(agent_config: AgentConfig):
                 if final_rag_context_callback:
                     await final_rag_context_callback(label, current_task_id, [])
                 messages = [SystemMessage(content=system_prompt)] + history_messages
-                messages.append(HumanMessage(content=_build_task_message(current_task, agent_config.agent_name, task_query)))
+                messages.append(HumanMessage(content=_build_task_message(
+                    current_task,
+                    agent_config.agent_name,
+                    task_query,
+                    cross_fund_query=cross_fund_query,
+                )))
 
                 iteration = 0
                 while iteration < agent_config.max_iterations:

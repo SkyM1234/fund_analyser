@@ -132,6 +132,7 @@ class AnswerExample(BaseModel):
             "out_of_scope",
             "sensitive",
             "fund_query",
+            "cross_fund_query",
             "fund_screening",
             "general_finance",
         ]

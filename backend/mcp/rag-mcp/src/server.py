@@ -25,6 +25,8 @@ logger = logging.getLogger("rag-mcp")
 server = Server("rag-mcp")
 rag_client: RagClient | None = None
 fund_matcher: FundCodeMatcher | None = None
+RAG_SEARCH_TYPE = "hybrid"
+RAG_USE_RERANKER = True
 
 
 @server.list_tools()
@@ -54,10 +56,9 @@ async def list_tools() -> list[Tool]:
                             {"type": "null"},
                         ],
                     },
-                    "search_type": {"type": "string", "enum": ["dense", "sparse", "hybrid"], "default": "hybrid"},
-                    "use_reranker": {"type": "boolean", "default": True},
                 },
                 "required": ["query"],
+                "additionalProperties": False,
             },
         ),
         Tool(
@@ -80,6 +81,7 @@ async def list_tools() -> list[Tool]:
                     },
                 },
                 "required": ["query"],
+                "additionalProperties": False,
             },
         ),
         Tool(name="rag_health", description="检查 RAG 服务健康状态", inputSchema={"type": "object", "properties": {}}),
@@ -132,7 +134,7 @@ async def handle_identify_funds(args: dict) -> Sequence[TextContent]:
     lines = [f"识别到 {len(results)} 只基金:"]
     for r in results:
         lines.append(
-            f"- {r['fund_code']}: {r['short_name']}  (置信度: {r['score']:.3f})"
+            f"- {r['fund_code']}: {r['full_name']}  (置信度: {r['score']:.3f})"
         )
 
     return [TextContent(type="text", text="\n".join(lines))]
@@ -150,8 +152,8 @@ async def handle_rag_search(args: dict) -> Sequence[TextContent]:
         query=args["query"],
         top_k=top_k,
         filter_fund_code=args.get("filter_fund_code"),
-        search_type=args.get("search_type", "hybrid"),
-        use_reranker=args.get("use_reranker", True),
+        search_type=RAG_SEARCH_TYPE,
+        use_reranker=RAG_USE_RERANKER,
     )
     if not results:
         return [TextContent(type="text", text="未找到相关内容")]
