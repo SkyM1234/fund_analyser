@@ -15,8 +15,6 @@ intent = "single_fund_query"
 category = "single_fund_strategy"
 ```
 
-跨基金、板块和多基金比较问题使用`answer_cross_fund.jsonl`，构建规则见`build_cross_fund_answer_dataset.md`。不要把跨基金问题放入本数据集，也不要把这类问题放入默认 `retrieval.jsonl`。
-
 ## 先检查上下文
 
 1. 检查 git/worktree 状态，保留已有用户修改，不得 reset、checkout 或覆盖无关改动。
