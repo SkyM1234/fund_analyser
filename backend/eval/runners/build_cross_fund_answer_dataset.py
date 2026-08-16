@@ -13,6 +13,14 @@ from pymilvus import MilvusClient
 
 EVAL_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_OUTPUT = EVAL_DIR / "datasets" / "answer_cross_fund.jsonl"
+
+def named_fund_calls(codes: list[str]) -> list[dict]:
+    calls = []
+    for code in codes:
+        calls.append({"name": "rag_identify_funds"})
+        calls.append({"name": "rag_search", "args": {"filter_fund_code": code}})
+    return calls
+
 CROSS_FUND_SPECS = [
     {
         "query": "截至2025年末，国证港股通科技ETF板块中持有腾讯控股的基金有哪些？各自持仓占基金资产净值的比例是多少？",
@@ -32,7 +40,7 @@ CROSS_FUND_SPECS = [
         "key_facts": ["腾讯控股", "15.32%", "15.31%", "15.40%", "15.38%"],
         "relevant_keywords": ["腾讯控股", "15.32", "15.31", "15.40", "15.38"],
         "intent": "cross_fund_query",
-        "category": "cross_fund_comparison",
+        "category": "cross_fund_strategy",
         "note": "按国证港股通科技ETF板块的年度报告逐基金核验腾讯控股持仓。",
     },
     {
@@ -60,7 +68,7 @@ CROSS_FUND_SPECS = [
             "36.59",
         ],
         "intent": "cross_fund_query",
-        "category": "cross_fund_comparison",
+        "category": "cross_fund_strategy",
         "note": "按年度报告期末行业配置表逐基金筛选超过36%的消费品配置。",
     },
     {
@@ -80,7 +88,7 @@ CROSS_FUND_SPECS = [
         "key_facts": ["-7.10%", "-10.16%", "-8.75%", "-3.56%", "0.9290", "0.8984", "0.9125", "0.9644"],
         "relevant_keywords": ["-7.10%", "-10.16%", "-8.75%", "-3.56%", "0.9290", "0.8984", "0.9125", "0.9644"],
         "intent": "cross_fund_query",
-        "category": "cross_fund_comparison",
+        "category": "cross_fund_strategy",
         "note": "仅比较 query 明确列出的华夏、招商、天弘和万家四只产品。",
     },
     {
@@ -121,7 +129,7 @@ CROSS_FUND_SPECS = [
         "key_facts": ["75.82%", "86.95%", "31.08%", "78.18%", "联接基金", "14.56%", "64.18%", "17.89%"],
         "relevant_keywords": ["个人投资者", "75.82%", "86.95%", "31.08%", "78.18", "联接基金"],
         "intent": "cross_fund_query",
-        "category": "cross_fund_comparison",
+        "category": "cross_fund_strategy",
         "note": "仅比较 query 明确列出的四只产品，并区分个人投资者与联接基金持有人。",
     },
     {
@@ -141,7 +149,7 @@ CROSS_FUND_SPECS = [
         "key_facts": ["0.45%", "0.39%", "0.26%", "0.25%", "100.4468", "100.3876", "100.2649", "100.2548"],
         "relevant_keywords": ["0.45%", "0.39%", "0.26%", "0.25%", "100.4468", "100.3876", "100.2649", "100.2548"],
         "intent": "cross_fund_query",
-        "category": "cross_fund_comparison",
+        "category": "cross_fund_strategy",
         "note": "按四只科创债ETF的2025年年度报告主要会计数据和财务指标逐基金比较。",
     },
     {
@@ -161,7 +169,7 @@ CROSS_FUND_SPECS = [
         "key_facts": ["23广金K1", "2.56%", "25管网SK", "2.32%", "25GTHTK1", "0.87%", "25CMGK01", "2.17%"],
         "relevant_keywords": ["23广金K1", "25管网SK", "25GTHTK1", "25CMGK01"],
         "intent": "cross_fund_query",
-        "category": "cross_fund_comparison",
+        "category": "cross_fund_strategy",
         "note": "按四只科创债ETF期末债券投资明细的第一行逐基金核验。",
     },
     {
@@ -180,7 +188,7 @@ CROSS_FUND_SPECS = [
         "key_facts": ["99.53%", "99.98%", "99.73%"],
         "relevant_keywords": ["机构投资者", "99.53", "99.98", "99.73"],
         "intent": "cross_fund_query",
-        "category": "cross_fund_comparison",
+        "category": "cross_fund_strategy",
         "note": "按四只科创债ETF期末基金份额持有人结构逐基金比较机构占比。",
     },
     {
@@ -219,7 +227,7 @@ CROSS_FUND_SPECS = [
         "key_facts": ["2025年9月17日", "2025年9月24日", "21,777,093.00", "107,806,676.00", "290,887,830.00", "50,903,487.00"],
         "relevant_keywords": ["2025年9月17日", "2025年9月24日", "期末基金份额总额", "份"],
         "intent": "cross_fund_query",
-        "category": "cross_fund_comparison",
+        "category": "cross_fund_strategy",
         "note": "按基金基本情况章节重新核验成立日、上市日、基金代码和期末份额总额。",
     },
 ]
@@ -280,7 +288,7 @@ def build_cross_fund_examples(
                 "category": spec["category"],
                 "relevant_keywords": spec["relevant_keywords"],
                 "relevant_chunk_ids": [chunk["id"] for chunk in selected_chunks],
-                "expected_tool_calls": [],
+                "expected_tool_calls": named_fund_calls(spec["expected_fund_codes"]),
                 "note": (
                     f"{spec['note']}；"
                     + "；".join(
