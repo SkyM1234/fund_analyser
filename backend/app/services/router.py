@@ -24,7 +24,7 @@ class RouteResult(BaseModel):
         "chitchat",          # 闲聊/问候
         "out_of_scope",      # 不在能力范围
         "sensitive",         # 敏感问题（投资建议）
-        "fund_query",        # 特定基金查询
+        "single_fund_query",        # 特定基金查询
         "cross_fund_query",  # 多基金/板块基金查询
         "fund_screening",    # 基金筛选（查找符合条件的基金）
         "general_finance",   # 通用金融知识
@@ -57,7 +57,7 @@ LLM_CLASSIFIER_SYSTEM = """你是基金问答系统的意图分类器。根据�
 - "推荐一只基金"、"买哪个好"、"这只基金会涨吗"、"帮我选"、"预期收益多少"
 - 要求推荐、选择、预测的都归此类
 
-**fund_query** - 查询特定基金的信息
+**single_fund_query** - 查询特定基金的信息
 - "科创债ETF万家的规模"、"159103的持仓"、"这两只基金哪个费率低"
 - 涉及具体基金名称或代码的查询
 
@@ -75,10 +75,10 @@ LLM_CLASSIFIER_SYSTEM = """你是基金问答系统的意图分类器。根据�
 
 ⚠️ 注意：
 - 若当前消息是追问或模糊指令（如"再试一下"、"换一个"），结合对话历史判断实际意图
-- sensitive 和 fund_query/fund_screening 的区别：前者要求推荐/预测，后者是客观查询
+- sensitive 和 single_fund_query/fund_screening 的区别：前者要求推荐/预测，后者是客观查询
 
 输出 JSON（不要解释）：
-{"intent": "sensitive|fund_query|cross_fund_query|fund_screening|general_finance"}"""
+{"intent": "sensitive|single_fund_query|cross_fund_query|fund_screening|general_finance"}"""
 
 
 async def route_query(
@@ -161,7 +161,7 @@ async def _llm_classify(
         intent = data["intent"]
         if intent in (
             "sensitive",
-            "fund_query",
+            "single_fund_query",
             "cross_fund_query",
             "fund_screening",
             "general_finance",

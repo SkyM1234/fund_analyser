@@ -79,7 +79,7 @@
   "key_facts": ["金融科技", "被动", "指数"],
   "relevant_chunk_ids": ["778279457f99a750795ed1dec5d4c072"],
   "should_refuse": false,
-  "intent": "fund_query",
+  "intent": "single_fund_query",
   "expected_tool_calls": [],
   "note": "159103: chunk=... id=..."
 }

@@ -131,7 +131,7 @@ class AnswerExample(BaseModel):
             "chitchat",
             "out_of_scope",
             "sensitive",
-            "fund_query",
+            "single_fund_query",
             "cross_fund_query",
             "fund_screening",
             "general_finance",

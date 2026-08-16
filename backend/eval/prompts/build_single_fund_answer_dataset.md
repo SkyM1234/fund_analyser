@@ -11,7 +11,7 @@
 当前主线为：
 
 ```text
-intent = "fund_query"
+intent = "single_fund_query"
 category = "single_fund_strategy"
 ```
 
@@ -40,7 +40,7 @@ category = "single_fund_strategy"
 
 ### 分类规则
 
-- 所有样本的 `intent` 必须是 `fund_query`。
+- 所有样本的 `intent` 必须是 `single_fund_query`。
 - 所有样本的 `category` 必须是 `single_fund_strategy`。
 - query 必须明确指向一只基金。
 - query 不能同时指向多只基金、泛泛询问基金类别，或要求扫描全部候选基金。
@@ -67,7 +67,7 @@ category = "single_fund_strategy"
   "expected_fund_codes": ["159103"],
   "key_facts": ["..."],
   "should_refuse": false,
-  "intent": "fund_query",
+  "intent": "single_fund_query",
   "category": "single_fund_strategy",
   "relevant_keywords": ["..."],
   "relevant_chunk_ids": ["真实 Milvus id"],
