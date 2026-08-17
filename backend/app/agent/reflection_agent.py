@@ -9,7 +9,12 @@ from langchain_openai import ChatOpenAI
 
 from app.core.config import get_settings
 from app.core.llm_concurrency import llm_ainvoke
-from app.agent.multi_agent_state import MultiAgentState, SubTask, ConflictAnnotation
+from app.agent.multi_agent_state import (
+    MultiAgentState,
+    SubTask,
+    ConflictAnnotation,
+    is_plan_complete,
+)
 from app.tools.llm_json import extract_json_block
 from app.tools.token_usage import record_usage
 
@@ -75,39 +80,64 @@ async def global_reflection_node(state: MultiAgentState) -> dict[str, Any]:
     严格禁止：直接修改 sub_results 中的任何 Agent 原始数据。
 
     流程：
-    1. 筛选本轮新完成（reflected=False）的任务
-    2. 若只有 1 个任务或任务间无可比数据，直接标记 reflected=True 后放行
-    3. 调用 LLM 识别跨 Agent 冲突并定级
-    4. low 冲突 → 写入 conflict_annotations（resolved=False），交 Synthesizer 披露
-    5. high 冲突 → 写入 conflict_annotations + 生成定向澄清 SubTask（clarify_ 前缀）
+    1. 计划未全部进入终态时，不做反思，直接放行下一调度批次
+    2. 原始任务全部终态后，统一比较所有尚未反思的原始任务结果
+    3. low 冲突 → 写入 conflict_annotations（resolved=False），交 Synthesizer 披露
+    4. high 冲突 → 写入 conflict_annotations + 生成定向澄清 SubTask（clarify_ 前缀）
+    5. 澄清任务完成后仅回写既有冲突的 resolved 状态，不再次全量比对
     6. 已达 clarification_round 上限时，high 冲突强制降级为 low（标注披露）
     """
-    import time as _time
-
     plan = list(state.get("plan", []))
     sub_results = state.get("sub_results", {})
     clarification_round = state.get("clarification_round", 0)
 
-    # 评估本轮新完成（reflected 标志为 False）的任务，包含 completed 和 failed。
-    # failed 任务通常仍带有部分/兜底结果（见 retrieval_agent 达到最大迭代时的降级返回），
-    # 若排除在外，一旦冲突的一方任务失败，冲突检测会被短路跳过，永远不会调度仲裁。
+    # batch_reflection 是每个调度批次后的汇合点，但跨批次依赖任务只能在整个
+    # DAG 结束后才能做完整一致性比较。中间批次绝不能提前写 reflected=True，
+    # 否则后续批次的结果不会再与上游结果进入同一次比较。
+    if not is_plan_complete(state):
+        pending_or_running = [
+            t["task_id"]
+            for t in plan
+            if t["status"] in ("pending", "running")
+        ]
+        logger.info(
+            "[GlobalReflection] Plan not complete; deferring full consistency check. "
+            "Outstanding tasks: %s",
+            pending_or_running,
+        )
+        return {}
+
+    # 仅原始任务参与一次完整一致性检查。澄清任务负责裁决既有冲突，不应成为
+    # 新一轮冲突识别的输入，避免澄清结果与原始结果被重复比较。
     new_tasks = [
         t for t in plan
-        if t["status"] in ("completed", "failed") and not t.get("reflected", False)
+        if (
+            t["status"] in ("completed", "failed")
+            and not t.get("reflected", False)
+            and not t["task_id"].startswith("clarify_")
+        )
     ]
 
-    # 将本轮新任务标记为已反思（无论后续是否有冲突，都不重复进全局反思）
+    # 只有真正进入最终检查的原始任务才标记为已反思。
+    new_task_ids = {task["task_id"] for task in new_tasks}
     for t in plan:
-        if t["status"] in ("completed", "failed") and not t.get("reflected", False):
+        if t["task_id"] in new_task_ids:
             t["reflected"] = True
 
     total_token_usage: dict[str, dict[str, int]] = {}
 
-    # 若本轮新完成的任务中包含澄清任务（clarify_ 前缀），回写对应 conflict_annotations 的 resolved
-    # 必须在下方"单任务短路"判断之前处理：澄清任务通常单独一批完成，new_tasks 长度会是 1，
-    # 若放在短路判断之后，这段逻辑将永远不会被执行到。
+    # 澄清任务通常会在原始任务的一次完整检查之后单独完成。它们不参与二次
+    # 冲突识别，只用于回写既有 conflict_annotations 的 resolved 状态。
     resolved_updates: list[ConflictAnnotation] = []
-    newly_completed_clarify_ids = {t["task_id"] for t in new_tasks if t["task_id"].startswith("clarify_")}
+    newly_completed_clarify_ids = {
+        t["task_id"]
+        for t in plan
+        if (
+            t["task_id"].startswith("clarify_")
+            and t["status"] in ("completed", "failed")
+            and not t.get("reflected", False)
+        )
+    }
     if newly_completed_clarify_ids:
         for ann in state.get("conflict_annotations", []):
             clarify_id = ann.get("clarification_task_id")
@@ -133,9 +163,17 @@ async def global_reflection_node(state: MultiAgentState) -> dict[str, Any]:
                 resolved_updates.append(new_ann)
                 logger.info(f"[GlobalReflection] Clarification {clarify_id} verdict={verdict} resolved={is_resolved} for conflict {ann.get('conflict_id')}")
 
-    # 单任务或无新任务，无需跨任务冲突检测
+    for t in plan:
+        if t["task_id"] in newly_completed_clarify_ids:
+            t["reflected"] = True
+
+    # 澄清完成后的终态批次，或只有一个原始任务时，无需调用 LLM 做跨任务比较。
     if len(new_tasks) <= 1:
-        logger.info(f"[GlobalReflection] {len(new_tasks)} new task(s), skipping cross-task check")
+        logger.info(
+            "[GlobalReflection] %s original task(s) awaiting final check; "
+            "skipping cross-task comparison",
+            len(new_tasks),
+        )
         return {
             "plan": plan,
             "reflection_count": state.get("reflection_count", 0) + 1,
