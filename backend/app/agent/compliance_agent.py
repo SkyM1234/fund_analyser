@@ -49,10 +49,10 @@ COMPLIANCE_SYSTEM_PROMPT = """你是基金分析系统的合规审查专家。
 async def compliance_agent_node(state: MultiAgentState) -> dict[str, Any]:
     """Compliance Agent 节点：合规检查"""
     
-    final_answer = state.get("final_answer")
+    draft_answer = state.get("draft_answer")
     
-    if not final_answer:
-        logger.info("[Compliance] No final_answer to check")
+    if not draft_answer:
+        logger.info("[Compliance] No draft_answer to check")
         return {"compliance_passed": True}
     
     logger.info("[Compliance] Starting compliance check")
@@ -71,8 +71,8 @@ async def compliance_agent_node(state: MultiAgentState) -> dict[str, Any]:
 
     prompt = f"""请审查以下答案是否符合合规要求：
 
-答案内容：
-{final_answer}
+答案草稿：
+{draft_answer}
 
 请判断是否包含投资建议、收益预测、基金推荐或买卖指导。"""
 

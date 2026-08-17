@@ -206,6 +206,8 @@ def _new_plan_update(validated_plan: list[dict]) -> dict[str, Any]:
         "clarification_round": 0,
         "compliance_passed": True,
         "compliance_reason": None,
+        "compliance_retry_count": 0,
+        "draft_answer": None,
         "final_answer": None,
         "synthesis_complete": False,
     }

@@ -126,6 +126,7 @@ class MultiAgentState(TypedDict):
     compliance_retry_count: int     # 合规重试次数（重新汇总答案的次数）
     
     # 最终输出
+    draft_answer: str | None         # Synthesizer 当前草稿，尚未通过合规检查
     final_answer: str | None        # 最终答案
     synthesis_complete: bool        # 汇总是否完成
 
@@ -160,6 +161,7 @@ def create_initial_state(
         compliance_passed=True,
         compliance_reason=None,
         compliance_retry_count=0,
+        draft_answer=None,
         final_answer=None,
         synthesis_complete=False,
     )

@@ -1,14 +1,13 @@
 """Synthesizer - 汇总所有子任务结果"""
 import logging
 from typing import Any
-from datetime import datetime
 
 from langchain_core.messages import HumanMessage
 from langchain_openai import ChatOpenAI
 
 from app.core.config import get_settings
 from app.core.llm_concurrency import llm_ainvoke
-from app.agent.multi_agent_state import MultiAgentState, PlanExecution
+from app.agent.multi_agent_state import MultiAgentState
 from app.tools.token_usage import record_usage
 
 logger = logging.getLogger(__name__)
@@ -65,7 +64,7 @@ async def synthesizer_node(state: MultiAgentState) -> dict[str, Any]:
 
     if not user_query:
         logger.warning("[Synthesizer] No user query found")
-        return {"final_answer": "无法生成答案：未找到用户问题"}
+        return {"draft_answer": "无法生成答案：未找到用户问题"}
 
     # 合规重试反馈：若是因合规不通过被打回，附加改写指导
     compliance_feedback = ""
@@ -125,20 +124,9 @@ async def synthesizer_node(state: MultiAgentState) -> dict[str, Any]:
                 final_answer = response.content
                 token_usage = record_usage("synthesizer:history_fallback", response)
 
-                # 记录到历史
-                updated_plan_history = plan_history + [PlanExecution(
-                    round_id=f"round_{len(plan_history) + 1}",
-                    user_query=user_query,
-                    plan=[],
-                    results={},
-                    final_answer=final_answer,
-                    timestamp=datetime.now().isoformat(),
-                )]
-
                 return {
-                    "final_answer": final_answer,
+                    "draft_answer": final_answer,
                     "synthesis_complete": True,
-                    "plan_history": updated_plan_history,
                     "compliance_passed": True,
                     "compliance_reason": None,
                     "token_usage": token_usage,
@@ -146,7 +134,7 @@ async def synthesizer_node(state: MultiAgentState) -> dict[str, Any]:
             except Exception as e:
                 logger.error(f"[Synthesizer] Failed with history: {e}")
                 return {
-                    "final_answer": f"抱歉，生成答案时出错：{str(e)}",
+                    "draft_answer": f"抱歉，生成答案时出错：{str(e)}",
                     "synthesis_complete": True,
                     "compliance_passed": True,
                     "compliance_reason": None,
@@ -171,20 +159,9 @@ async def synthesizer_node(state: MultiAgentState) -> dict[str, Any]:
                 final_answer = response.content
                 token_usage = record_usage("synthesizer:no_history_fallback", response)
 
-                # 记录到历史
-                updated_plan_history = [PlanExecution(
-                    round_id="round_1",
-                    user_query=user_query,
-                    plan=[],
-                    results={},
-                    final_answer=final_answer,
-                    timestamp=datetime.now().isoformat(),
-                )]
-
                 return {
-                    "final_answer": final_answer,
+                    "draft_answer": final_answer,
                     "synthesis_complete": True,
-                    "plan_history": updated_plan_history,
                     "compliance_passed": True,
                     "compliance_reason": None,
                     "token_usage": token_usage,
@@ -192,7 +169,7 @@ async def synthesizer_node(state: MultiAgentState) -> dict[str, Any]:
             except Exception as e:
                 logger.error(f"[Synthesizer] Fallback failed: {e}")
                 return {
-                    "final_answer": f"抱歉，生成答案时出错：{str(e)}",
+                    "draft_answer": f"抱歉，生成答案时出错：{str(e)}",
                     "synthesis_complete": True,
                 }
     
@@ -281,22 +258,9 @@ async def synthesizer_node(state: MultiAgentState) -> dict[str, Any]:
         token_usage = record_usage("synthesizer", response)
         logger.info(f"[Synthesizer] Generated answer ({len(final_answer)} chars)")
 
-        # 保存本轮执行记录到历史
-        plan_history = state.get("plan_history", [])
-        current_round = PlanExecution(
-            round_id=f"round_{len(plan_history) + 1}",
-            user_query=user_query,
-            plan=plan,
-            results=sub_results.copy(),
-            final_answer=final_answer,
-            timestamp=datetime.now().isoformat(),
-        )
-        updated_plan_history = plan_history + [current_round]
-
         return {
-            "final_answer": final_answer,
+            "draft_answer": final_answer,
             "synthesis_complete": True,
-            "plan_history": updated_plan_history,  # 更新历史
             "compliance_passed": True,
             "compliance_reason": None,
             "token_usage": token_usage,
@@ -313,22 +277,9 @@ async def synthesizer_node(state: MultiAgentState) -> dict[str, Any]:
         
         fallback_answer = "\n".join(fallback_parts)
 
-        # 保存历史（即使失败也记录）
-        plan_history = state.get("plan_history", [])
-        current_round = PlanExecution(
-            round_id=f"round_{len(plan_history) + 1}",
-            user_query=user_query,
-            plan=plan,
-            results=sub_results.copy(),
-            final_answer=fallback_answer,
-            timestamp=datetime.now().isoformat(),
-        )
-        updated_plan_history = plan_history + [current_round]
-
         return {
-            "final_answer": fallback_answer,
+            "draft_answer": fallback_answer,
             "synthesis_complete": True,
-            "plan_history": updated_plan_history,
             "compliance_passed": True,
             "compliance_reason": None,
         }

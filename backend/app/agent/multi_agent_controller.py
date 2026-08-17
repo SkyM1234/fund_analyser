@@ -2,6 +2,7 @@
 import copy
 import logging
 import time
+from datetime import datetime
 from typing import Literal
 from pathlib import Path
 
@@ -12,6 +13,7 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 
 from app.agent.multi_agent_state import (
     MultiAgentState,
+    PlanExecution,
     get_blocked_tasks,
     get_ready_tasks,
     is_plan_complete,
@@ -308,16 +310,34 @@ def check_compliance(state: MultiAgentState) -> Literal["end", "synthesizer_retr
 
 # ===== 合规通过后落盘最终答案 =====
 def commit_answer_node(state: MultiAgentState):
-    """合规检查通过后，才将最终答案写入消息历史。
+    """合规检查通过后，才归档并将最终答案写入消息历史。
 
-    synthesizer 每次执行（含合规重试）只覆盖 final_answer，不直接写 messages，
-    避免未通过合规审查的中间版本被 add_messages 追加并持久化到对话历史里。
+    synthesizer 每次执行（含合规重试）只产生 draft_answer。只有通过合规
+    的草稿才会在这里提升为 final_answer，并追加一条 plan_history。
     """
-    final_answer = state.get("final_answer", "")
+    final_answer = state.get("draft_answer", "")
+    messages = state.get("messages", [])
+    user_query = ""
+    for message in reversed(messages):
+        if getattr(message, "type", None) == "human":
+            user_query = message.content
+            break
+
+    plan_history = state.get("plan_history", [])
+    current_round = PlanExecution(
+        round_id=f"round_{len(plan_history) + 1}",
+        user_query=user_query,
+        plan=copy.deepcopy(state.get("plan", [])),
+        results=copy.deepcopy(state.get("sub_results", {})),
+        final_answer=final_answer,
+        timestamp=datetime.now().isoformat(),
+    )
 
     from langchain_core.messages import AIMessage
 
     return {
+        "final_answer": final_answer,
+        "plan_history": plan_history + [current_round],
         "messages": [AIMessage(content=final_answer)],
     }
 
