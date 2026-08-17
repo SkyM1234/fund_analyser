@@ -27,6 +27,8 @@ from app.agent.compliance_agent import compliance_agent_node
 from app.agent.synthesizer import synthesizer_node
 from app.agent.reflection_agent import global_reflection_node
 from app.services.router import route_query
+from app.core.config import get_settings
+from app.core.llm_concurrency import llm_ainvoke
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +68,9 @@ async def route_node(state: MultiAgentState):
 
 
 # ===== 路由后置分支：敏感问题硬拦截 =====
-def route_after_intent(state: MultiAgentState) -> Literal["supervisor", "sensitive_refusal"]:
+def route_after_intent(
+    state: MultiAgentState,
+) -> Literal["supervisor", "direct_answer", "out_of_scope_refusal", "sensitive_refusal"]:
     """route 节点之后的硬性分支：intent == sensitive 时直接拒绝，不进入 supervisor 规划。
 
     route_result.intent 此前只是写入 state 供 supervisor 的 prompt 参考（软约束），
@@ -74,9 +78,19 @@ def route_after_intent(state: MultiAgentState) -> Literal["supervisor", "sensiti
     边界，需要用图结构保证确定性拒绝，因此在此处直接短路。
     """
     route_result = state.get("route_result")
-    if route_result is not None and route_result.intent == "sensitive":
+    intent = route_result.intent if route_result is not None else None
+
+    if intent == "sensitive":
         logger.info("[Router] intent=sensitive, short-circuit to sensitive_refusal")
         return "sensitive_refusal"
+    if intent == "out_of_scope":
+        logger.info("[Router] intent=out_of_scope, short-circuit to out_of_scope_refusal")
+        return "out_of_scope_refusal"
+    if intent in ("chitchat", "general_finance"):
+        logger.info("[Router] intent=%s, short-circuit to direct_answer", intent)
+        return "direct_answer"
+
+    logger.info("[Router] intent=%s, entering fund workflow", intent or "unknown")
     return "supervisor"
 
 
@@ -105,6 +119,74 @@ def handle_sensitive_refusal(state: MultiAgentState):
 # 注意：Send 只能从 add_conditional_edges 的路由函数返回，不能从普通 node 返回
 # （普通 node 的返回值会被当作状态更新字典处理，返回 list[Send] 会触发 InvalidUpdateError: Expected dict, got [Send(...), ...]）。
 # 因此 dispatch_tasks 不注册为节点，而是直接作为 supervisor / batch_reflection 之后的条件边使用。
+async def direct_answer_node(state: MultiAgentState):
+    """回答通用金融知识或闲聊问题，不创建任务计划。"""
+    from langchain_core.messages import HumanMessage
+    from langchain_openai import ChatOpenAI
+    from app.tools.token_usage import record_usage
+
+    route_result = state.get("route_result")
+    intent = route_result.intent if route_result is not None else "general_finance"
+    user_query = next(
+        (
+            message.content
+            for message in reversed(state.get("messages", []))
+            if isinstance(message, HumanMessage)
+        ),
+        "",
+    )
+
+    if intent == "chitchat":
+        answer = "你好！我是基金分析助手，可以帮助你了解基金概念、查询基金信息和进行客观数据分析。"
+        return {
+            "draft_answer": answer,
+            "synthesis_complete": True,
+            "compliance_passed": True,
+            "compliance_reason": None,
+            "compliance_retry_count": 0,
+        }
+
+    settings = get_settings()
+    llm = ChatOpenAI(
+        base_url=settings.LLM_BASE_URL,
+        api_key=settings.LLM_API_KEY,
+        model=settings.LLM_MODEL,
+        temperature=0.4,
+    )
+    response = await llm_ainvoke(llm, [
+        {
+            "role": "system",
+            "content": (
+                "你是基金分析助手。回答通用金融知识问题，保持客观、简洁、易懂；"
+                "不要提供具体投资建议、基金推荐、收益预测或买卖指令。"
+            ),
+        },
+        {"role": "user", "content": user_query},
+    ])
+    return {
+        "draft_answer": response.content,
+        "synthesis_complete": True,
+        "compliance_passed": True,
+        "compliance_reason": None,
+        "compliance_retry_count": 0,
+        "token_usage": record_usage("direct_answer", response),
+    }
+
+
+def handle_out_of_scope_refusal(state: MultiAgentState):
+    """越出基金助手能力范围时固定拒答，避免进入检索或市场工具。"""
+    from langchain_core.messages import AIMessage
+
+    refusal_message = (
+        "抱歉，我目前只支持基金相关信息查询、客观数据分析和金融概念解释，"
+        "无法处理该领域的问题。"
+    )
+    return {
+        "final_answer": refusal_message,
+        "messages": [AIMessage(content=refusal_message)],
+    }
+
+
 def prepare_task_dispatch_node(state: MultiAgentState):
     """持久化当前批次的 running 状态，再交给 Send 路由并发分发。
 
@@ -428,6 +510,8 @@ def build_multi_agent_graph(checkpointer: BaseCheckpointSaver):
     graph.add_node("compliance_failure_handler", handle_compliance_failure)
     graph.add_node("planning_failure_handler", handle_planning_failure)
     graph.add_node("sensitive_refusal", handle_sensitive_refusal)
+    graph.add_node("out_of_scope_refusal", handle_out_of_scope_refusal)
+    graph.add_node("direct_answer", direct_answer_node)
     graph.add_node("agent_error_handler", handle_agent_error)
 
     # 构建流程
@@ -437,6 +521,8 @@ def build_multi_agent_graph(checkpointer: BaseCheckpointSaver):
         route_after_intent,
         {
             "supervisor": "supervisor",
+            "direct_answer": "direct_answer",
+            "out_of_scope_refusal": "out_of_scope_refusal",
             "sensitive_refusal": "sensitive_refusal",
         }
     )
@@ -502,6 +588,7 @@ def build_multi_agent_graph(checkpointer: BaseCheckpointSaver):
 
     # Synthesizer → Compliance
     graph.add_edge("synthesizer", "compliance")
+    graph.add_edge("direct_answer", "compliance")
 
     # Compliance → 落盘最终答案 或 回synthesizer重新生成 或 拒绝兜底
     graph.add_conditional_edges(
@@ -518,6 +605,7 @@ def build_multi_agent_graph(checkpointer: BaseCheckpointSaver):
     graph.add_edge("compliance_failure_handler", END)
     graph.add_edge("planning_failure_handler", END)
     graph.add_edge("sensitive_refusal", END)
+    graph.add_edge("out_of_scope_refusal", END)
 
     # 编译
     compiled = graph.compile(checkpointer=checkpointer)

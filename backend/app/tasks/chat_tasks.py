@@ -54,7 +54,7 @@ async def _run_chat_turn(run_id: str, req: ChatRequest, user_id: int) -> None:
 
         logger.info("[chat_task] 使用多Agent架构")
         app = build_multi_agent_graph(checkpointer)
-        agent_node_names = ["synthesizer"]
+        agent_node_names = ["synthesizer", "direct_answer"]
         worker_agent_names = {"rag_agent", "market_agent", "arbiter_agent"}
 
         config = {"configurable": {"thread_id": req.session_id, "user_id": str(user_id)}}
@@ -224,9 +224,20 @@ async def _run_chat_turn(run_id: str, req: ChatRequest, user_id: int) -> None:
                             logger.warning(f"[chat_task] event: compliance未通过，reason={reason}")
                             publish_event(run_id, "retry_notice", {"reason": reason})
 
-                    if node_name in ("compliance_failure_handler", "sensitive_refusal") and is_node_level_event:
+                    if node_name in (
+                        "compliance_failure_handler",
+                        "sensitive_refusal",
+                        "out_of_scope_refusal",
+                        "direct_answer",
+                    ) and is_node_level_event:
                         output = event.get("data", {}).get("output")
-                        if isinstance(output, dict) and "messages" in output:
+                        if isinstance(output, dict) and node_name == "direct_answer":
+                            content = output.get("draft_answer", "")
+                            if content:
+                                publish_event(run_id, "message_start", {})
+                                for char in content:
+                                    publish_event(run_id, "token", {"delta": char})
+                        elif isinstance(output, dict) and "messages" in output:
                             last_msg = output["messages"][-1]
                             if hasattr(last_msg, "content") and last_msg.content:
                                 logger.info(f"[chat_task] event: {node_name}节点返回预设回复")
