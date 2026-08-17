@@ -49,7 +49,7 @@ class SubTask(TypedDict, total=False):
     fund_codes: list[str]           # 涉及的基金代码
     query: str                      # 查询文本
     depends_on: list[str]           # 依赖的任务ID
-    status: Literal["pending", "running", "completed", "failed"]
+    status: Literal["pending", "running", "completed", "failed", "blocked"]
     result: str | None              # 任务结果
     error: str | None               # 错误信息
     retry_count: int                # 重试次数
@@ -91,6 +91,7 @@ class MultiAgentState(TypedDict):
     # 执行状态（按 task_id 合并去重；supervisor 新一轮规划时返回 CLEARED 清空）
     completed_tasks: Annotated[list[str], merge_str_list_unique]  # 已完成的任务ID列表
     failed_tasks: Annotated[list[str], merge_str_list_unique]     # 失败的任务ID列表
+    blocked_tasks: Annotated[list[str], merge_str_list_unique]    # 被失败依赖阻断的任务ID列表
 
     # 子任务结果存储（按 task_id 合并；supervisor 新一轮规划时返回 CLEARED 清空）
     sub_results: Annotated[dict[str, str], merge_dict]  # {task_id: result_text}
@@ -140,6 +141,7 @@ def create_initial_state(
         dispatch_task_ids=[],
         completed_tasks=[],
         failed_tasks=[],
+        blocked_tasks=[],
         sub_results={},
         current_agent=None,
         agent_history=[],
@@ -160,44 +162,71 @@ def create_initial_state(
 
 def get_next_pending_task(state: MultiAgentState) -> SubTask | None:
     """获取下一个可执行的待处理任务（依赖已满足）"""
-    completed = set(state.get("completed_tasks", []))
-    failed = set(state.get("failed_tasks", []))
-    settled = completed | failed
-
-    for task in state.get("plan", []):
-        if task["status"] != "pending":
-            continue
-
-        depends_on = task.get("depends_on", [])
-        if all(dep_id in settled for dep_id in depends_on):
-            return task
-
-    return None
+    ready_tasks = get_ready_tasks(state)
+    return ready_tasks[0] if ready_tasks else None
 
 
 def get_ready_tasks(state: MultiAgentState) -> list[SubTask]:
-    """返回当前所有依赖已满足、可并发执行的待处理任务列表。"""
-    completed = set(state.get("completed_tasks", []))
-    failed = set(state.get("failed_tasks", []))
-    settled = completed | failed
+    """返回所有依赖均已成功完成、可并发执行的待处理任务。"""
+    completed = {
+        task["task_id"]
+        for task in state.get("plan", [])
+        if task["status"] == "completed"
+    }
+    completed.update(state.get("completed_tasks", []))
 
     ready = []
     for task in state.get("plan", []):
         if task["status"] != "pending":
             continue
         depends_on = task.get("depends_on", [])
-        if all(dep_id in settled for dep_id in depends_on):
+        if all(dep_id in completed for dep_id in depends_on):
             ready.append(task)
     return ready
 
 
+def get_blocked_tasks(state: MultiAgentState) -> list[SubTask]:
+    """返回因失败或已阻断依赖而不能执行的 pending 任务。
+
+    通过固定点计算处理任意深度的依赖链：若 t1 failed，t2 依赖 t1，
+    t3 又依赖 t2，则一次调用会同时返回 t2 和 t3。
+    """
+    plan = state.get("plan", [])
+    terminal_blockers = {
+        task["task_id"]
+        for task in plan
+        if task["status"] in ("failed", "blocked")
+    }
+    terminal_blockers.update(state.get("failed_tasks", []))
+    terminal_blockers.update(state.get("blocked_tasks", []))
+
+    blocked: list[SubTask] = []
+    blocked_ids: set[str] = set()
+    pending_tasks = [task for task in plan if task["status"] == "pending"]
+
+    while True:
+        newly_blocked = [
+            task
+            for task in pending_tasks
+            if task["task_id"] not in blocked_ids
+            and any(dep_id in terminal_blockers for dep_id in task.get("depends_on", []))
+        ]
+        if not newly_blocked:
+            return blocked
+
+        blocked.extend(newly_blocked)
+        new_ids = {task["task_id"] for task in newly_blocked}
+        blocked_ids.update(new_ids)
+        terminal_blockers.update(new_ids)
+
+
 def is_plan_complete(state: MultiAgentState) -> bool:
-    """检查所有任务是否已完成（成功或失败）"""
+    """检查所有任务是否已进入终态。"""
     plan = state.get("plan", [])
     if not plan:
         return False
     
     return all(
-        task["status"] in ["completed", "failed"]
+        task["status"] in ["completed", "failed", "blocked"]
         for task in plan
     )

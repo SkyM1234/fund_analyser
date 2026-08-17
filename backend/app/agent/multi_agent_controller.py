@@ -12,6 +12,7 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 
 from app.agent.multi_agent_state import (
     MultiAgentState,
+    get_blocked_tasks,
     get_ready_tasks,
     is_plan_complete,
 )
@@ -161,6 +162,51 @@ def dispatch_tasks(state: MultiAgentState) -> list[Send] | Literal["synthesizer"
     return sends or "synthesizer"
 
 
+def block_dependent_tasks_node(state: MultiAgentState):
+    """将失败或阻断依赖的下游任务标记为 blocked，而非继续派发。"""
+    blocked_tasks = get_blocked_tasks(state)
+    if not blocked_tasks:
+        return {}
+
+    blocked_ids = [task["task_id"] for task in blocked_tasks]
+    known_blockers = {
+        task["task_id"]
+        for task in state.get("plan", [])
+        if task["status"] in ("failed", "blocked")
+    }
+    known_blockers.update(state.get("failed_tasks", []))
+    known_blockers.update(state.get("blocked_tasks", []))
+
+    patches = []
+    results = {}
+    for task in blocked_tasks:
+        blocking_dependencies = [
+            dep_id for dep_id in task.get("depends_on", [])
+            if dep_id in known_blockers
+        ]
+        result = (
+            "未执行：依赖任务 "
+            f"{', '.join(blocking_dependencies)} 未成功完成，当前任务已阻断。"
+        )
+        patches.append(TaskPatch(
+            task_id=task["task_id"],
+            changes={
+                "status": "blocked",
+                "error": result,
+                "result": result,
+            },
+        ))
+        results[task["task_id"]] = result
+        known_blockers.add(task["task_id"])
+
+    logger.warning("[DependencyBlocker] Blocked tasks: %s", blocked_ids)
+    return {
+        "plan": PlanPatches(patches),
+        "blocked_tasks": blocked_ids,
+        "sub_results": results,
+    }
+
+
 # ===== 条件路由函数 =====
 def should_continue_planning(state: MultiAgentState):
     """决定是否进入下一批调度。"""
@@ -172,6 +218,9 @@ def should_continue_planning(state: MultiAgentState):
     if is_plan_complete(state):
         logger.info("[Router] All tasks completed, moving to synthesizer")
         return "synthesizer"
+
+    if get_blocked_tasks(state):
+        return "dependency_blocker"
 
     if get_ready_tasks(state):
         return "task_dispatcher"
@@ -191,6 +240,9 @@ def after_batch_reflection(state: MultiAgentState):
     if not has_pending and (not plan or is_plan_complete(state)):
         logger.info("[Router] All tasks done after global reflection, moving to synthesizer")
         return "synthesizer"
+    if get_blocked_tasks(state):
+        logger.info("[Router] Blocking tasks with unsuccessful dependencies")
+        return "dependency_blocker"
     if get_ready_tasks(state):
         logger.info("[Router] Pending tasks after global reflection, dispatching next batch")
         return "task_dispatcher"
@@ -314,6 +366,7 @@ def build_multi_agent_graph(checkpointer: BaseCheckpointSaver):
     graph.add_node("route", route_node)
     graph.add_node("supervisor", supervisor_node)
     graph.add_node("task_dispatcher", prepare_task_dispatch_node)
+    graph.add_node("dependency_blocker", block_dependent_tasks_node)
     graph.add_node("rag_agent", rag_agent_node)
     graph.add_node("market_agent", market_agent_node)
     graph.add_node("arbiter_agent", arbiter_agent_node)
@@ -346,6 +399,7 @@ def build_multi_agent_graph(checkpointer: BaseCheckpointSaver):
             "arbiter_agent": "arbiter_agent",
             "agent_error_handler": "agent_error_handler",
             "task_dispatcher": "task_dispatcher",
+            "dependency_blocker": "dependency_blocker",
             "synthesizer": "synthesizer",
         }
     )
@@ -357,6 +411,15 @@ def build_multi_agent_graph(checkpointer: BaseCheckpointSaver):
             "market_agent": "market_agent",
             "arbiter_agent": "arbiter_agent",
             "agent_error_handler": "agent_error_handler",
+            "synthesizer": "synthesizer",
+        },
+    )
+    graph.add_conditional_edges(
+        "dependency_blocker",
+        should_continue_planning,
+        {
+            "task_dispatcher": "task_dispatcher",
+            "dependency_blocker": "dependency_blocker",
             "synthesizer": "synthesizer",
         },
     )
@@ -379,6 +442,7 @@ def build_multi_agent_graph(checkpointer: BaseCheckpointSaver):
             "arbiter_agent": "arbiter_agent",
             "agent_error_handler": "agent_error_handler",
             "task_dispatcher": "task_dispatcher",
+            "dependency_blocker": "dependency_blocker",
             "synthesizer": "synthesizer",
         }
     )

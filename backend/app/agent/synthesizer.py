@@ -202,6 +202,7 @@ async def synthesizer_node(state: MultiAgentState) -> dict[str, Any]:
     status_labels = {
         "completed": "已成功获取",
         "failed": "未能成功获取（以下为部分或兜底信息，可能不完整或不准确）",
+        "blocked": "未执行（依赖任务未成功完成）",
         "pending": "未执行",
         "running": "执行中",
     }
