@@ -18,6 +18,7 @@ from langchain_openai import ChatOpenAI
 from app.core.config import get_settings
 from app.core.llm_concurrency import llm_ainvoke
 from app.agent.multi_agent_state import MultiAgentState
+from app.agent.state_reducers import TaskPatch
 from app.tools.conversation_utils import get_recent_messages_for_agent
 from app.tools.token_usage import record_usage
 from app.agent.reflection_agent import agent_self_check, _improve_query, MAX_REFLECTION_RETRIES
@@ -84,12 +85,13 @@ def _get_tools_for_agent(agent_name: str) -> list:
     return filtered
 
 
-def _mark_finished(task: dict) -> None:
+def _finish_changes(task: dict) -> dict[str, float]:
     finished_at = time.monotonic()
-    task["finished_at"] = finished_at
+    changes = {"finished_at": finished_at}
     started_at = task.get("started_at")
     if started_at is not None:
-        task["duration_ms"] = (finished_at - started_at) * 1000
+        changes["duration_ms"] = (finished_at - started_at) * 1000
+    return changes
 
 
 def _latest_user_fund_codes(messages: list) -> set[str]:
@@ -313,24 +315,30 @@ def make_retrieval_node(agent_config: AgentConfig):
 
     async def _node(state: MultiAgentState, config: RunnableConfig | None = None) -> dict[str, Any]:
         label = agent_config.agent_name
-        current_task_id = state.get("current_task_id")
-        if not current_task_id:
-            logger.error(f"[{label}] No current_task_id")
-            return {}
-
-        current_task = next(
-            (t for t in state.get("plan", []) if t["task_id"] == current_task_id),
-            None,
-        )
+        current_task = state.get("task_input")
         if not current_task:
-            logger.error(f"[{label}] Task {current_task_id} not found in plan")
+            logger.error(f"[{label}] No task_input")
             return {}
+        current_task_id = current_task["task_id"]
 
         logger.info(f"[{label}] Executing task: {current_task['description']}")
 
         tools = _get_tools_for_agent(label)
         if not tools:
-            return {"sub_results": {current_task_id: f"错误：{label} 没有可用工具"}}
+            result_text = f"错误：{label} 没有可用工具"
+            return {
+                "plan": TaskPatch(
+                    current_task_id,
+                    {
+                        "status": "failed",
+                        "error": result_text,
+                        "result": result_text,
+                        **_finish_changes(current_task),
+                    },
+                ),
+                "sub_results": {current_task_id: result_text},
+                "failed_tasks": [current_task_id],
+            }
 
         system_prompt = agent_config.system_prompt.format(
             tool_descriptions=_build_tool_descriptions(tools)
@@ -417,26 +425,18 @@ def make_retrieval_node(agent_config: AgentConfig):
 
                         logger.info(f"[{label}] Task completed: {result_text[:100]}...")
 
-                        plan = state.get("plan", [])
-                        for task in plan:
-                            if task["task_id"] == current_task_id:
-                                task["status"] = "completed"
-                                task["result"] = result_text
-                                task["retry_count"] = retry_count
-                                _mark_finished(task)
-                                break
-
-                        sub_results = state.get("sub_results", {}).copy()
-                        sub_results[current_task_id] = result_text
-
-                        completed_tasks = state.get("completed_tasks", [])[:]
-                        if current_task_id not in completed_tasks:
-                            completed_tasks.append(current_task_id)
-
                         return {
-                            "plan": plan,
-                            "sub_results": sub_results,
-                            "completed_tasks": completed_tasks,
+                            "plan": TaskPatch(
+                                current_task_id,
+                                {
+                                    "status": "completed",
+                                    "result": result_text,
+                                    "retry_count": retry_count,
+                                    **_finish_changes(current_task),
+                                },
+                            ),
+                            "sub_results": {current_task_id: result_text},
+                            "completed_tasks": [current_task_id],
                             "token_usage": token_usage,
                             "tool_call_log": tool_call_log,
                         }
@@ -488,27 +488,19 @@ def make_retrieval_node(agent_config: AgentConfig):
             )
             partial_result = last_ai_message or "任务超时：达到最大迭代次数，未能获取充分信息"
 
-            plan = state.get("plan", [])
-            for task in plan:
-                if task["task_id"] == current_task_id:
-                    task["status"] = "failed"
-                    task["error"] = "达到最大迭代次数"
-                    task["result"] = partial_result
-                    task["retry_count"] = retry_count
-                    _mark_finished(task)
-                    break
-
-            sub_results = state.get("sub_results", {}).copy()
-            sub_results[current_task_id] = partial_result
-
-            failed_tasks = state.get("failed_tasks", [])[:]
-            if current_task_id not in failed_tasks:
-                failed_tasks.append(current_task_id)
-
             return {
-                "plan": plan,
-                "sub_results": sub_results,
-                "failed_tasks": failed_tasks,
+                "plan": TaskPatch(
+                    current_task_id,
+                    {
+                        "status": "failed",
+                        "error": "达到最大迭代次数",
+                        "result": partial_result,
+                        "retry_count": retry_count,
+                        **_finish_changes(current_task),
+                    },
+                ),
+                "sub_results": {current_task_id: partial_result},
+                "failed_tasks": [current_task_id],
                 "token_usage": token_usage,
                 "tool_call_log": tool_call_log,
             }
@@ -516,25 +508,20 @@ def make_retrieval_node(agent_config: AgentConfig):
         except Exception as e:
             logger.error(f"[{label}] Execution failed: {e}", exc_info=True)
 
-            plan = state.get("plan", [])
-            for task in plan:
-                if task["task_id"] == current_task_id:
-                    task["status"] = "failed"
-                    task["error"] = str(e)
-                    _mark_finished(task)
-                    break
-
-            sub_results = state.get("sub_results", {}).copy()
-            sub_results[current_task_id] = f"执行失败：{str(e)}"
-
-            failed_tasks = state.get("failed_tasks", [])[:]
-            if current_task_id not in failed_tasks:
-                failed_tasks.append(current_task_id)
+            result_text = f"执行失败：{str(e)}"
 
             return {
-                "plan": plan,
-                "sub_results": sub_results,
-                "failed_tasks": failed_tasks,
+                "plan": TaskPatch(
+                    current_task_id,
+                    {
+                        "status": "failed",
+                        "error": str(e),
+                        "result": result_text,
+                        **_finish_changes(current_task),
+                    },
+                ),
+                "sub_results": {current_task_id: result_text},
+                "failed_tasks": [current_task_id],
                 "token_usage": token_usage,
                 "tool_call_log": tool_call_log,
             }

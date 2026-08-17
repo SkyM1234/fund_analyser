@@ -15,6 +15,8 @@ _serializer = JsonPlusSerializer(
         ("app.services.router", "RouteResult"),
         ("app.agent.state_reducers", "_Sentinel"),
         ("app.agent.state_reducers", "NewPlan"),
+        ("app.agent.state_reducers", "TaskPatch"),
+        ("app.agent.state_reducers", "PlanPatches"),
     ]
 )
 

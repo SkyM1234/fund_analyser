@@ -14,6 +14,7 @@ from langchain_openai import ChatOpenAI
 from app.core.config import get_settings
 from app.core.llm_concurrency import llm_ainvoke
 from app.agent.multi_agent_state import MultiAgentState
+from app.agent.state_reducers import TaskPatch
 from app.tools.llm_json import extract_json_block
 from app.tools.token_usage import record_usage
 
@@ -57,16 +58,11 @@ verdict 取值说明：
 async def arbiter_agent_node(state: MultiAgentState) -> dict[str, Any]:
     """仲裁节点：对定向澄清任务（clarify_ 前缀）做一次性裁决，不做工具调用。"""
 
-    current_task_id = state.get("current_task_id")
-    if not current_task_id:
-        logger.error("[arbiter_agent] No current_task_id")
-        return {}
-
-    plan = list(state.get("plan", []))
-    current_task = next((t for t in plan if t["task_id"] == current_task_id), None)
+    current_task = state.get("task_input")
     if not current_task:
-        logger.error(f"[arbiter_agent] Task {current_task_id} not found in plan")
+        logger.error("[arbiter_agent] No task_input")
         return {}
+    current_task_id = current_task["task_id"]
 
     logger.info(f"[arbiter_agent] Executing task: {current_task['description']}")
 
@@ -83,37 +79,27 @@ async def arbiter_agent_node(state: MultiAgentState) -> dict[str, Any]:
     token_usage: dict[str, dict[str, int]] = {}
 
     def _finish(result_text: str, status: str = "completed", error: str | None = None) -> dict[str, Any]:
-        for task in plan:
-            if task["task_id"] == current_task_id:
-                task["status"] = status
-                task["result"] = result_text
-                if error:
-                    task["error"] = error
-                finished_at = time.monotonic()
-                task["finished_at"] = finished_at
-                started_at = task.get("started_at")
-                if started_at is not None:
-                    task["duration_ms"] = (finished_at - started_at) * 1000
-                break
-
-        sub_results = state.get("sub_results", {}).copy()
-        sub_results[current_task_id] = result_text
+        finished_at = time.monotonic()
+        changes: dict[str, Any] = {
+            "status": status,
+            "result": result_text,
+            "finished_at": finished_at,
+        }
+        if error:
+            changes["error"] = error
+        started_at = current_task.get("started_at")
+        if started_at is not None:
+            changes["duration_ms"] = (finished_at - started_at) * 1000
 
         update: dict[str, Any] = {
-            "plan": plan,
-            "sub_results": sub_results,
+            "plan": TaskPatch(current_task_id, changes),
+            "sub_results": {current_task_id: result_text},
             "token_usage": token_usage,
         }
         if status == "completed":
-            completed_tasks = state.get("completed_tasks", [])[:]
-            if current_task_id not in completed_tasks:
-                completed_tasks.append(current_task_id)
-            update["completed_tasks"] = completed_tasks
+            update["completed_tasks"] = [current_task_id]
         else:
-            failed_tasks = state.get("failed_tasks", [])[:]
-            if current_task_id not in failed_tasks:
-                failed_tasks.append(current_task_id)
-            update["failed_tasks"] = failed_tasks
+            update["failed_tasks"] = [current_task_id]
         return update
 
     try:

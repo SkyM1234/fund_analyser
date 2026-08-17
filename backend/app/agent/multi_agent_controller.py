@@ -1,4 +1,5 @@
 """多Agent架构的主控制器 - LangGraph编排"""
+import copy
 import logging
 import time
 from typing import Literal
@@ -11,10 +12,10 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 
 from app.agent.multi_agent_state import (
     MultiAgentState,
-    get_next_pending_task,
     get_ready_tasks,
     is_plan_complete,
 )
+from app.agent.state_reducers import PlanPatches, TaskPatch
 from app.agent.supervisor import supervisor_node
 from app.agent.rag_agent import rag_agent_node
 from app.agent.market_agent import market_agent_node
@@ -101,33 +102,53 @@ def handle_sensitive_refusal(state: MultiAgentState):
 # 注意：Send 只能从 add_conditional_edges 的路由函数返回，不能从普通 node 返回
 # （普通 node 的返回值会被当作状态更新字典处理，返回 list[Send] 会触发 InvalidUpdateError: Expected dict, got [Send(...), ...]）。
 # 因此 dispatch_tasks 不注册为节点，而是直接作为 supervisor / batch_reflection 之后的条件边使用。
-def dispatch_tasks(state: MultiAgentState) -> list[Send] | Literal["synthesizer"]:
-    """任务分发路由：用 Send API 并发分发所有当前可执行的任务。
+def prepare_task_dispatch_node(state: MultiAgentState):
+    """持久化当前批次的 running 状态，再交给 Send 路由并发分发。
 
-    返回 list[Send] 时，LangGraph 会将每个 Send 作为独立的 super-step branch
-    并发执行，实现真正的多任务并行；无可执行任务时路由到 synthesizer。
+    条件边不能写状态，因此不能在 Send 分支副本中临时修改 plan。这里先在主
+    状态写入小粒度 patch，确保任务的生命周期状态不会因并发合并而丢失。
     """
     ready_tasks = get_ready_tasks(state)
-
     if not ready_tasks:
-        logger.info("[Dispatcher] No ready tasks, moving to synthesizer")
+        return {"dispatch_task_ids": []}
+
+    now = time.monotonic()
+    ready_ids = [task["task_id"] for task in ready_tasks]
+    logger.info(f"[Dispatcher] Fan-out {len(ready_tasks)} tasks in parallel: {list(ready_ids)}")
+    return {
+        "plan": PlanPatches([
+            TaskPatch(
+                task_id=task_id,
+                changes={"status": "running", "started_at": now},
+            )
+            for task_id in ready_ids
+        ]),
+        "dispatch_task_ids": ready_ids,
+    }
+
+
+def dispatch_tasks(state: MultiAgentState) -> list[Send] | Literal["synthesizer"]:
+    """将已持久化为 running 的任务作为独立不可变输入并发分发。"""
+    ready_ids = state.get("dispatch_task_ids", [])
+    if not ready_ids:
+        logger.info("[Dispatcher] No prepared tasks, moving to synthesizer")
         return "synthesizer"
 
-    # 将所有就绪任务标记为 running
-    plan = list(state.get("plan", []))
-    now = time.monotonic()
-    ready_ids = {t["task_id"] for t in ready_tasks}
-    for task in plan:
-        if task["task_id"] in ready_ids:
-            task["status"] = "running"
-            task["started_at"] = now
-
-    logger.info(f"[Dispatcher] Fan-out {len(ready_tasks)} tasks in parallel: {list(ready_ids)}")
-
+    tasks_by_id = {task["task_id"]: task for task in state.get("plan", [])}
     sends = []
-    for task in ready_tasks:
+    for task_id in ready_ids:
+        task = tasks_by_id.get(task_id)
+        if task is None:
+            logger.error("[Dispatcher] Prepared task %s disappeared from plan", task_id)
+            continue
         agent_name = task.get("assigned_agent", "")
-        task_state = {**state, "plan": plan, "current_task_id": task["task_id"], "current_agent": agent_name}
+        task_state = {
+            "messages": state.get("messages", []),
+            "route_result": state.get("route_result"),
+            "task_input": copy.deepcopy(task),
+            "current_task_id": task_id,
+            "current_agent": agent_name,
+        }
         if agent_name == "rag_agent":
             sends.append(Send("rag_agent", task_state))
         elif agent_name == "market_agent":
@@ -137,12 +158,12 @@ def dispatch_tasks(state: MultiAgentState) -> list[Send] | Literal["synthesizer"
         else:
             sends.append(Send("agent_error_handler", task_state))
 
-    return sends
+    return sends or "synthesizer"
 
 
 # ===== 条件路由函数 =====
 def should_continue_planning(state: MultiAgentState):
-    """判断是否继续分发任务；直接委托给 dispatch_tasks 完成 Send 分发。"""
+    """决定是否进入下一批调度。"""
     plan = state.get("plan", [])
 
     if not plan:
@@ -152,7 +173,11 @@ def should_continue_planning(state: MultiAgentState):
         logger.info("[Router] All tasks completed, moving to synthesizer")
         return "synthesizer"
 
-    return dispatch_tasks(state)
+    if get_ready_tasks(state):
+        return "task_dispatcher"
+
+    logger.warning("[Router] Plan has no ready tasks before completion, moving to synthesizer")
+    return "synthesizer"
 
 
 def after_batch_reflection(state: MultiAgentState):
@@ -166,8 +191,11 @@ def after_batch_reflection(state: MultiAgentState):
     if not has_pending and (not plan or is_plan_complete(state)):
         logger.info("[Router] All tasks done after global reflection, moving to synthesizer")
         return "synthesizer"
-    logger.info("[Router] Pending tasks after global reflection, dispatching next batch")
-    return dispatch_tasks(state)
+    if get_ready_tasks(state):
+        logger.info("[Router] Pending tasks after global reflection, dispatching next batch")
+        return "task_dispatcher"
+    logger.warning("[Router] Pending tasks are not runnable after global reflection, moving to synthesizer")
+    return "synthesizer"
 
 
 def check_compliance(state: MultiAgentState) -> Literal["end", "synthesizer_retry", "compliance_failure"]:
@@ -247,33 +275,32 @@ def handle_agent_error(state: MultiAgentState):
     2. 记录详细错误信息
     3. 触发反思节点尝试恢复
     """
-    current_task_id = state.get("current_task_id")
+    task_input = state.get("task_input")
+    current_task_id = task_input["task_id"] if task_input else state.get("current_task_id")
     current_agent = state.get("current_agent", "unknown")
 
     logger.error(f"[AgentErrorHandler] System error - Unknown agent: {current_agent} for task: {current_task_id}")
+    if not current_task_id:
+        return {}
 
-    # 标记任务失败
-    plan = state.get("plan", [])
-    for task in plan:
-        if task["task_id"] == current_task_id:
-            task["status"] = "failed"
-            task["error"] = f"系统错误: 未知的Agent类型 '{current_agent}'"
-            task["result"] = f"任务分配错误，无法执行。Agent类型: {current_agent}"
-            break
-
-    # 记录到failed_tasks
-    failed_tasks = state.get("failed_tasks", [])[:]
-    if current_task_id not in failed_tasks:
-        failed_tasks.append(current_task_id)
-
-    # 获取任务结果
-    sub_results = state.get("sub_results", {}).copy()
-    sub_results[current_task_id] = f"系统错误：无法识别的Agent类型 '{current_agent}'，任务无法执行"
+    error = f"系统错误: 未知的Agent类型 '{current_agent}'"
+    result = f"系统错误：无法识别的Agent类型 '{current_agent}'，任务无法执行"
+    changes = {
+        "status": "failed",
+        "error": error,
+        "result": result,
+    }
+    if task_input:
+        finished_at = time.monotonic()
+        changes["finished_at"] = finished_at
+        started_at = task_input.get("started_at")
+        if started_at is not None:
+            changes["duration_ms"] = (finished_at - started_at) * 1000
 
     return {
-        "plan": plan,
-        "sub_results": sub_results,
-        "failed_tasks": failed_tasks,
+        "plan": TaskPatch(current_task_id, changes),
+        "sub_results": {current_task_id: result},
+        "failed_tasks": [current_task_id],
     }
 
 
@@ -286,6 +313,7 @@ def build_multi_agent_graph(checkpointer: BaseCheckpointSaver):
     # 添加节点
     graph.add_node("route", route_node)
     graph.add_node("supervisor", supervisor_node)
+    graph.add_node("task_dispatcher", prepare_task_dispatch_node)
     graph.add_node("rag_agent", rag_agent_node)
     graph.add_node("market_agent", market_agent_node)
     graph.add_node("arbiter_agent", arbiter_agent_node)
@@ -317,8 +345,20 @@ def build_multi_agent_graph(checkpointer: BaseCheckpointSaver):
             "market_agent": "market_agent",
             "arbiter_agent": "arbiter_agent",
             "agent_error_handler": "agent_error_handler",
+            "task_dispatcher": "task_dispatcher",
             "synthesizer": "synthesizer",
         }
+    )
+    graph.add_conditional_edges(
+        "task_dispatcher",
+        dispatch_tasks,
+        {
+            "rag_agent": "rag_agent",
+            "market_agent": "market_agent",
+            "arbiter_agent": "arbiter_agent",
+            "agent_error_handler": "agent_error_handler",
+            "synthesizer": "synthesizer",
+        },
     )
 
     # 各专家 Agent 完成后汇入 batch_reflection。rag_agent/market_agent 内部已在
@@ -338,6 +378,7 @@ def build_multi_agent_graph(checkpointer: BaseCheckpointSaver):
             "market_agent": "market_agent",
             "arbiter_agent": "arbiter_agent",
             "agent_error_handler": "agent_error_handler",
+            "task_dispatcher": "task_dispatcher",
             "synthesizer": "synthesizer",
         }
     )

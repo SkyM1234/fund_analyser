@@ -85,6 +85,8 @@ class MultiAgentState(TypedDict):
     plan: Annotated[list[SubTask], merge_plan]
     plan_history: list[PlanExecution]  # 历史plan执行记录（累积，不清空）
     current_task_id: str | None     # 当前执行的任务ID
+    task_input: SubTask | None      # Send 分支专用的不可变任务输入
+    dispatch_task_ids: list[str]    # 当前调度批次的任务 ID，仅供 dispatcher 路由
 
     # 执行状态（按 task_id 合并去重；supervisor 新一轮规划时返回 CLEARED 清空）
     completed_tasks: Annotated[list[str], merge_str_list_unique]  # 已完成的任务ID列表
@@ -134,6 +136,8 @@ def create_initial_state(
         plan=[],
         plan_history=[],  # 初始化历史记录
         current_task_id=None,
+        task_input=None,
+        dispatch_task_ids=[],
         completed_tasks=[],
         failed_tasks=[],
         sub_results={},

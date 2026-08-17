@@ -31,7 +31,7 @@ SUPERVISOR_SYSTEM_PROMPT = """你是基金分析系统的 Supervisor Agent，负
 
 可用的专家Agent：
 - **rag_agent**: 检索本地基金年报内容（投资策略、持仓、业绩等历史数据）
-- **market_agent**: 获取实时数据（当前净值、实时估值、最新持仓等实时数据）
+- **market_agent**: 获取实时数据（当前净值、实时估值、最新持仓等实时数据），只有当用户问题明确涉及实时数据时才调用
 
 任务类型(task_type)：
 - "rag_search": 年报检索任务

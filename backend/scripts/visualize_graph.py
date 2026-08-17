@@ -29,6 +29,8 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+project_root = backend_root.parent  # 项目根目录
+
 
 def main():
     """主函数"""
@@ -39,7 +41,7 @@ def main():
     # 1. 打印结构
     print("📊 Step 1: Printing graph structure...")
     print_graph_structure()
-    
+
     # 2. 导出Mermaid
     mermaid_file = project_root / "backend" / "docs" / "graph_mermaid.md"
     print(f"📄 Step 2: Exporting Mermaid diagram to {mermaid_file.relative_to(project_root)}...")

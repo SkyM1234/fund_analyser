@@ -56,7 +56,46 @@ class NewPlan:
     tasks: list
 
 
-def merge_plan(left: "list[SubTask]", right: "list[SubTask] | _Sentinel") -> "list[SubTask]":
+@dataclasses.dataclass
+class TaskPatch:
+    """单个任务的增量更新。
+
+    并发 Agent 只能提交自己负责的任务变更，不能携带整份 plan 快照，
+    否则后完成的分支会用旧状态覆盖其他分支已经完成的任务。
+    """
+
+    task_id: str
+    changes: dict[str, Any]
+
+
+@dataclasses.dataclass
+class PlanPatches:
+    """同一串行节点对多个任务提交的增量更新。"""
+
+    patches: list[TaskPatch]
+
+
+def _apply_task_patch(
+    plan: "list[SubTask]",
+    patch: TaskPatch,
+) -> "list[SubTask]":
+    updated = []
+    found = False
+    for task in plan:
+        if task["task_id"] == patch.task_id:
+            updated.append({**task, **patch.changes})
+            found = True
+        else:
+            updated.append(task)
+    if not found:
+        raise ValueError(f"Task patch references unknown task_id: {patch.task_id}")
+    return updated
+
+
+def merge_plan(
+    left: "list[SubTask]",
+    right: "list[SubTask] | NewPlan | TaskPatch | PlanPatches | _Sentinel",
+) -> "list[SubTask]":
     """按 task_id 合并两份任务列表。
 
     right 中的任务覆盖 left 中同 task_id 的任务（视为该任务的最新状态）；
@@ -67,6 +106,13 @@ def merge_plan(left: "list[SubTask]", right: "list[SubTask] | _Sentinel") -> "li
         return []
     if isinstance(right, NewPlan):
         return list(right.tasks)
+    if isinstance(right, TaskPatch):
+        return _apply_task_patch(left, right)
+    if isinstance(right, PlanPatches):
+        merged = left
+        for patch in right.patches:
+            merged = _apply_task_patch(merged, patch)
+        return merged
     if not left:
         return right
     if not right:
