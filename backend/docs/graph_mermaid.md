@@ -8,6 +8,7 @@ graph TD;
 	route(route)
 	supervisor(supervisor)
 	task_dispatcher(task_dispatcher)
+	dependency_blocker(dependency_blocker)
 	rag_agent(rag_agent)
 	market_agent(market_agent)
 	arbiter_agent(arbiter_agent)
@@ -24,6 +25,7 @@ graph TD;
 	arbiter_agent --> batch_reflection;
 	batch_reflection -.-> agent_error_handler;
 	batch_reflection -.-> arbiter_agent;
+	batch_reflection -.-> dependency_blocker;
 	batch_reflection -.-> market_agent;
 	batch_reflection -.-> rag_agent;
 	batch_reflection -.-> synthesizer;
@@ -31,12 +33,15 @@ graph TD;
 	compliance -. &nbsp;end&nbsp; .-> commit_answer;
 	compliance -. &nbsp;compliance_failure&nbsp; .-> compliance_failure_handler;
 	compliance -. &nbsp;synthesizer_retry&nbsp; .-> synthesizer;
+	dependency_blocker -.-> synthesizer;
+	dependency_blocker -.-> task_dispatcher;
 	market_agent --> batch_reflection;
 	rag_agent --> batch_reflection;
 	route -.-> sensitive_refusal;
 	route -.-> supervisor;
 	supervisor -.-> agent_error_handler;
 	supervisor -.-> arbiter_agent;
+	supervisor -.-> dependency_blocker;
 	supervisor -.-> market_agent;
 	supervisor -.-> rag_agent;
 	supervisor -.-> synthesizer;
@@ -50,6 +55,7 @@ graph TD;
 	commit_answer --> __end__;
 	compliance_failure_handler --> __end__;
 	sensitive_refusal --> __end__;
+	dependency_blocker -.-> dependency_blocker;
 	classDef default fill:#f2f0ff,line-height:1.2
 	classDef first fill-opacity:0
 	classDef last fill:#bfb6fc
