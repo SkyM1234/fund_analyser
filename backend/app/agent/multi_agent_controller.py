@@ -136,6 +136,7 @@ def dispatch_tasks(state: MultiAgentState) -> list[Send] | Literal["synthesizer"
         return "synthesizer"
 
     tasks_by_id = {task["task_id"]: task for task in state.get("plan", [])}
+    sub_results = state.get("sub_results", {})
     sends = []
     for task_id in ready_ids:
         task = tasks_by_id.get(task_id)
@@ -143,10 +144,24 @@ def dispatch_tasks(state: MultiAgentState) -> list[Send] | Literal["synthesizer"
             logger.error("[Dispatcher] Prepared task %s disappeared from plan", task_id)
             continue
         agent_name = task.get("assigned_agent", "")
+        dependency_results = {
+            dependency_id: copy.deepcopy(
+                sub_results.get(
+                    dependency_id,
+                    tasks_by_id[dependency_id].get(
+                        "result",
+                        "Dependency completed without a saved result.",
+                    ),
+                )
+            )
+            for dependency_id in task.get("depends_on", [])
+        }
+        task_input = copy.deepcopy(task)
+        task_input["dependency_results"] = dependency_results
         task_state = {
             "messages": state.get("messages", []),
             "route_result": state.get("route_result"),
-            "task_input": copy.deepcopy(task),
+            "task_input": task_input,
             "current_task_id": task_id,
             "current_agent": agent_name,
         }
@@ -210,6 +225,9 @@ def block_dependent_tasks_node(state: MultiAgentState):
 # ===== 条件路由函数 =====
 def should_continue_planning(state: MultiAgentState):
     """决定是否进入下一批调度。"""
+    if state.get("planning_error"):
+        return "planning_failure"
+
     plan = state.get("plan", [])
 
     if not plan:
@@ -227,6 +245,19 @@ def should_continue_planning(state: MultiAgentState):
 
     logger.warning("[Router] Plan has no ready tasks before completion, moving to synthesizer")
     return "synthesizer"
+
+
+def handle_planning_failure(state: MultiAgentState):
+    """计划未通过硬校验时直接结束，不让非法 DAG 进入执行或汇总。"""
+    error = state.get("planning_error", "任务规划校验失败")
+    message = f"抱歉，系统未能生成可安全执行的任务计划：{error}"
+
+    from langchain_core.messages import AIMessage
+
+    return {
+        "final_answer": message,
+        "messages": [AIMessage(content=message)],
+    }
 
 
 def after_batch_reflection(state: MultiAgentState):
@@ -375,6 +406,7 @@ def build_multi_agent_graph(checkpointer: BaseCheckpointSaver):
     graph.add_node("compliance", compliance_agent_node)
     graph.add_node("commit_answer", commit_answer_node)
     graph.add_node("compliance_failure_handler", handle_compliance_failure)
+    graph.add_node("planning_failure_handler", handle_planning_failure)
     graph.add_node("sensitive_refusal", handle_sensitive_refusal)
     graph.add_node("agent_error_handler", handle_agent_error)
 
@@ -400,6 +432,7 @@ def build_multi_agent_graph(checkpointer: BaseCheckpointSaver):
             "agent_error_handler": "agent_error_handler",
             "task_dispatcher": "task_dispatcher",
             "dependency_blocker": "dependency_blocker",
+            "planning_failure": "planning_failure_handler",
             "synthesizer": "synthesizer",
         }
     )
@@ -463,6 +496,7 @@ def build_multi_agent_graph(checkpointer: BaseCheckpointSaver):
 
     graph.add_edge("commit_answer", END)
     graph.add_edge("compliance_failure_handler", END)
+    graph.add_edge("planning_failure_handler", END)
     graph.add_edge("sensitive_refusal", END)
 
     # 编译

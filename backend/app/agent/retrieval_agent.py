@@ -19,6 +19,7 @@ from app.core.config import get_settings
 from app.core.llm_concurrency import llm_ainvoke
 from app.agent.multi_agent_state import MultiAgentState
 from app.agent.state_reducers import TaskPatch
+from app.agent.task_context import format_dependency_results
 from app.tools.conversation_utils import get_recent_messages_for_agent
 from app.tools.token_usage import record_usage
 from app.agent.reflection_agent import agent_self_check, _improve_query, MAX_REFLECTION_RETRIES
@@ -380,12 +381,15 @@ def make_retrieval_node(agent_config: AgentConfig):
                 if final_rag_context_callback:
                     await final_rag_context_callback(label, current_task_id, [])
                 messages = [SystemMessage(content=system_prompt)] + history_messages
-                messages.append(HumanMessage(content=_build_task_message(
+                task_message = _build_task_message(
                     current_task,
                     agent_config.agent_name,
                     task_query,
                     cross_fund_query=cross_fund_query,
-                )))
+                )
+                messages.append(HumanMessage(
+                    content=task_message + format_dependency_results(current_task)
+                ))
 
                 iteration = 0
                 while iteration < agent_config.max_iterations:

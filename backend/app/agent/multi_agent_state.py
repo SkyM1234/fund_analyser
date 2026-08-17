@@ -60,6 +60,9 @@ class SubTask(TypedDict, total=False):
     duration_ms: float | None       # 执行耗时（毫秒），finished_at - started_at
 
 
+    dependency_results: dict[str, str]  # Direct dependency result snapshot for task_input only.
+
+
 class PlanExecution(TypedDict, total=False):
     """单次plan执行记录"""
     round_id: str                   # 轮次ID（如 "round_1", "round_2"）
@@ -87,6 +90,7 @@ class MultiAgentState(TypedDict):
     current_task_id: str | None     # 当前执行的任务ID
     task_input: SubTask | None      # Send 分支专用的不可变任务输入
     dispatch_task_ids: list[str]    # 当前调度批次的任务 ID，仅供 dispatcher 路由
+    planning_error: str | None      # Supervisor 计划校验失败，禁止进入执行图
 
     # 执行状态（按 task_id 合并去重；supervisor 新一轮规划时返回 CLEARED 清空）
     completed_tasks: Annotated[list[str], merge_str_list_unique]  # 已完成的任务ID列表
@@ -139,6 +143,7 @@ def create_initial_state(
         current_task_id=None,
         task_input=None,
         dispatch_task_ids=[],
+        planning_error=None,
         completed_tasks=[],
         failed_tasks=[],
         blocked_tasks=[],

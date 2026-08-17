@@ -15,6 +15,7 @@ from app.core.config import get_settings
 from app.core.llm_concurrency import llm_ainvoke
 from app.agent.multi_agent_state import MultiAgentState
 from app.agent.state_reducers import TaskPatch
+from app.agent.task_context import format_dependency_results
 from app.tools.llm_json import extract_json_block
 from app.tools.token_usage import record_usage
 
@@ -105,7 +106,7 @@ async def arbiter_agent_node(state: MultiAgentState) -> dict[str, Any]:
     try:
         response = await llm_ainvoke(llm, [
             SystemMessage(content=ARBITER_SYSTEM_PROMPT),
-            HumanMessage(content=query),
+            HumanMessage(content=query + format_dependency_results(current_task)),
         ])
         usage = record_usage(f"arbiter_agent:{current_task_id}", response)
         for k, v in usage.items():

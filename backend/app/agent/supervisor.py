@@ -1,20 +1,25 @@
 """Supervisor Agent - 任务规划与调度"""
 import logging
 import json
+import re
 from typing import Any
 
 from langchain_core.messages import HumanMessage
 from langchain_openai import ChatOpenAI
+from pydantic import ValidationError
 
 from app.core.config import get_settings
 from app.core.llm_concurrency import llm_ainvoke
 from app.agent.multi_agent_state import MultiAgentState, SubTask
+from app.agent.plan_validation import PlanValidationError, validate_supervisor_plan
 from app.agent.state_reducers import CLEARED, NewPlan
 from app.services.router import RouteResult
 from app.tools.conversation_utils import format_history_for_prompt
 from app.tools.llm_json import extract_json_block
 
 logger = logging.getLogger(__name__)
+
+MAX_PLAN_VALIDATION_RETRIES = 1
 
 
 SUPERVISOR_SYSTEM_PROMPT = """你是基金分析系统的 Supervisor Agent，负责任务规划与调度。
@@ -68,9 +73,7 @@ SUPERVISOR_SYSTEM_PROMPT = """你是基金分析系统的 Supervisor Agent，负
       "query": "投资策略",
       "depends_on": [],
       "status": "pending"
-    }
-  ],
-  "plan": [
+    },
     {
       "task_id": "t2",
       "task_type": "market_data",
@@ -148,7 +151,6 @@ async def supervisor_node(state: MultiAgentState) -> dict[str, Any]:
 
 def _find_last_substantive_query(messages: list) -> str | None:
     """从历史消息中找到最近一条信息量足够的用户问题（排除当前消息和追问类短消息）。"""
-    import re
     followup_patterns = [
         r'^(再|重新|重试|再试|继续)',
         r'^(好的|ok|嗯|那|那么|然后)',
@@ -171,6 +173,50 @@ def _find_last_substantive_query(messages: list) -> str | None:
         if not is_followup:
             return text
     return None
+
+
+def _explicit_fund_codes(messages: list) -> set[str]:
+    """只允许计划使用用户消息中明确出现过的 6 位基金代码。"""
+    return {
+        code
+        for message in messages
+        if isinstance(message, HumanMessage)
+        for code in re.findall(r"(?<!\d)\d{6}(?!\d)", str(message.content))
+    }
+
+
+def _new_plan_update(validated_plan: list[dict]) -> dict[str, Any]:
+    """写入通过校验的新计划并重置本轮执行状态。"""
+    return {
+        "plan": NewPlan(tasks=[SubTask(**task) for task in validated_plan]),
+        "current_task_id": None,
+        "task_input": None,
+        "dispatch_task_ids": [],
+        "planning_error": None,
+        "completed_tasks": CLEARED,
+        "failed_tasks": CLEARED,
+        "blocked_tasks": CLEARED,
+        "sub_results": CLEARED,
+        "current_agent": None,
+        "agent_history": [],
+        "reflection_count": 0,
+        "confidence_score": None,
+        "needs_reflection": False,
+        "conflict_annotations": CLEARED,
+        "clarification_round": 0,
+        "compliance_passed": True,
+        "compliance_reason": None,
+        "final_answer": None,
+        "synthesis_complete": False,
+    }
+
+
+def _planning_failure_update(error: str) -> dict[str, Any]:
+    """校验重试耗尽后的硬失败结果，不向执行图提交任何任务。"""
+    return {
+        **_new_plan_update([]),
+        "planning_error": error,
+    }
 
 
 async def _generate_new_plan(user_query: str, route_result: RouteResult | None, messages: list) -> dict[str, Any]:
@@ -203,122 +249,45 @@ async def _generate_new_plan(user_query: str, route_result: RouteResult | None, 
 
 请输出 JSON 格式的任务规划。"""
 
-    try:
-        response = await llm_ainvoke(llm, [
-            {"role": "system", "content": SUPERVISOR_SYSTEM_PROMPT},
-            {"role": "user", "content": prompt}
-        ])
-        
-        # 解析 JSON
-        content = extract_json_block(response.content)
+    explicit_fund_codes = _explicit_fund_codes(messages)
+    validation_feedback = ""
 
-        plan_data = json.loads(content)
-        plan = plan_data.get("plan", [])
-        reasoning = plan_data.get("reasoning", "")
-        
-        logger.info(f"[Supervisor] Generated plan with {len(plan)} tasks")
-        logger.info(f"[Supervisor] Reasoning: {reasoning}")
-        
-        # 验证并标准化任务
-        validated_plan = []
-        for task in plan:
-            raw_fund_codes = task.get("fund_codes", [])
-
-            # 后校验：rag/market 任务的 fund_codes 不能超过一个代码
-            # 如果 LLM 仍然输出了多个，自动拆开
-            if (
-                len(raw_fund_codes) > 1
-                and task.get("task_type") in ("rag_search", "market_data")
-                and task.get("assigned_agent") in ("rag_agent", "market_agent")
-            ):
-                logger.warning(
-                    f"[Supervisor] Task {task.get('task_id')} has multiple fund_codes "
-                    f"{raw_fund_codes}, splitting into separate tasks"
-                )
-                for i, code in enumerate(raw_fund_codes):
-                    split_task = SubTask(
-                        task_id=f"{task.get('task_id', 't')}_split{i+1}",
-                        task_type=task.get("task_type", "rag_search"),
-                        description=f"{task.get('description', '')}（{code}）",
-                        assigned_agent=task.get("assigned_agent", "rag_agent"),
-                        fund_codes=[code],
-                        query=task.get("query", user_query),
-                        depends_on=task.get("depends_on", []),
-                        status="pending",
-                        result=None,
-                        error=None,
-                    )
-                    validated_plan.append(split_task)
-                continue  # 跳过原始任务
-
-            validated_task = SubTask(
-                task_id=task.get("task_id", f"t{len(validated_plan)+1}"),
-                task_type=task.get("task_type", "general_qa"),
-                description=task.get("description", ""),
-                assigned_agent=task.get("assigned_agent", "rag_agent"),
-                fund_codes=raw_fund_codes,
-                query=task.get("query", user_query),
-                depends_on=task.get("depends_on", []),
-                status="pending",
-                result=None,
-                error=None,
+    for attempt in range(MAX_PLAN_VALIDATION_RETRIES + 1):
+        try:
+            response = await llm_ainvoke(llm, [
+                {"role": "system", "content": SUPERVISOR_SYSTEM_PROMPT},
+                {"role": "user", "content": prompt + validation_feedback},
+            ])
+            plan_data = json.loads(extract_json_block(response.content))
+            validated_plan = validate_supervisor_plan(
+                plan_data,
+                explicit_fund_codes=explicit_fund_codes,
             )
-            validated_plan.append(validated_task)
-        
-        return {
-            "plan": NewPlan(tasks=validated_plan),
-            # 清空之前的执行状态（reducer 管理的字段用 CLEARED 显式清空）
-            "current_task_id": None,
-            "completed_tasks": CLEARED,
-            "failed_tasks": CLEARED,
-            "blocked_tasks": CLEARED,
-            "sub_results": CLEARED,
-            "current_agent": None,
-            "agent_history": [],
-            "reflection_count": 0,
-            "confidence_score": None,
-            "needs_reflection": False,
-            "conflict_annotations": CLEARED,
-            "clarification_round": 0,
-            "compliance_passed": True,
-            "compliance_reason": None,
-            "final_answer": None,
-            "synthesis_complete": False,
-        }
+            logger.info(
+                "[Supervisor] Generated and validated plan with %s tasks",
+                len(validated_plan),
+            )
+            return _new_plan_update(validated_plan)
+        except (json.JSONDecodeError, ValidationError, PlanValidationError, ValueError) as exc:
+            logger.warning(
+                "[Supervisor] Invalid plan on attempt %s/%s: %s",
+                attempt + 1,
+                MAX_PLAN_VALIDATION_RETRIES + 1,
+                exc,
+            )
+            validation_feedback = (
+                "\n\n上一版计划未通过硬校验，错误如下：\n"
+                f"{exc}\n"
+                "请重新输出完整 JSON。不得省略字段；不得使用不存在或循环依赖；"
+                "task_type 与 assigned_agent 必须匹配；fund_codes 只能使用用户消息中"
+                "明确出现的 6 位数字代码。"
+            )
+        except Exception as exc:
+            logger.exception("[Supervisor] Plan generation failed on attempt %s", attempt + 1)
+            validation_feedback = (
+                "\n\n上一版计划生成失败，请重新仅输出符合要求的完整 JSON。"
+            )
 
-    except Exception as e:
-        logger.error(f"[Supervisor] Failed to generate plan: {e}")
-        # 降级：生成简单的单任务计划
-        fallback_plan = [SubTask(
-            task_id="t1",
-            task_type="general_qa",
-            description=f"处理用户问题: {user_query[:50]}...",
-            assigned_agent="rag_agent",
-            fund_codes=[],
-            query=user_query,
-            depends_on=[],
-            status="pending",
-            result=None,
-            error=None,
-        )]
-        logger.info("[Supervisor] Using fallback single-task plan")
-        return {
-            "plan": NewPlan(tasks=fallback_plan),
-            # 清空之前的执行状态（reducer 管理的字段用 CLEARED 显式清空）
-            "current_task_id": None,
-            "completed_tasks": CLEARED,
-            "failed_tasks": CLEARED,
-            "blocked_tasks": CLEARED,
-            "sub_results": CLEARED,
-            "current_agent": None,
-            "agent_history": [],
-            "reflection_count": 0,
-            "confidence_score": None,
-            "needs_reflection": False,
-            "conflict_annotations": CLEARED,
-            "clarification_round": 0,
-            "compliance_passed": True,
-            "compliance_reason": None,
-            "final_answer": None,
-            "synthesis_complete": False,
-        }
+    error = "计划生成或校验连续失败，未提交任何任务执行。"
+    logger.error("[Supervisor] %s", error)
+    return _planning_failure_update(error)
