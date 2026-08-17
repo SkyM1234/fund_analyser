@@ -196,24 +196,24 @@ async def _run_chat_turn(run_id: str, req: ChatRequest, user_id: int) -> None:
                     if node_name in worker_agent_names and is_node_level_event:
                         output = event.get("data", {}).get("output")
                         status = "completed"
+                        task_id = ""
                         if isinstance(output, dict):
-                            plan_after = output.get("plan", [])
+                            plan_update = output.get("plan")
                             failed_tasks = output.get("failed_tasks", [])
-                            for t in plan_after:
-                                if t.get("assigned_agent") == node_name and t.get("status") == "failed":
-                                    status = "failed"
-                                    break
-                            task_id = ""
-                            for t in plan_after:
-                                if t.get("assigned_agent") == node_name:
-                                    task_id = t.get("task_id", "")
-                                    break
+
+                            # 并发 Agent 现在返回 TaskPatch，而不是整份 plan 快照。
+                            # 保留 list 分支以兼容尚未迁移的节点或历史实现。
+                            task_id = getattr(plan_update, "task_id", "")
+                            changes = getattr(plan_update, "changes", {})
+                            if isinstance(changes, dict):
+                                status = changes.get("status", status)
+
                             if task_id and task_id in failed_tasks:
                                 status = "failed"
                         logger.info(f"[chat_task] event: agent_end -> {node_name} status={status}")
                         publish_event(run_id, "agent_end", {
                             "agent_name": node_name,
-                            "task_id": "",
+                            "task_id": task_id,
                             "status": status,
                         })
 
