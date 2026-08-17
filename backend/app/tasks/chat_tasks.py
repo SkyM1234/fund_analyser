@@ -18,7 +18,6 @@ from app.core.config import get_settings
 from app.core.worker_lifecycle import run_coro
 from app.models.chat import ChatMessage, ChatRequest
 from app.services.rag_result_parser import tool_output_to_text
-from app.services.stream_moderation import StreamModerationBuffer
 from app.services.task_events import publish_event
 
 # 锁自动过期时间必须大于 AGENT_TIMEOUT，确保即使任务超时，finally 块也有机会
@@ -108,22 +107,6 @@ async def _run_chat_turn(run_id: str, req: ChatRequest, user_id: int) -> None:
             seen_run_ids: set[str] = set()
             _route_emitted = False
             _plan_emitted = False
-            settings = get_settings()
-            moderation = None
-            active_synth_run_id = None
-            stream_suppressed = False
-            stream_visible_chars = 0
-            local_notice_emitted = False
-
-            def _publish_moderation_hit(hit) -> None:
-                nonlocal stream_suppressed, local_notice_emitted
-                stream_suppressed = True
-                if local_notice_emitted:
-                    return
-                local_notice_emitted = True
-                reason = f"{hit.reason}：{hit.matched_text}"
-                logger.warning(f"[chat_task] 流式审核拦截，reason={reason}")
-                publish_event(run_id, "retry_notice", {"reason": reason})
 
             async for event in app.astream_events(input_state, config=config, version="v2"):
                 while not retry_events.empty():
@@ -137,19 +120,6 @@ async def _run_chat_turn(run_id: str, req: ChatRequest, user_id: int) -> None:
                 if kind == "on_chain_start":
                     name = event["name"]
                     meta_node = event.get("metadata", {}).get("langgraph_node")
-                    if name == "synthesizer" and meta_node == "synthesizer":
-                        active_synth_run_id = None
-                        stream_suppressed = False
-                        stream_visible_chars = 0
-                        local_notice_emitted = False
-                        moderation = (
-                            StreamModerationBuffer(
-                                window_chars=settings.STREAM_MODERATION_WINDOW_CHARS,
-                                overlap_chars=settings.STREAM_MODERATION_OVERLAP_CHARS,
-                            )
-                            if settings.STREAM_MODERATION_ENABLED
-                            else None
-                        )
                     if name in worker_agent_names and name == meta_node:
                         node_input = event.get("data", {}).get("input", {})
                         task_id = node_input.get("current_task_id", "")
@@ -173,50 +143,18 @@ async def _run_chat_turn(run_id: str, req: ChatRequest, user_id: int) -> None:
 
                     if node_name in agent_node_names:
                         evt_run_id = event.get("run_id")
-                        if evt_run_id != active_synth_run_id:
-                            active_synth_run_id = evt_run_id
-                            stream_suppressed = False
-                            stream_visible_chars = 0
-                            local_notice_emitted = False
-                            moderation = (
-                                StreamModerationBuffer(
-                                    window_chars=settings.STREAM_MODERATION_WINDOW_CHARS,
-                                    overlap_chars=settings.STREAM_MODERATION_OVERLAP_CHARS,
-                                )
-                                if settings.STREAM_MODERATION_ENABLED
-                                else None
-                            )
                         if evt_run_id not in seen_run_ids:
                             seen_run_ids.add(evt_run_id)
                             publish_event(run_id, "message_start", {})
 
                         chunk: AIMessageChunk = event["data"]["chunk"]
-                        if chunk.content and not stream_suppressed:
-                            text = chunk.content if isinstance(chunk.content, str) else str(chunk.content)
-                            if moderation is None:
-                                publish_event(run_id, "token", {"delta": text})
-                                stream_visible_chars += len(text)
-                            else:
-                                released, hit = moderation.feed(text)
-                                if hit:
-                                    _publish_moderation_hit(hit)
-                                elif released:
-                                    publish_event(run_id, "token", {"delta": released})
-                                    stream_visible_chars += len(released)
+                        if chunk.content:
+                            publish_event(run_id, "token", {"delta": chunk.content})
 
                 elif kind == "on_chain_end":
                     metadata = event.get("metadata", {})
                     node_name = metadata.get("langgraph_node")
                     is_node_level_event = event.get("name") == node_name
-
-                    if node_name == "synthesizer" and is_node_level_event:
-                        if moderation is not None and not stream_suppressed:
-                            released, hit = moderation.flush()
-                            if hit:
-                                _publish_moderation_hit(hit)
-                            elif released:
-                                publish_event(run_id, "token", {"delta": released})
-                                stream_visible_chars += len(released)
 
                     if node_name == "route" and is_node_level_event and not _route_emitted:
                         output = event.get("data", {}).get("output")
@@ -284,19 +222,7 @@ async def _run_chat_turn(run_id: str, req: ChatRequest, user_id: int) -> None:
                         if isinstance(output, dict) and output.get("compliance_passed") is False:
                             reason = output.get("compliance_reason") or "内容不符合合规要求"
                             logger.warning(f"[chat_task] event: compliance未通过，reason={reason}")
-                            if not local_notice_emitted:
-                                publish_event(run_id, "retry_notice", {"reason": reason})
-                            else:
-                                logger.info("[chat_task] 已发送流式审核重试提示，跳过重复的合规重试提示")
-
-                    if node_name == "commit_answer" and is_node_level_event:
-                        output = event.get("data", {}).get("output")
-                        final_answer = output.get("final_answer") if isinstance(output, dict) else None
-                        if final_answer and (stream_suppressed or stream_visible_chars == 0):
-                            logger.info("[chat_task] 未完整转发答案，发送合规后的最终答案")
-                            publish_event(run_id, "message_start", {})
-                            for start in range(0, len(final_answer), 256):
-                                publish_event(run_id, "token", {"delta": final_answer[start:start + 256]})
+                            publish_event(run_id, "retry_notice", {"reason": reason})
 
                     if node_name in ("compliance_failure_handler", "sensitive_refusal") and is_node_level_event:
                         output = event.get("data", {}).get("output")

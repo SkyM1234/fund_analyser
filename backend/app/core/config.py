@@ -25,9 +25,6 @@ class Settings(BaseSettings):
 
     # Agent
     AGENT_TIMEOUT: int = 300
-    STREAM_MODERATION_ENABLED: bool = os.getenv("STREAM_MODERATION_ENABLED", "true").lower() == "true"
-    STREAM_MODERATION_WINDOW_CHARS: int = int(os.getenv("STREAM_MODERATION_WINDOW_CHARS", "80"))
-    STREAM_MODERATION_OVERLAP_CHARS: int = int(os.getenv("STREAM_MODERATION_OVERLAP_CHARS", "24"))
 
     # PostgreSQL (Checkpoint，部署在 GPU 电脑)
     # Docker 部署时 POSTGRES_HOST 指向 compose 中的 postgres 服务名，而非 GPU_HOST
