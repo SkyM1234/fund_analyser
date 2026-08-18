@@ -10,6 +10,7 @@
 """
 import asyncio
 import logging
+from collections.abc import Iterable
 
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage
 
@@ -42,6 +43,56 @@ def _resolve_task_context(
         if context:
             return context
     return {}
+
+
+def _extract_reasoning_text(message: object) -> str:
+    """Extract provider-exposed reasoning without treating normal content as reasoning."""
+    candidates: list[object] = []
+    if isinstance(message, dict):
+        content = message.get("content")
+        candidates.extend([
+            message.get("reasoning_content"),
+            message.get("reasoning"),
+            message.get("thinking"),
+            message.get("additional_kwargs", {}).get("reasoning_content")
+            if isinstance(message.get("additional_kwargs"), dict)
+            else None,
+            message.get("response_metadata", {}).get("reasoning_content")
+            if isinstance(message.get("response_metadata"), dict)
+            else None,
+            content if isinstance(content, Iterable) and not isinstance(content, (str, bytes, dict)) else None,
+        ])
+    else:
+        content = getattr(message, "content", None)
+        candidates.extend([
+            getattr(message, "reasoning_content", None),
+            getattr(message, "reasoning", None),
+            getattr(message, "thinking", None),
+            getattr(message, "additional_kwargs", {}).get("reasoning_content")
+            if isinstance(getattr(message, "additional_kwargs", None), dict)
+            else None,
+            getattr(message, "response_metadata", {}).get("reasoning_content")
+            if isinstance(getattr(message, "response_metadata", None), dict)
+            else None,
+            content if isinstance(content, Iterable) and not isinstance(content, (str, bytes, dict)) else None,
+        ])
+
+    for candidate in candidates:
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()
+        if isinstance(candidate, Iterable) and not isinstance(candidate, (str, bytes, dict)):
+            parts: list[str] = []
+            for block in candidate:
+                if not isinstance(block, dict):
+                    continue
+                if block.get("type") not in {"reasoning", "thinking"}:
+                    continue
+                text = block.get("text") or block.get("content")
+                if isinstance(text, str) and text.strip():
+                    parts.append(text.strip())
+            if parts:
+                return "\n".join(parts)
+    return ""
 
 
 async def _run_chat_turn(run_id: str, req: ChatRequest, user_id: int) -> None:
@@ -123,14 +174,30 @@ async def _run_chat_turn(run_id: str, req: ChatRequest, user_id: int) -> None:
             event_count = 0
             seen_run_ids: set[str] = set()
             task_context_by_run_id: dict[str, dict[str, str]] = {}
+            trace_events: list[dict] = []
+            trace_sequence = 0
+            decision_by_task: dict[str, str] = {}
+            decision_tools: dict[str, list[str]] = {}
+            decision_trace_event: dict[str, dict] = {}
             _route_emitted = False
             _plan_emitted = False
+
+            def emit_trace(event_name: str, data: dict) -> None:
+                nonlocal trace_sequence
+                trace_sequence += 1
+                payload = {
+                    **data,
+                    "event_id": f"{run_id}:{trace_sequence}",
+                    "sequence": trace_sequence,
+                }
+                trace_events.append({"type": event_name, **payload})
+                publish_event(run_id, event_name, payload)
 
             async for event in app.astream_events(input_state, config=config, version="v2"):
                 while not retry_events.empty():
                     evt_type, evt_data = retry_events.get_nowait()
                     logger.info(f"[chat_task] event: {evt_type} -> {evt_data['agent_name']} task={evt_data['task_id']} attempt={evt_data['attempt']}")
-                    publish_event(run_id, evt_type, evt_data)
+                    emit_trace(evt_type, evt_data)
 
                 kind = event["event"]
                 event_count += 1
@@ -172,6 +239,31 @@ async def _run_chat_turn(run_id: str, req: ChatRequest, user_id: int) -> None:
                         chunk: AIMessageChunk = event["data"]["chunk"]
                         if chunk.content:
                             publish_event(run_id, "token", {"delta": chunk.content})
+
+                elif kind == "on_chat_model_end":
+                    metadata = event.get("metadata", {})
+                    node_name = metadata.get("langgraph_node")
+                    if node_name in worker_agent_names:
+                        output = event.get("data", {}).get("output")
+                        reasoning = _extract_reasoning_text(output)
+                        task_context = _resolve_task_context(
+                            event,
+                            task_context_by_run_id,
+                        )
+                        if reasoning and task_context.get("task_id"):
+                            task_id = task_context["task_id"]
+                            decision_id = f"{run_id}:decision:{trace_sequence + 1}"
+                            decision_by_task[task_id] = decision_id
+                            decision_tools[decision_id] = []
+                            emit_trace("agent_thought", {
+                                "thought_id": str(event.get("run_id", "")),
+                                "agent_name": task_context.get("agent_name") or node_name,
+                                "task_id": task_id,
+                                "decision_id": decision_id,
+                                "related_tool_call_ids": [],
+                                "content": reasoning,
+                            })
+                            decision_trace_event[decision_id] = trace_events[-1]
 
                 elif kind == "on_chain_end":
                     metadata = event.get("metadata", {})
@@ -295,7 +387,18 @@ async def _run_chat_turn(run_id: str, req: ChatRequest, user_id: int) -> None:
                         + (f" (agent={agent_name})" if agent_name else "")
                         + (f" task={task_context['task_id']}" if task_context.get("task_id") else "")
                     )
-                    publish_event(run_id, "tool_call", payload)
+                    task_id = payload.get("task_id", "")
+                    decision_id = decision_by_task.get(task_id) if task_id else None
+                    if decision_id:
+                        payload["decision_id"] = decision_id
+                        decision_tools.setdefault(decision_id, []).append(payload["tool_call_id"])
+                        decision_trace_event[decision_id]["related_tool_call_ids"].append(
+                            payload["tool_call_id"]
+                        )
+                    payload["related_tool_call_ids"] = (
+                        [payload["tool_call_id"]] if payload.get("tool_call_id") else []
+                    )
+                    emit_trace("tool_call", payload)
 
                 elif kind == "on_tool_end":
                     output = event["data"].get("output")
@@ -314,11 +417,30 @@ async def _run_chat_turn(run_id: str, req: ChatRequest, user_id: int) -> None:
                         payload["agent_name"] = task_context["agent_name"]
                     if task_context.get("task_id"):
                         payload["task_id"] = task_context["task_id"]
-                    publish_event(run_id, "tool_result", payload)
+                    tool_call_id = payload.get("tool_call_id")
+                    decision_id = next(
+                        (
+                            candidate
+                            for candidate, tool_ids in decision_tools.items()
+                            if tool_call_id in tool_ids
+                        ),
+                        None,
+                    )
+                    if decision_id:
+                        payload["decision_id"] = decision_id
+                    payload["related_tool_call_ids"] = (
+                        [tool_call_id] if tool_call_id else []
+                    )
+                    emit_trace("tool_result", payload)
             while not retry_events.empty():
                 evt_type, evt_data = retry_events.get_nowait()
                 logger.info(f"[chat_task] event (final drain): {evt_type} -> {evt_data['agent_name']}")
-                publish_event(run_id, evt_type, evt_data)
+                emit_trace(evt_type, evt_data)
+
+            await app.aupdate_state(
+                config=config,
+                values={"trace_events": {run_id: trace_events}},
+            )
 
             logger.info(f"[chat_task] 流式处理完成，共 {event_count} 个事件")
             publish_event(run_id, "done", {"finish_reason": "stop"})

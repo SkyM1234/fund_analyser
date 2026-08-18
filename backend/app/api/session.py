@@ -115,8 +115,12 @@ async def _load_session_detail(thread_id: str) -> SessionDetail:
         checkpoint = checkpoint_tuple.checkpoint
         channel_values = checkpoint.get("channel_values", {})
         messages = channel_values.get("messages", [])
+        tool_call_log = channel_values.get("tool_call_log", []) or []
+        trace_events_by_run = channel_values.get("trace_events", {}) or {}
+        current_plan = channel_values.get("plan", []) or []
 
         formatted_messages = []
+        tool_log_index = 0
         for msg in messages:
             if hasattr(msg, "type") and hasattr(msg, "content"):
                 role = msg.type
@@ -152,6 +156,16 @@ async def _load_session_detail(thread_id: str) -> SessionDetail:
                                 "tool_call_id": tc.get("id", ""),
                             })
 
+                for tool in tools:
+                    while tool_log_index < len(tool_call_log):
+                        log_item = tool_call_log[tool_log_index]
+                        tool_log_index += 1
+                        if log_item.get("name") != tool.get("name"):
+                            continue
+                        tool["agent_name"] = log_item.get("agent", "")
+                        tool["task_id"] = log_item.get("task_id", "")
+                        break
+
                 if str(content).strip() or tools:
                     formatted_messages.append({
                         "role": "assistant",
@@ -180,6 +194,66 @@ async def _load_session_detail(thread_id: str) -> SessionDetail:
                         ):
                             tool["output"] = output
                             break
+
+        # trace_events 按用户轮次与最终 assistant 消息配对。旧 checkpoint 没有该字段，
+        # 保持既有的工具消息回放路径。
+        trace_runs = (
+            list(trace_events_by_run.values())
+            if isinstance(trace_events_by_run, dict)
+            else []
+        )
+        user_turns: list[int] = [
+            index
+            for index, message in enumerate(formatted_messages)
+            if message["role"] == "user"
+        ]
+        for turn_index, user_index in enumerate(user_turns):
+            if turn_index >= len(trace_runs):
+                break
+            next_user_index = (
+                user_turns[turn_index + 1]
+                if turn_index + 1 < len(user_turns)
+                else len(formatted_messages)
+            )
+            assistant_indexes = [
+                index
+                for index in range(user_index + 1, next_user_index)
+                if formatted_messages[index]["role"] == "assistant"
+            ]
+            if assistant_indexes:
+                formatted_messages[assistant_indexes[-1]]["trace_events"] = trace_runs[turn_index]
+
+        if formatted_messages and current_plan:
+            plan_summary = []
+            agent_summary = []
+            for task in current_plan:
+                if not isinstance(task, dict):
+                    continue
+                plan_summary.append({
+                    "task_id": task.get("task_id", ""),
+                    "task_type": task.get("task_type", ""),
+                    "description": task.get("description", ""),
+                    "assigned_agent": task.get("assigned_agent", ""),
+                    "fund_codes": task.get("fund_codes", []),
+                })
+                agent_summary.append({
+                    "agent_name": task.get("assigned_agent", ""),
+                    "task_id": task.get("task_id", ""),
+                    "description": task.get("description", ""),
+                    "status": task.get("status", "completed"),
+                })
+            if plan_summary:
+                last_assistant = next(
+                    (
+                        message
+                        for message in reversed(formatted_messages)
+                        if message["role"] == "assistant"
+                    ),
+                    None,
+                )
+                if last_assistant is not None:
+                    last_assistant["plan"] = plan_summary
+                    last_assistant["agents"] = agent_summary
 
         return SessionDetail(
             thread_id=thread_id,

@@ -9,9 +9,7 @@ import time
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
-
-from app.core.config import get_settings
+from app.core.deepseek_llm import create_chat_llm
 from app.core.llm_concurrency import llm_ainvoke
 from app.agent.multi_agent_state import MultiAgentState
 from app.agent.state_reducers import TaskPatch
@@ -69,13 +67,7 @@ async def arbiter_agent_node(state: MultiAgentState) -> dict[str, Any]:
 
     query = current_task.get("query", "")
 
-    settings = get_settings()
-    llm = ChatOpenAI(
-        base_url=settings.LLM_BASE_URL,
-        api_key=settings.LLM_API_KEY,
-        model=settings.LLM_MODEL,
-        temperature=0.1,
-    )
+    llm = create_chat_llm(temperature=0.1)
 
     token_usage: dict[str, dict[str, int]] = {}
 

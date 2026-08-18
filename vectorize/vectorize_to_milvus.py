@@ -2,6 +2,8 @@
 使用BGE-M3向量化analyzed markdown文件并存储到Milvus
 支持稠密向量 + 神经稀疏向量（Learned Sparse Retrieval）的混合检索
 """
+from __future__ import annotations
+
 import re
 from html import unescape
 from io import StringIO
@@ -15,6 +17,10 @@ import pandas as pd
 import hashlib
 import warnings
 import os
+import pymysql
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).with_name(".env"), override=False)
 
 # 抑制transformers的性能警告
 warnings.filterwarnings('ignore', message='.*fast tokenizer.*')
@@ -31,11 +37,14 @@ OVERLAP_MIN_LENGTH = 20  # overlap 文本的最小有效长度
 TABLE_ROW_GROUP_MIN_LENGTH = 300  # 表格短行累计到该长度后形成一个向量记录
 TABLE_ROW_GROUP_MAX_LENGTH = 800  # 表格短行组的最大长度
 TABLE_SHORT_PREFIX_MAX_LENGTH = 120  # 可附加到后续长行的短行组最大长度
-
 # 预编译的正则表达式
 RE_PAGE_MARKER = re.compile(r'<!--\s*第\s*\d+\s*页\s*-->\s*')
 RE_TABLE_START = re.compile(r'<!--\s*TABLE_START[^>]*?-->')
 RE_TABLE_END = re.compile(r'<!--\s*TABLE_END[^>]*?-->')
+RE_TABLE_ID = re.compile(
+    r'<!--\s*TABLE_START\b[^>]*?\bid\s*=\s*["\']?([^"\'\s>]+)',
+    re.IGNORECASE,
+)
 RE_IMAGE_START = re.compile(r'<!--\s*IMAGE_START[^>]*?-->')
 RE_IMAGE_END = re.compile(r'<!--\s*IMAGE_END[^>]*?-->')
 RE_IMAGE_MARKDOWN = re.compile(r'!\[.*?\]\(.*?\)')
@@ -48,6 +57,9 @@ RE_PUNCTUATION_SPLIT = re.compile(r'([。！？；\n])')
 
 
 class FundVectorizer:
+    TABLE_PARENT_TABLE = "fund_report_table_parents"
+    TABLE_CHILD_LINK_TABLE = "fund_report_table_children"
+
     def __init__(self,
                  milvus_host: str = "localhost",
                  milvus_port: int = 19595,
@@ -87,6 +99,18 @@ class FundVectorizer:
 
         # 创建或获取集合
         self._setup_collection()
+        self._setup_table_tables()
+
+    @staticmethod
+    def _extract_table_id(table_content: str) -> str:
+        """提取 TABLE_START 标记中的稳定表格标识。"""
+        match = RE_TABLE_ID.search(table_content)
+        return match.group(1) if match else ""
+
+    @staticmethod
+    def _build_parent_table_id(fund_code: str, table_id: str) -> str:
+        """为同一基金报告中的原始表格生成稳定父记录 ID。"""
+        return hashlib.md5(f"{fund_code}:{table_id}".encode()).hexdigest()[:32]
 
     def _extract_header_path(self, metadata: Dict) -> List[str]:
         """
@@ -171,6 +195,7 @@ class FundVectorizer:
             # 也会仅在它们都很短时合并；较长的行维持独立向量。
             for table_match in RE_TABLE_BLOCK.finditer(content):
                 table_content = table_match.group()
+                table_id = self._extract_table_id(table_content)
                 table_text = self._table_to_embedding_text(table_content)
                 table_rows = [
                     line.strip()
@@ -185,6 +210,7 @@ class FundVectorizer:
                         'chunk_dict': chunk_dict,
                         'content': table_row_with_header,
                         'embedding_text': table_row_with_header,
+                        'table_id': table_id,
                     })
 
         return records
@@ -289,6 +315,56 @@ class FundVectorizer:
             index_params=index_params
         )
         print("集合创建完成")
+
+    @staticmethod
+    def _mysql_config() -> Dict:
+        return {
+            "host": os.getenv("MYSQL_HOST", "localhost"),
+            "port": int(os.getenv("MYSQL_PORT", "3306")),
+            "user": os.getenv("MYSQL_USER", "root"),
+            "password": os.getenv("MYSQL_PASSWORD", ""),
+            "database": os.getenv("MYSQL_DATABASE", "fund_analyser"),
+            "charset": "utf8mb4",
+            "autocommit": False,
+        }
+
+    def _get_mysql_connection(self):
+        return pymysql.connect(**self._mysql_config())
+
+    def _setup_table_tables(self):
+        """创建表格父记录和子块关联表，不修改报告主 collection 的 schema。"""
+        with self._get_mysql_connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    f"""
+                    CREATE TABLE IF NOT EXISTS {self.TABLE_PARENT_TABLE} (
+                        parent_table_id CHAR(32) PRIMARY KEY,
+                        fund_code VARCHAR(10) NOT NULL,
+                        fund_name VARCHAR(200) NOT NULL,
+                        file_path VARCHAR(500) NOT NULL,
+                        table_id VARCHAR(256) NOT NULL,
+                        content LONGTEXT NOT NULL,
+                        UNIQUE KEY uq_fund_table (fund_code, table_id),
+                        KEY idx_parent_fund_code (fund_code)
+                    ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+                    """
+                )
+                cursor.execute(
+                    f"""
+                    CREATE TABLE IF NOT EXISTS {self.TABLE_CHILD_LINK_TABLE} (
+                        child_chunk_id CHAR(32) PRIMARY KEY,
+                        parent_table_id CHAR(32) NOT NULL,
+                        fund_code VARCHAR(10) NOT NULL,
+                        KEY idx_child_parent_table_id (parent_table_id),
+                        KEY idx_child_fund_code (fund_code)
+                    ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+                    """
+                )
+            connection.commit()
+        print(
+            f"表格父子关系使用 MySQL 表: "
+            f"{self.TABLE_PARENT_TABLE}, {self.TABLE_CHILD_LINK_TABLE}"
+        )
 
     def chunk_text_with_headers(self, text: str, chunk_size: int = 2000, overlap: int = 200) -> List[Dict]:
         """
@@ -1423,7 +1499,70 @@ class FundVectorizer:
 
         return text.strip()
     
-    def process_markdown_file(self, file_path: Path, chunk_size: int = 2000, overlap: int = 200, encode_batch_size: int = 32) -> List[Dict]:
+    def _build_table_parent_records(
+        self,
+        source_content: str,
+        file_path: Path,
+        fund_code: str,
+        fund_name: str,
+        embedding_records: List[Dict],
+        data_list: List[Dict],
+    ) -> tuple[List[Dict], List[Dict]]:
+        """为表格子块生成父表记录和子块关联记录。"""
+        source_tables = {}
+        for match in RE_TABLE_BLOCK.finditer(source_content):
+            table_id = self._extract_table_id(match.group())
+            if table_id:
+                source_tables.setdefault(table_id, match.group())
+
+        table_headers = {}
+        parent_links = []
+        for record, data_item in zip(embedding_records, data_list):
+            table_id = record.get("table_id", "")
+            if not table_id or table_id not in source_tables:
+                continue
+
+            if table_id not in table_headers:
+                header_path = [
+                    record["chunk_dict"].get(f"header_{i}", "")
+                    for i in range(1, MAX_HEADER_LEVELS + 1)
+                ]
+                header_path = [header for header in header_path if header]
+                table_headers[table_id] = self._build_header_prefix(header_path)
+
+            parent_table_id = self._build_parent_table_id(fund_code, table_id)
+            parent_links.append({
+                "child_chunk_id": data_item["id"],
+                "fund_code": fund_code,
+                "parent_table_id": parent_table_id,
+            })
+
+        parent_records = []
+        for table_id, table_content in source_tables.items():
+            if not any(link["parent_table_id"] == self._build_parent_table_id(fund_code, table_id)
+                       for link in parent_links):
+                continue
+
+            content = f"{table_headers.get(table_id, '')}{table_content}".strip()
+            parent_records.append({
+                "parent_table_id": self._build_parent_table_id(fund_code, table_id),
+                "fund_code": fund_code,
+                "fund_name": fund_name,
+                "file_path": str(file_path),
+                "table_id": table_id,
+                "content": content,
+            })
+
+        return parent_records, parent_links
+
+    def process_markdown_file(
+        self,
+        file_path: Path,
+        chunk_size: int = 2000,
+        overlap: int = 200,
+        encode_batch_size: int = 32,
+        include_table_parents: bool = False,
+    ):
         """
         处理单个markdown文件
 
@@ -1505,7 +1644,78 @@ class FundVectorizer:
 
             data_list.append(data_item)
 
-        return data_list
+        if not include_table_parents:
+            return data_list
+
+        parent_records, parent_links = self._build_table_parent_records(
+            source_content=content,
+            file_path=file_path,
+            fund_code=fund_code,
+            fund_name=fund_name,
+            embedding_records=embedding_records,
+            data_list=data_list,
+        )
+        return data_list, parent_records, parent_links
+
+    def _insert_table_records(
+        self,
+        parent_records: List[Dict],
+        parent_links: List[Dict],
+    ):
+        """批量写入 MySQL 父表及子块关联记录。"""
+        if not parent_records and not parent_links:
+            return
+
+        with self._get_mysql_connection() as connection:
+            with connection.cursor() as cursor:
+                if parent_records:
+                    cursor.executemany(
+                        f"""
+                        INSERT INTO {self.TABLE_PARENT_TABLE} (
+                            parent_table_id, fund_code, fund_name,
+                            file_path, table_id, content
+                        ) VALUES (
+                            %(parent_table_id)s, %(fund_code)s, %(fund_name)s,
+                            %(file_path)s, %(table_id)s, %(content)s
+                        )
+                        ON DUPLICATE KEY UPDATE
+                            fund_code = VALUES(fund_code),
+                            fund_name = VALUES(fund_name),
+                            file_path = VALUES(file_path),
+                            table_id = VALUES(table_id),
+                            content = VALUES(content)
+                        """,
+                        parent_records,
+                    )
+                if parent_links:
+                    cursor.executemany(
+                        f"""
+                        INSERT INTO {self.TABLE_CHILD_LINK_TABLE} (
+                            child_chunk_id, parent_table_id, fund_code
+                        ) VALUES (
+                            %(child_chunk_id)s, %(parent_table_id)s, %(fund_code)s
+                        )
+                        ON DUPLICATE KEY UPDATE
+                            parent_table_id = VALUES(parent_table_id),
+                            fund_code = VALUES(fund_code)
+                        """,
+                        parent_links,
+                    )
+            connection.commit()
+
+    def _delete_table_records_for_fund(self, fund_code: str):
+        """删除指定基金的 MySQL 父表和子块关联记录。"""
+        with self._get_mysql_connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    f"DELETE FROM {self.TABLE_CHILD_LINK_TABLE} WHERE fund_code = %s",
+                    (fund_code,),
+                )
+                cursor.execute(
+                    f"DELETE FROM {self.TABLE_PARENT_TABLE} WHERE fund_code = %s",
+                    (fund_code,),
+                )
+            connection.commit()
 
     def batch_insert(self, data_list: List[Dict], batch_size: int = 100):
         """
@@ -1567,6 +1777,7 @@ class FundVectorizer:
         iterator.close()
 
         if not all_results:
+            self._delete_table_records_for_fund(fund_code)
             print(f"  基金 {fund_code} 在集合中无数据")
             return 0
 
@@ -1575,6 +1786,7 @@ class FundVectorizer:
             collection_name=self.collection_name,
             ids=ids,
         )
+        self._delete_table_records_for_fund(fund_code)
         print(f"  已删除基金 {fund_code} 的 {len(ids)} 条 chunk 数据")
         return len(ids)
 
@@ -1653,6 +1865,8 @@ class FundVectorizer:
 
         # ── 处理文件 ──
         all_data = []
+        all_parent_records = []
+        all_parent_links = []
         for file_path, fund_code, need_delete in tqdm(to_process, desc="处理文件"):
             try:
                 print(f"\n处理文件: {file_path.name}{'（覆盖）' if need_delete else '（新增）'}")
@@ -1661,19 +1875,28 @@ class FundVectorizer:
                 if need_delete:
                     self.delete_fund(fund_code)
 
-                data_list = self.process_markdown_file(
+                data_list, parent_records, parent_links = self.process_markdown_file(
                     file_path,
                     chunk_size=chunk_size,
                     overlap=overlap,
                     encode_batch_size=encode_batch_size,
+                    include_table_parents=True,
                 )
                 all_data.extend(data_list)
+                all_parent_records.extend(parent_records)
+                all_parent_links.extend(parent_links)
 
                 # 累积到阈值后批量插入
                 if len(all_data) >= accumulate_threshold:
                     print(f"\n累积 {len(all_data)} 条数据，开始插入...")
                     self.batch_insert(all_data, batch_size=insert_batch_size)
+                    self._insert_table_records(
+                        all_parent_records,
+                        all_parent_links,
+                    )
                     all_data = []
+                    all_parent_records = []
+                    all_parent_links = []
 
             except Exception as e:
                 print(f"处理文件 {file_path} 时出错: {e}")
@@ -1685,6 +1908,10 @@ class FundVectorizer:
         if all_data:
             print(f"\n插入剩余 {len(all_data)} 条数据...")
             self.batch_insert(all_data, batch_size=insert_batch_size)
+            self._insert_table_records(
+                all_parent_records,
+                all_parent_links,
+            )
 
 class FundIndexBuilder:
     """基金识别索引构建器（两级RAG的第一级）
@@ -1995,7 +2222,7 @@ def main():
         encode_batch_size=ENCODE_BATCH_SIZE,
         insert_batch_size=INSERT_BATCH_SIZE,
         accumulate_threshold=ACCUMULATE_THRESHOLD,
-        force_codes=[] # ALL 表示全量重建，慎用
+        force_codes=["ALL"] # ALL 表示全量重建，慎用
     )
 
     # ── 第二步：构建基金识别索引（两级RAG第一级）──

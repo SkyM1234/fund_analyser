@@ -111,6 +111,9 @@ class MultiAgentState(TypedDict):
     # 与 messages 解耦：messages 是给 LLM 看的对话上下文，tool_call_log 是给评测/观测用的结构化日志
     tool_call_log: Annotated[list[dict], merge_list_append]
 
+    # 每次对话执行的统一轨迹，按 run_id 保存，供会话回放使用
+    trace_events: Annotated[dict[str, list[dict]], merge_dict]
+
     # 反思与质量控制
     reflection_count: int           # 反思次数
     confidence_score: float | None  # 整体置信度
@@ -153,6 +156,7 @@ def create_initial_state(
         agent_history=[],
         token_usage={},
         tool_call_log=[],
+        trace_events={},
         reflection_count=0,
         confidence_score=None,
         needs_reflection=False,

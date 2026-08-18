@@ -23,6 +23,7 @@ RUN pip install --no-cache-dir \
     fastapi==0.136.1 \
     uvicorn==0.40.0 \
     pydantic==2.10.6 \
+    PyMySQL==1.1.1 \
     numpy==2.4.4
 
 # 复制应用代码

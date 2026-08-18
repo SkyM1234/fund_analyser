@@ -2,10 +2,13 @@
 GPU电脑上的一体化查询服务
 提供embedding + Milvus检索 + Reranker重排的完整查询接口
 """
+from __future__ import annotations
+
 import asyncio
 import os
 import re
 import time
+import pymysql
 
 from FlagEmbedding import BGEM3FlagModel, FlagReranker
 from pymilvus import MilvusClient
@@ -195,6 +198,8 @@ reranker = None
 milvus_client = None
 batch_encoder: BatchEncoder | None = None
 batch_reranker: BatchReranker | None = None
+TABLE_PARENT_TABLE = "fund_report_table_parents"
+TABLE_CHILD_LINK_TABLE = "fund_report_table_children"
 
 
 def _wait_for_collection_loaded(client: MilvusClient, collection_name: str,
@@ -255,7 +260,10 @@ async def lifespan(app: FastAPI):
 
     # 显式加载collection并等待完成，避免collection仍在loading（未完全加载进内存）时
     # search请求命中不完整索引返回异常低分（这是导致偶发性"检索失效"的根因）
-    for collection_name in ("fund_reports_mineru", "fund_index"):
+    for collection_name in (
+        "fund_reports_mineru",
+        "fund_index",
+    ):
         if milvus_client.has_collection(collection_name):
             print(f"加载collection: {collection_name}")
             milvus_client.load_collection(collection_name)
@@ -293,6 +301,7 @@ class SearchResult(BaseModel):
     header_4: str = ""
     header_5: str = ""
     header_6: str = ""
+    parent_table_id: Optional[str] = None
     score: float
 
 
@@ -381,6 +390,8 @@ async def search_funds(request: SearchRequest):
             # 不使用reranker时，截取top_k
             results = results[:request.top_k]
 
+        results = await _replace_table_results_with_parents(results)
+
         return SearchResponse(
             results=results,
             query=request.query,
@@ -395,6 +406,68 @@ async def search_funds(request: SearchRequest):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"查询失败: {str(e)}")
+
+
+async def _replace_table_results_with_parents(
+    results: List[SearchResult],
+) -> List[SearchResult]:
+    """将命中的表格子块内容替换为完整父表，保留子块 ID 和 chunk_index。"""
+    if not results:
+        return results
+
+    child_ids = [result.id for result in results if result.id]
+    if not child_ids:
+        return results
+
+    try:
+        table_rows = await asyncio.to_thread(_fetch_parent_tables, child_ids)
+    except Exception as exc:
+        # 表格父子回查是结果增强；MySQL 短暂异常时仍返回原子 chunk。
+        print(f"表格父子回查失败，返回原子 chunk: {exc}")
+        return results
+
+    parent_by_child = {
+        row["child_chunk_id"]: row
+        for row in table_rows
+        if row.get("child_chunk_id") and row.get("parent_table_id")
+    }
+
+    for result in results:
+        table_row = parent_by_child.get(result.id)
+        if table_row and table_row.get("content") is not None:
+            result.content = table_row["content"]
+            result.parent_table_id = table_row["parent_table_id"]
+    return results
+
+
+def _fetch_parent_tables(child_ids: List[str]) -> List[dict]:
+    """批量通过 MySQL 子块关联回查完整父表。"""
+    unique_child_ids = list(dict.fromkeys(child_ids))
+    placeholders = ", ".join(["%s"] * len(unique_child_ids))
+    query = f"""
+        SELECT
+            child.child_chunk_id,
+            child.parent_table_id,
+            parent.content
+        FROM {TABLE_CHILD_LINK_TABLE} AS child
+        INNER JOIN {TABLE_PARENT_TABLE} AS parent
+            ON parent.parent_table_id = child.parent_table_id
+        WHERE child.child_chunk_id IN ({placeholders})
+    """
+    with pymysql.connect(
+        host=os.getenv("MYSQL_HOST", "localhost"),
+        port=int(os.getenv("MYSQL_PORT", "3306")),
+        user=os.getenv("MYSQL_USER", "root"),
+        password=os.getenv("MYSQL_PASSWORD", ""),
+        database=os.getenv("MYSQL_DATABASE", "fund_analyser"),
+        charset="utf8mb4",
+        cursorclass=pymysql.cursors.DictCursor,
+        connect_timeout=int(os.getenv("MYSQL_CONNECT_TIMEOUT", "5")),
+        read_timeout=int(os.getenv("MYSQL_READ_TIMEOUT", "5")),
+    ) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(query, unique_child_ids)
+            return cursor.fetchall()
 
 
 def _build_fund_code_filter(filter_fund_code: Optional[str]) -> Optional[str]:

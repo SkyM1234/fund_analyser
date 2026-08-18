@@ -14,12 +14,30 @@ export interface StreamHandlers {
   onMessageStart?: () => void
   onToken?: (delta: string) => void
   onRetryNotice?: (reason: string) => void
-  onToolCall?: (name: string, args: unknown, agent_name?: string, tool_call_id?: string) => void
-  onToolResult?: (name: string, output: string, tool_call_id?: string) => void
+  onToolCall?: (
+    name: string,
+    args: unknown,
+    agent_name?: string,
+    task_id?: string,
+    tool_call_id?: string,
+  ) => void
+  onToolResult?: (
+    name: string,
+    output: string,
+    task_id?: string,
+    tool_call_id?: string,
+  ) => void
   onAgentStart?: (agent_name: string, task_id: string, description: string) => void
   onAgentEnd?: (agent_name: string, task_id: string, status: string) => void
   onPlanCreated?: (plan: Array<{ task_id: string; task_type: string; description: string; assigned_agent: string; fund_codes: string[] }>, reasoning: string) => void
   onToolRetry?: (agent_name: string, task_id: string, attempt: number, reason: string) => void
+  onAgentThought?: (
+    thought_id: string,
+    content: string,
+    agent_name: string,
+    task_id: string,
+  ) => void
+  onTraceEvent?: (event: any) => void
   onDone?: () => void
   onError?: (msg: string) => void
 }
@@ -84,10 +102,21 @@ export async function sendChatStream(opts: SendOptions, handlers: StreamHandlers
         handlers.onRetryNotice?.(payload.reason ?? '')
         break
       case 'tool_call':
-        handlers.onToolCall?.(payload.name, payload.args, payload.agent_name, payload.tool_call_id)
+        handlers.onToolCall?.(
+          payload.name,
+          payload.args,
+          payload.agent_name,
+          payload.task_id,
+          payload.tool_call_id,
+        )
         break
       case 'tool_result':
-        handlers.onToolResult?.(payload.name, payload.output, payload.tool_call_id)
+        handlers.onToolResult?.(
+          payload.name,
+          payload.output,
+          payload.task_id,
+          payload.tool_call_id,
+        )
         break
       case 'agent_start':
         handlers.onAgentStart?.(payload.agent_name ?? '', payload.task_id ?? '', payload.description ?? '')
@@ -101,12 +130,25 @@ export async function sendChatStream(opts: SendOptions, handlers: StreamHandlers
       case 'tool_retry':
         handlers.onToolRetry?.(payload.agent_name ?? '', payload.task_id ?? '', payload.attempt ?? 1, payload.reason ?? '')
         break
+      case 'agent_thought':
+        handlers.onAgentThought?.(
+          payload.thought_id ?? '',
+          payload.content ?? '',
+          payload.agent_name ?? '',
+          payload.task_id ?? '',
+        )
+        break
       case 'done':
         handlers.onDone?.()
         break
       case 'error':
         handlers.onError?.(payload.message ?? 'unknown error')
         break
+    }
+    if (
+      ['agent_thought', 'tool_call', 'tool_result', 'tool_retry'].includes(event)
+    ) {
+      handlers.onTraceEvent?.({ type: event, ...payload })
     }
   }
 

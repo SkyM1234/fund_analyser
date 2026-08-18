@@ -8,7 +8,39 @@ export interface ToolStep {
   tool_call_id?: string
   output?: string
   agent_name?: string
+  task_id?: string
   retry_attempt?: number
+}
+
+export interface ThoughtStep {
+  thought_id: string
+  content: string
+  agent_name?: string
+  task_id?: string
+}
+
+export type TraceEventType =
+  | 'agent_thought'
+  | 'tool_call'
+  | 'tool_result'
+  | 'tool_retry'
+
+export interface TraceEvent {
+  type: TraceEventType
+  event_id: string
+  sequence: number
+  decision_id?: string
+  related_tool_call_ids?: string[]
+  thought_id?: string
+  content?: string
+  name?: string
+  args?: unknown
+  output?: string
+  tool_call_id?: string
+  agent_name?: string
+  task_id?: string
+  attempt?: number
+  reason?: string
 }
 
 export interface AgentStep {
@@ -31,6 +63,8 @@ export interface Message {
   role: 'user' | 'assistant'
   content: string
   tools: ToolStep[]
+  thoughts: ThoughtStep[]
+  trace_events: TraceEvent[]
   agents: AgentStep[]
   plan?: PlanTask[]
   pending?: boolean
@@ -120,6 +154,8 @@ export const useChatStore = defineStore('chat', () => {
       role: 'assistant',
       content: '',
       tools: [],
+      thoughts: [],
+      trace_events: [],
       agents: [],
       pending: true,
     }
@@ -129,6 +165,8 @@ export const useChatStore = defineStore('chat', () => {
       role: 'user',
       content: trimmedText,
       tools: [],
+      thoughts: [],
+      trace_events: [],
       agents: [],
     })
     conversation.messages.push(assistantMessage)
@@ -160,9 +198,10 @@ export const useChatStore = defineStore('chat', () => {
             assistant.content = ''
             assistant.retryNotice = reason
           },
-          onToolCall: (name, args, agentName, toolCallId) => {
+          onToolCall: (name, args, agentName, taskId, toolCallId) => {
             const step: ToolStep = { name, args }
             if (agentName) step.agent_name = agentName
+            if (taskId) step.task_id = taskId
             if (toolCallId) step.tool_call_id = toolCallId
             if (pendingRetry) {
               step.retry_attempt = pendingRetry.attempt
@@ -170,14 +209,29 @@ export const useChatStore = defineStore('chat', () => {
             }
             assistant.tools.push(step)
           },
-          onToolResult: (name, output, toolCallId) => {
+          onToolResult: (name, output, taskId, toolCallId) => {
             const step = toolCallId
               ? assistant.tools.find((tool) => tool.tool_call_id === toolCallId)
               : [...assistant.tools]
                 .reverse()
-                .find((tool) => tool.name === name && !tool.output)
-            if (step) step.output = output
-            else assistant.tools.push({ name, args: null, output, tool_call_id: toolCallId })
+                .find(
+                  (tool) =>
+                    tool.name === name &&
+                    !tool.output &&
+                    (!taskId || tool.task_id === taskId),
+                )
+            if (step) {
+              step.output = output
+              if (taskId) step.task_id = taskId
+            } else {
+              assistant.tools.push({
+                name,
+                args: null,
+                output,
+                task_id: taskId,
+                tool_call_id: toolCallId,
+              })
+            }
           },
           onAgentStart: (agent_name, task_id, description) => {
             assistant.agents.push({
@@ -201,6 +255,20 @@ export const useChatStore = defineStore('chat', () => {
           },
           onToolRetry: (agent_name, _task_id, attempt, _reason) => {
             pendingRetry = { agent_name, attempt }
+          },
+          onAgentThought: (thought_id, content, agent_name, task_id) => {
+            assistant.thoughts.push({
+              thought_id,
+              content,
+              agent_name,
+              task_id,
+            })
+          },
+          onTraceEvent: (event) => {
+            assistant.trace_events.push({
+              ...event,
+              sequence: Number(event.sequence ?? assistant.trace_events.length + 1),
+            })
           },
           onDone: () => {
             assistant.pending = false
@@ -280,12 +348,27 @@ export const useChatStore = defineStore('chat', () => {
             tool_call_id: tool.tool_call_id,
             output: tool.output,
             agent_name: tool.agent_name,
+            task_id: tool.task_id,
             retry_attempt: tool.retry_attempt,
           })),
+          thoughts: (message.thoughts || []).map((thought) => ({
+            thought_id: thought.thought_id,
+            content: thought.content,
+            agent_name: thought.agent_name,
+            task_id: thought.task_id,
+          })),
+          trace_events: (message.trace_events || []).map((event) => ({
+            ...event,
+            type: event.type as TraceEventType,
+            sequence: Number(event.sequence ?? 0),
+          })).filter((event) =>
+            ['agent_thought', 'tool_call', 'tool_result', 'tool_retry'].includes(event.type),
+          ),
           agents: (message.agents || []).map((agent) => ({
             ...agent,
             status: agent.status as 'running' | 'completed' | 'failed',
           })),
+          plan: message.plan,
         })),
       )
       conversation.loaded = true

@@ -13,7 +13,39 @@ export interface SessionItem {
 
 export interface SessionDetail {
   thread_id: string
-  messages: Array<{ role: string; content: string; tools?: Array<{ name: string; args: any; tool_call_id?: string; output?: string; agent_name?: string; retry_attempt?: number }>; agents?: Array<{ agent_name: string; task_id: string; description: string; status: string }> }>
+  messages: Array<{
+    role: string
+    content: string
+    tools?: Array<{
+      name: string
+      args: any
+      tool_call_id?: string
+      output?: string
+      agent_name?: string
+      task_id?: string
+      retry_attempt?: number
+    }>
+    thoughts?: Array<{
+      thought_id: string
+      content: string
+      agent_name?: string
+      task_id?: string
+    }>
+    trace_events?: Array<{
+      type: string
+      event_id: string
+      sequence: number
+      [key: string]: any
+    }>
+    agents?: Array<{ agent_name: string; task_id: string; description: string; status: string }>
+    plan?: Array<{
+      task_id: string
+      task_type: string
+      description: string
+      assigned_agent: string
+      fund_codes: string[]
+    }>
+  }>
   checkpoint_count: number
 }
 

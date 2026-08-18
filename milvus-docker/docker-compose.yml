@@ -114,6 +114,15 @@ services:
       - BATCH_RERANK_MAX=${BATCH_RERANK_MAX:-128}
       - EMBEDDING_MODEL_PATH=/app/embedding_model/bge-m3
       - RERANKER_MODEL_PATH=/app/embedding_model/bge-reranker-v2-m3
+      - MYSQL_HOST=${MYSQL_HOST:-host.docker.internal}
+      - MYSQL_PORT=${MYSQL_PORT:-3306}
+      - MYSQL_USER=${MYSQL_USER:-root}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-}
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-fund_analyser}
+      - MYSQL_CONNECT_TIMEOUT=${MYSQL_CONNECT_TIMEOUT:-5}
+      - MYSQL_READ_TIMEOUT=${MYSQL_READ_TIMEOUT:-5}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ulimits:
       memlock: -1
     ipc: host

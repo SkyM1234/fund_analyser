@@ -13,9 +13,8 @@ from typing import Any, Awaitable, Callable
 
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
-from langchain_openai import ChatOpenAI
-
 from app.core.config import get_settings
+from app.core.deepseek_llm import create_chat_llm
 from app.core.llm_concurrency import llm_ainvoke
 from app.agent.multi_agent_state import MultiAgentState
 from app.agent.state_reducers import TaskPatch
@@ -25,7 +24,6 @@ from app.tools.token_usage import record_usage
 from app.agent.reflection_agent import agent_self_check, _improve_query
 from app.services.rag_result_parser import (
     parse_rag_search_result,
-    parse_rag_search_sections,
 )
 
 logger = logging.getLogger(__name__)
@@ -220,53 +218,41 @@ async def _execute_tool_calls(
                     rag_tool_contexts.append(
                         _RagToolContext(message=message, output=str(message.content))
                     )
-            _deduplicate_rag_tool_context(rag_tool_contexts)
             if final_rag_context_callback and rag_tool_contexts:
-                final_chunks = parse_rag_search_result(
-                    str(rag_tool_contexts[0].message.content)
+                final_chunks = _unique_rag_chunks_for_observability(
+                    rag_tool_contexts
                 )
                 await final_rag_context_callback(agent_name, task_id, final_chunks)
     return tool_messages
 
 
-def _deduplicate_rag_tool_context(contexts: list[_RagToolContext]) -> None:
-    """在 Agent 提示词上下文中，每个检索 chunk 只保留一份。
+def _unique_rag_chunks_for_observability(
+    contexts: list[_RagToolContext],
+) -> list[dict]:
+    """Deduplicate only the SSE/metrics payload, never the LLM tool messages."""
+    best_by_id: dict[str, dict] = {}
+    for context in contexts:
+        for chunk in parse_rag_search_result(context.output):
+            chunk_id = chunk.get("id")
+            if not chunk_id:
+                continue
+            current = best_by_id.get(chunk_id)
+            current_score = current.get("score") if current else None
+            score = chunk.get("score")
+            if (
+                current is None
+                or (
+                    score is not None
+                    and (current_score is None or score > current_score)
+                )
+            ):
+                best_by_id[chunk_id] = chunk
 
-    若后续结果的分数更高，则替换此前版本。最终将去重后的 chunk
-    按 score 降序放入上下文。
-    """
-    occurrences = []
-    for context_index, context in enumerate(contexts):
-        for section_index, section in enumerate(parse_rag_search_sections(context.output)):
-            occurrences.append((context_index, section_index, section))
-
-    best_sections = {}
-    for context_index, section_index, section in occurrences:
-        current_best = best_sections.get(section.chunk_id)
-        if (
-            current_best is None
-            or (
-                section.score is not None
-                and (current_best.score is None or section.score > current_best.score)
-            )
-        ):
-            best_sections[section.chunk_id] = section
-
-    ranked_sections = sorted(
-        best_sections.values(),
-        key=lambda section: section.score is not None and section.score,
+    return sorted(
+        best_by_id.values(),
+        key=lambda chunk: chunk.get("score") is not None and chunk.get("score"),
         reverse=True,
     )
-    if not ranked_sections:
-        return
-
-    # ToolMessage 必须与工具调用一一对应，因此将全局排序后的上下文放入第一条
-    # RAG 消息，并将其余消息标记为空上下文。
-    contexts[0].message.content = "\n".join(
-        section.text for section in ranked_sections
-    )
-    for context in contexts[1:]:
-        context.message.content = "Duplicate RAG chunks omitted from context."
 
 
 def _build_task_message(
@@ -346,12 +332,7 @@ def make_retrieval_node(agent_config: AgentConfig):
         )
 
         settings = get_settings()
-        llm = ChatOpenAI(
-            base_url=settings.LLM_BASE_URL,
-            api_key=settings.LLM_API_KEY,
-            model=settings.LLM_MODEL,
-            temperature=0.3,
-        )
+        llm = create_chat_llm(temperature=0.3)
         llm_with_tools = llm.bind_tools(tools)
         tools_by_name = {tool.name: tool for tool in tools}
 
@@ -369,7 +350,10 @@ def make_retrieval_node(agent_config: AgentConfig):
             getattr(route_result, "intent", None) == "cross_fund_query"
         )
         max_query_retries = settings.MAX_QUERY_RETRIES
+        max_self_check_retries = max(0, settings.MAX_SELF_CHECK_RETRIES)
         retry_count = 0
+        self_check_retry_count = 0
+        seen_recheck_queries: set[str] = set()
         final_rag_context_callback = (
             (config.get("configurable", {}) if config else {}).get(
                 "_sse_final_rag_context_callback"
@@ -396,8 +380,21 @@ def make_retrieval_node(agent_config: AgentConfig):
                 while iteration < agent_config.max_iterations:
                     iteration += 1
                     logger.info(f"[{label}] Iteration {iteration}")
-
                     response = await llm_ainvoke(llm_with_tools, messages)
+
+                    if (
+                        response.usage_metadata
+                        and response.usage_metadata.get("output_token_details", {}).get(
+                            "reasoning", 0
+                        )
+                        and not response.additional_kwargs.get("reasoning_content")
+                    ):
+                        logger.warning(
+                            "[%s] Provider reported reasoning tokens but no "
+                            "reasoning_content was preserved",
+                            label,
+                        )
+
                     messages.append(response)
                     iter_usage = record_usage(f"{label}:{current_task_id}", response)
                     for bucket, usage in iter_usage.items():
@@ -408,17 +405,44 @@ def make_retrieval_node(agent_config: AgentConfig):
                     if not response.tool_calls:
                         result_text = response.content
 
-                        result_text, self_check_usage, recheck_query = await agent_self_check(
-                            current_task, result_text, label
-                        )
+                        if settings.AGENT_SELF_CHECK_ENABLED:
+                            result_text, self_check_usage, recheck_query = await agent_self_check(
+                                current_task, result_text, label
+                            )
+                        else:
+                            self_check_usage, recheck_query = {}, None
+                            logger.info(f"[{label}] Self-check disabled")
                         for k, v in self_check_usage.items():
                             existing = token_usage.setdefault(k, {})
                             for field, val in v.items():
                                 existing[field] = existing.get(field, 0) + val
 
                         # 自检发现事实矛盾 → 追加反馈消息并回到工具调用循环
-                        if recheck_query and iteration < agent_config.max_iterations:
-                            logger.info(f"[{label}] Self-check triggered recheck, iter={iteration}/{agent_config.max_iterations}")
+                        if recheck_query:
+                            normalized_recheck_query = " ".join(
+                                recheck_query.split()
+                            ).casefold()
+                            if self_check_retry_count >= max_self_check_retries:
+                                logger.warning(
+                                    f"[{label}] Self-check recheck limit reached "
+                                    f"({self_check_retry_count}/{max_self_check_retries})"
+                                )
+                                break
+                            if normalized_recheck_query in seen_recheck_queries:
+                                logger.warning(
+                                    f"[{label}] Repeated self-check query detected; "
+                                    "stopping recheck loop"
+                                )
+                                break
+
+                            seen_recheck_queries.add(normalized_recheck_query)
+                            self_check_retry_count += 1
+                            logger.info(
+                                f"[{label}] Self-check triggered recheck "
+                                f"({self_check_retry_count}/{max_self_check_retries}), "
+                                f"iter={iteration} -> 0 "
+                            )
+                            iteration = 0
                             messages.append(HumanMessage(
                                 content=(
                                     f"自检发现以下数据矛盾需要重新查证：{recheck_query}\n"

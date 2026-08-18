@@ -9,6 +9,8 @@
 # ── 向量化核心 ──
 FlagEmbedding>=1.4.0
 pymilvus>=3.0.0
+PyMySQL>=1.1.0
+python-dotenv>=1.0.0
 langchain-text-splitters>=1.1.0
 tqdm>=4.67.0
 numpy>=1.24.0

@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     LLM_API_KEY: str = os.getenv("DEEPSEEK_API_KEY", "")
     LLM_MODEL: str = "deepseek-v4-flash"
     LLM_TEMPERATURE: float = 0.2
+    LLM_THINKING_ENABLED: bool = os.getenv(
+        "LLM_THINKING_ENABLED", "true"
+    ).lower() in {"1", "true", "yes", "on"}
+    LLM_THINKING_LANGUAGE: str = os.getenv("LLM_THINKING_LANGUAGE", "中文")
     LLM_MAX_CONCURRENCY: int = int(os.getenv("LLM_MAX_CONCURRENCY", "10"))  # 单进程内并发 LLM 调用上限
 
     # GPU
@@ -26,6 +30,10 @@ class Settings(BaseSettings):
     # Agent
     AGENT_TIMEOUT: int = 300
     MAX_QUERY_RETRIES: int = int(os.getenv("MAX_QUERY_RETRIES", "1"))
+    AGENT_SELF_CHECK_ENABLED: bool = os.getenv(
+        "AGENT_SELF_CHECK_ENABLED", "true"
+    ).lower() in {"1", "true", "yes", "on"}
+    MAX_SELF_CHECK_RETRIES: int = int(os.getenv("MAX_SELF_CHECK_RETRIES", "2"))
 
     # PostgreSQL (Checkpoint，部署在 GPU 电脑)
     # Docker 部署时 POSTGRES_HOST 指向 compose 中的 postgres 服务名，而非 GPU_HOST
