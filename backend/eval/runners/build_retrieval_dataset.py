@@ -24,9 +24,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_MARKDOWN_ROOT = PROJECT_ROOT / "markdown_mineru"
 DEFAULT_OUTPUT = PROJECT_ROOT / "backend" / "eval" / "datasets" / "retrieval.jsonl"
 HISTORICAL_FUND_CODES = [
-   
-]
-CURRENT_BATCH_FUND_CODES = [ "159101",
+    "159101",
     "159102",
     "159103",
     "159105",
@@ -76,6 +74,8 @@ CURRENT_BATCH_FUND_CODES = [ "159101",
     "159519",
     "159523",
     "159526",
+]
+CURRENT_BATCH_FUND_CODES = [
 
 ]
 EXPECTED_FUND_CODES = HISTORICAL_FUND_CODES + CURRENT_BATCH_FUND_CODES
