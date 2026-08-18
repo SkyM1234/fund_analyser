@@ -22,7 +22,7 @@ from app.agent.state_reducers import TaskPatch
 from app.agent.task_context import format_dependency_results
 from app.tools.conversation_utils import get_recent_messages_for_agent
 from app.tools.token_usage import record_usage
-from app.agent.reflection_agent import agent_self_check, _improve_query, MAX_REFLECTION_RETRIES
+from app.agent.reflection_agent import agent_self_check, _improve_query
 from app.services.rag_result_parser import (
     parse_rag_search_result,
     parse_rag_search_sections,
@@ -368,6 +368,7 @@ def make_retrieval_node(agent_config: AgentConfig):
         cross_fund_query = (
             getattr(route_result, "intent", None) == "cross_fund_query"
         )
+        max_query_retries = settings.MAX_QUERY_RETRIES
         retry_count = 0
         final_rag_context_callback = (
             (config.get("configurable", {}) if config else {}).get(
@@ -460,8 +461,8 @@ def make_retrieval_node(agent_config: AgentConfig):
 
                 # 超出最大迭代：重试预算未用完时，改写 query 原地重跑一轮；用完预算才真正判定为 failed。
                 # 同一分支内部完成，不涉及跨节点/跨并行分支的状态传递，避免 Send fan-out 场景下 reflection 类下游节点无法可靠定位"这次是哪个 task_id"的问题。
-                logger.warning(f"[{label}] Max iterations reached (retry {retry_count}/{MAX_REFLECTION_RETRIES})")
-                if retry_count >= MAX_REFLECTION_RETRIES:
+                logger.warning(f"[{label}] Max iterations reached (retry {retry_count}/{max_query_retries})")
+                if retry_count >= max_query_retries:
                     break
 
                 retry_count += 1

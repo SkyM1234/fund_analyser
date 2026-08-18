@@ -25,6 +25,7 @@ class Settings(BaseSettings):
 
     # Agent
     AGENT_TIMEOUT: int = 300
+    MAX_QUERY_RETRIES: int = int(os.getenv("MAX_QUERY_RETRIES", "1"))
 
     # PostgreSQL (Checkpoint，部署在 GPU 电脑)
     # Docker 部署时 POSTGRES_HOST 指向 compose 中的 postgres 服务名，而非 GPU_HOST
@@ -102,7 +103,7 @@ class Settings(BaseSettings):
     MCP_ENABLED: bool = True  # 是否启用 MCP
     MCP_MAX_TOTAL_CALLS: int | None = 20  # 每用户每窗口的全局最大调用次数（None 表示无限制）
     MCP_MAX_CALLS_PER_TOOL: int | None = 10  # 每用户每工具每窗口最大调用次数（None 表示无限制）
-    MCP_RATE_LIMIT_WINDOW_SECONDS: int = 60  # 限流滚动窗口长度（秒）
+    MCP_RATE_LIMIT_WINDOW_SECONDS: int = 30  # 限流滚动窗口长度（秒）
     MCP_SERVERS: str | None = None  # 由 mcp_servers_list 方法动态生成
 
     # 实时行情类工具缓存（短 TTL，减少重复调用 & 计入限流的次数）

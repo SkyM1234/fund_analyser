@@ -21,8 +21,6 @@ from app.tools.token_usage import record_usage
 logger = logging.getLogger(__name__)
 
 
-# 反思配置
-MAX_REFLECTION_RETRIES = 2  # 单个任务最多图层重试次数
 MAX_CLARIFICATION_ROUNDS = 1  # 全局反思最多触发一次定向澄清
 
 
