@@ -35,7 +35,9 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger(__name__)
 
 REPORT_DIR = Path(__file__).resolve().parent.parent / "reports" / "answer"
-DATASET_PATH = Path(__file__).resolve().parent.parent / "datasets" / "answer_single_fund.jsonl"
+DATASET_PATH = Path(__file__).resolve().parent.parent / "datasets" / "answer_cross_fund.jsonl" 
+# answer_single_fund.jsonl 是单基金回答评测数据集，包含 50 条样本
+# answer_cross_fund.jsonl 是跨基金回答评测数据集，包含 50 条样本
 
 
 def _get_evaluators(use_judge: bool) -> list:

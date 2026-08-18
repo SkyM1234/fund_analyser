@@ -27,6 +27,23 @@ CHAT_LOCK_TIMEOUT_SECONDS = 360  # AGENT_TIMEOUT(300) + 60s 缓冲
 logger = logging.getLogger(__name__)
 
 
+def _resolve_task_context(
+    event: dict,
+    task_context_by_run_id: dict[str, dict[str, str]],
+) -> dict[str, str]:
+    """Find the task context inherited by a LangChain child run."""
+    run_id = str(event.get("run_id", ""))
+    if run_id in task_context_by_run_id:
+        return task_context_by_run_id[run_id]
+
+    parent_ids = event.get("parent_ids", [])
+    for parent_id in reversed(parent_ids):
+        context = task_context_by_run_id.get(str(parent_id))
+        if context:
+            return context
+    return {}
+
+
 async def _run_chat_turn(run_id: str, req: ChatRequest, user_id: int) -> None:
     from app.agent.multi_agent_controller import build_multi_agent_graph
     from app.db.redis import get_redis_client
@@ -105,6 +122,7 @@ async def _run_chat_turn(run_id: str, req: ChatRequest, user_id: int) -> None:
             logger.info("[chat_task] 开始流式处理...")
             event_count = 0
             seen_run_ids: set[str] = set()
+            task_context_by_run_id: dict[str, dict[str, str]] = {}
             _route_emitted = False
             _plan_emitted = False
 
@@ -123,13 +141,17 @@ async def _run_chat_turn(run_id: str, req: ChatRequest, user_id: int) -> None:
                     if name in worker_agent_names and name == meta_node:
                         node_input = event.get("data", {}).get("input", {})
                         task_id = node_input.get("current_task_id", "")
-                        plan = node_input.get("plan", [])
-                        description = ""
-                        if task_id and plan:
-                            for t in plan:
-                                if t.get("task_id") == task_id:
-                                    description = t.get("description", "")
-                                    break
+                        task_input = node_input.get("task_input", {})
+                        description = (
+                            task_input.get("description", "")
+                            if isinstance(task_input, dict)
+                            else ""
+                        )
+                        if task_id:
+                            task_context_by_run_id[str(event.get("run_id", ""))] = {
+                                "task_id": task_id,
+                                "agent_name": name,
+                            }
                         logger.info(f"[chat_task] event: agent_start -> {name} task={task_id}")
                         publish_event(run_id, "agent_start", {
                             "agent_name": name,
@@ -250,6 +272,10 @@ async def _run_chat_turn(run_id: str, req: ChatRequest, user_id: int) -> None:
                     tool_name = event["name"]
                     tool_args = event["data"].get("input", {})
                     parent_node = event.get("metadata", {}).get("langgraph_node")
+                    task_context = _resolve_task_context(
+                        event,
+                        task_context_by_run_id,
+                    )
                     # LangChain 为同一次工具执行的 start/end 事件使用同一个 run_id。
                     # 透传该 ID，避免并发同名工具按到达顺序在前端错误配对。
                     payload: dict = {
@@ -257,20 +283,38 @@ async def _run_chat_turn(run_id: str, req: ChatRequest, user_id: int) -> None:
                         "args": tool_args,
                         "tool_call_id": str(event.get("run_id", "")),
                     }
-                    if parent_node and parent_node in worker_agent_names:
-                        payload["agent_name"] = parent_node
-                    logger.info(f"[chat_task] event: tool_call -> {tool_name}" + (f" (agent={parent_node})" if parent_node else ""))
+                    agent_name = task_context.get("agent_name") or (
+                        parent_node if parent_node in worker_agent_names else ""
+                    )
+                    if agent_name:
+                        payload["agent_name"] = agent_name
+                    if task_context.get("task_id"):
+                        payload["task_id"] = task_context["task_id"]
+                    logger.info(
+                        f"[chat_task] event: tool_call -> {tool_name}"
+                        + (f" (agent={agent_name})" if agent_name else "")
+                        + (f" task={task_context['task_id']}" if task_context.get("task_id") else "")
+                    )
                     publish_event(run_id, "tool_call", payload)
 
                 elif kind == "on_tool_end":
                     output = event["data"].get("output")
                     output_str = tool_output_to_text(output)
+                    task_context = _resolve_task_context(
+                        event,
+                        task_context_by_run_id,
+                    )
                     logger.info(f"[chat_task] event: tool_result -> {event['name']}")
-                    publish_event(run_id, "tool_result", {
+                    payload = {
                         "name": event["name"],
                         "output": output_str,
                         "tool_call_id": str(event.get("run_id", "")),
-                    })
+                    }
+                    if task_context.get("agent_name"):
+                        payload["agent_name"] = task_context["agent_name"]
+                    if task_context.get("task_id"):
+                        payload["task_id"] = task_context["task_id"]
+                    publish_event(run_id, "tool_result", payload)
             while not retry_events.empty():
                 evt_type, evt_data = retry_events.get_nowait()
                 logger.info(f"[chat_task] event (final drain): {evt_type} -> {evt_data['agent_name']}")
