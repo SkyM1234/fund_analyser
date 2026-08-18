@@ -107,10 +107,6 @@ class AnswerExample(BaseModel):
     should_refuse: bool = Field(
         False, description="若为 True，期望 Agent 拒绝回答（敏感问题）"
     )
-    relevant_keywords: list[str] = Field(
-        default_factory=list,
-        description="可选：检索结果应包含的关键词（用于 Agent RAG 的弱标注）",
-    )
     relevant_chunk_ids: list[str] = Field(
         default_factory=list,
         description="Agent 完整链路应召回的 Milvus chunk 主键，用于与直接 RAG 对比",

@@ -63,7 +63,6 @@ category = "cross_fund_strategy"
   "should_refuse": false,
   "intent": "cross_fund_query",
   "category": "cross_fund_strategy",
-  "relevant_keywords": ["..."],
   "relevant_chunk_ids": ["真实 Milvus id"],
   "expected_tool_calls": [],
   "note": "159101: chunk=... id=...；159125: chunk=... id=..."
@@ -74,8 +73,7 @@ category = "cross_fund_strategy"
 2. `expected_fund_codes` 必须列出 query 范围内、且由答案逐一说明的基金。
 3. 每个 `expected_fund_codes` 都必须至少对应一个直接支持答案的 chunk。
 4. `key_facts` 应覆盖各基金之间实际需要比较的事实、数字、指数、策略或风险。
-5. `relevant_keywords` 必须是对应 chunk 正文中的原始短语，并覆盖答案所需的关键证据。
-6. `note` 必须按基金代码记录依据，例如：`159213: chunk=... id=...；159526: chunk=... id=...`。
+5. `note` 必须按基金代码记录依据，例如：`159213: chunk=... id=...；159526: chunk=... id=...`。
 
 ## Milvus Ground Truth
 
@@ -85,8 +83,7 @@ Milvus：`http://localhost:19595`；collection：`fund_reports_mineru`。
 2. 对 query 范围内的每一只基金逐个查询 Milvus，并核对每个相关 chunk 的 `fund_code`、`file_path`、`chunk_index` 和 `content`。
 3. `file_path` 必须对应正确的 `markdown_mineru` 下的 `_analyzed.md` 文件。
 4. 仅选择能够直接支持答案的最少 chunk；不要使用只共享关键词但不能证明结论的 chunk。
-5. `relevant_keywords` 必须来自对应 chunk 正文的原始短语。
-6. `note` 可以使用 `chunk_index` 和章节信息辅助审阅，但不能用它们代替真实 Milvus ID。
+5. `note` 可以使用 `chunk_index` 和章节信息辅助审阅，但不能用它们代替真实 Milvus ID。
 
 ## 工具调用和服务评测
 
@@ -122,9 +119,8 @@ Milvus：`http://localhost:19595`；collection：`fund_reports_mineru`。
 1. JSONL 合法，ID 不重复，query 不重复。
 2. 所有 `relevant_chunk_ids` 都能在 Milvus 查询到，且基金归属正确。
 3. 每个 `expected_fund_codes` 都有直接支持答案的 chunk。
-4. 所有 `relevant_keywords` 都存在于对应 chunk 正文中。
-5. `reference_answer` 和 `key_facts` 都能由已标注 chunk 支持，不得引入报告之外的事实。
-6. 构建脚本通过语法检查且可重复运行，不会重复追加或改变样本数量。
+4. `reference_answer` 和 `key_facts` 都能由已标注 chunk 支持，不得引入报告之外的事实。
+5. 构建脚本通过语法检查且可重复运行，不会重复追加或改变样本数量。
 7. 不得出现 local-agent target；服务评测应能使用 SSE 收集的检索上下文计算 Agentic RAG 的 hit rate、MRR 和 NDCG。
 8. 如果 Milvus、Docker、依赖或权限阻塞验证，记录实际失败步骤和原因，同时完成可执行的本地检查。
 

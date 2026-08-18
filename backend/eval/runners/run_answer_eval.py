@@ -161,7 +161,6 @@ async def _evaluate_jsonl_example(
         "should_refuse": example.should_refuse,
         "intent": example.intent,
         "relevant_chunk_ids": example.relevant_chunk_ids,
-        "relevant_keywords": example.relevant_keywords,
         "expected_tool_calls": example.expected_tool_calls,
     }
 

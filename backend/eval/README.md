@@ -97,7 +97,6 @@
   "should_refuse": false,
   "intent": "cross_fund_query",
   "category": "cross_fund_strategy",
-  "relevant_keywords": ["腾讯控股", "15.32", "15.31", "15.40", "15.38"],
   "relevant_chunk_ids": ["28e8098a682ed795ba94cec05956e0c4", "eb38ef52f4555edb5f5dfea90f85355e", "0fee37803dd46eef7a9263b0bec6dba8", "9daeaa5e91cfec3312c27ddd5dabc147", "7eebd2c5ef04fe52cd57d795209d03aa"],
   "expected_tool_calls": [],
   "note": "159101: chunk=... id=...；159125: chunk=... id=..."
