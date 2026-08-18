@@ -23,7 +23,11 @@ class RagClient:
             base_url = f"http://{gpu_host}:{gpu_port}"
         
         self._base_url = base_url
-        self._client = httpx.AsyncClient(base_url=base_url, timeout=30.0)
+        timeout_seconds = float(os.getenv("RAG_REQUEST_TIMEOUT_SECONDS", "90"))
+        self._client = httpx.AsyncClient(
+            base_url=base_url,
+            timeout=httpx.Timeout(timeout_seconds),
+        )
 
     async def health(self) -> dict[str, Any]:
         """检查服务健康状态"""

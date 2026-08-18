@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     # GPU
     GPU_HOST: str = os.getenv("GPU_HOST", "localhost")
     GPU_PORT: int = 8001
+    RAG_REQUEST_TIMEOUT_SECONDS: float = float(
+        os.getenv("RAG_REQUEST_TIMEOUT_SECONDS", "90")
+    )
 
     # Agent
     AGENT_TIMEOUT: int = 300
@@ -180,7 +183,10 @@ class Settings(BaseSettings):
                 "cwd": os.path.join(project_root, "mcp", "rag-mcp"),
                 "env": {
                     "GPU_HOST": self.GPU_HOST,  # 动态使用当前配置
-                    "GPU_PORT": str(self.GPU_PORT)
+                    "GPU_PORT": str(self.GPU_PORT),
+                    "RAG_REQUEST_TIMEOUT_SECONDS": str(
+                        self.RAG_REQUEST_TIMEOUT_SECONDS
+                    ),
                 }
             }
         ]

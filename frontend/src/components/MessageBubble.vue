@@ -167,7 +167,11 @@ const executionGroups = computed<ExecutionGroup[]>(() => {
 })
 
 const executionToolCount = computed(() =>
-  executionGroups.value.reduce((total, group) => total + group.tools.length, 0),
+  executionGroups.value.reduce(
+    (total, group) =>
+      total + group.events.filter((event) => event.type === 'tool_call').length,
+    0,
+  ),
 )
 const executionThoughtCount = computed(() =>
   executionGroups.value.reduce(
@@ -290,7 +294,9 @@ const copyContent = async () => {
                 </div>
                 <div class="task-description">{{ group.description }}</div>
               </div>
-              <span class="task-count">{{ group.tools.length }} 个工具</span>
+              <span class="task-count">
+                {{ group.events.filter((event) => event.type === 'tool_call').length }} 个工具
+              </span>
               <el-icon class="task-arrow" :class="{ open: isTaskOpen(group.task_id) }">
                 <ArrowRight />
               </el-icon>
@@ -329,7 +335,7 @@ const copyContent = async () => {
                         >
                           <ArrowRight />
                         </el-icon>
-                        <span class="thought-label">分析说明</span>
+                        <span class="thought-label">思考过程</span>
                       </div>
                       <el-collapse-transition>
                         <div v-if="openThoughts.has(event.event_id)" class="thought-content">
