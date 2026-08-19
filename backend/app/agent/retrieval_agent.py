@@ -21,7 +21,7 @@ from app.agent.state_reducers import TaskPatch
 from app.agent.task_context import format_dependency_results
 from app.tools.conversation_utils import get_recent_messages_for_agent
 from app.tools.token_usage import record_usage
-from app.agent.reflection_agent import agent_self_check, _improve_query
+from app.agent.reflection_agent import agent_self_check, _build_retry_context
 from app.services.rag_result_parser import (
     parse_rag_search_result,
 )
@@ -354,6 +354,7 @@ def make_retrieval_node(agent_config: AgentConfig):
         retry_count = 0
         self_check_retry_count = 0
         seen_recheck_queries: set[str] = set()
+        retry_context: str | None = None
         final_rag_context_callback = (
             (config.get("configurable", {}) if config else {}).get(
                 "_sse_final_rag_context_callback"
@@ -375,6 +376,16 @@ def make_retrieval_node(agent_config: AgentConfig):
                 messages.append(HumanMessage(
                     content=task_message + format_dependency_results(current_task)
                 ))
+                if retry_context:
+                    messages.append(HumanMessage(
+                        content=(
+                            "这是同一任务的续跑。原始任务和查询保持不变；"
+                            "请依据以下上一轮执行摘要继续，复用已有事实，"
+                            "不要重复成功调用。只有在修改参数或检索策略后，"
+                            "才可重试失败调用。\n\n"
+                            f"{retry_context}"
+                        )
+                    ))
 
                 iteration = 0
                 while iteration < agent_config.max_iterations:
@@ -483,7 +494,8 @@ def make_retrieval_node(agent_config: AgentConfig):
                     )
                     messages.extend(tool_messages)
 
-                # 超出最大迭代：重试预算未用完时，改写 query 原地重跑一轮；用完预算才真正判定为 failed。
+                # 超出最大迭代：重试预算未用完时，压缩本轮轨迹并原地续跑；
+                # 用完预算才真正判定为 failed。
                 # 同一分支内部完成，不涉及跨节点/跨并行分支的状态传递，避免 Send fan-out 场景下 reflection 类下游节点无法可靠定位"这次是哪个 task_id"的问题。
                 logger.warning(f"[{label}] Max iterations reached (retry {retry_count}/{max_query_retries})")
                 if retry_count >= max_query_retries:
@@ -500,12 +512,20 @@ def make_retrieval_node(agent_config: AgentConfig):
                     except Exception:
                         logger.exception(f"[{label}] retry callback failed (non-fatal)")
 
-                task_query, improve_usage = await _improve_query(current_task, "达到最大迭代次数，未能获取充分信息")
-                for k, v in improve_usage.items():
+                retry_context, retry_context_usage = await _build_retry_context(
+                    current_task,
+                    messages,
+                    "达到最大迭代次数，未能获取充分信息",
+                )
+                for k, v in retry_context_usage.items():
                     existing = token_usage.setdefault(k, {})
                     for field, val in v.items():
                         existing[field] = existing.get(field, 0) + val
-                logger.info(f"[{label}] Retrying task {current_task_id} with improved query: {task_query}")
+                logger.info(
+                    "[%s] Retrying task %s with compressed prior execution context",
+                    label,
+                    current_task_id,
+                )
 
             last_ai_message = next(
                 (

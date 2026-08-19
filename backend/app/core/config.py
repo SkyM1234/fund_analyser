@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     AGENT_TIMEOUT: int = 300
     MAX_QUERY_RETRIES: int = int(os.getenv("MAX_QUERY_RETRIES", "1"))
     AGENT_SELF_CHECK_ENABLED: bool = os.getenv(
-        "AGENT_SELF_CHECK_ENABLED", "true"
+        "AGENT_SELF_CHECK_ENABLED", "false"
     ).lower() in {"1", "true", "yes", "on"}
     MAX_SELF_CHECK_RETRIES: int = int(os.getenv("MAX_SELF_CHECK_RETRIES", "2"))
 

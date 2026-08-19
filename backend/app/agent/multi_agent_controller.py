@@ -564,7 +564,7 @@ def build_multi_agent_graph(checkpointer: BaseCheckpointSaver):
     )
 
     # 各专家 Agent 完成后汇入 batch_reflection。rag_agent/market_agent 内部已在
-    # ReAct 循环耗尽轮次时原地重试（改写 query 后重跑，不跨节点/跨并行分支传状态），
+    # ReAct 循环耗尽轮次时原地重试（压缩执行轨迹后续跑，不跨节点/跨并行分支传状态），
     # 到这里的 failed 任务都是重试预算已用完的最终结果。
     graph.add_edge("rag_agent", "batch_reflection")
     graph.add_edge("market_agent", "batch_reflection")
