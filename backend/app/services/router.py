@@ -24,13 +24,11 @@ class RouteResult(BaseModel):
         "chitchat",          # 闲聊/问候
         "out_of_scope",      # 不在能力范围
         "sensitive",         # 敏感问题（投资建议）
-        "single_fund_query",        # 特定基金查询
+        "single_fund_query", # 特定基金查询
         "cross_fund_query",  # 多基金/板块基金查询
         "fund_screening",    # 基金筛选（查找符合条件的基金）
         "general_finance",   # 通用金融知识
     ]
-
-
 # ===== 第1层：快速规则过滤 =====
 CHITCHAT_PATTERNS = [
     r'^(你好|hi|hello|嗨|哈喽|早上好|晚上好|下午好)',

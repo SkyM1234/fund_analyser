@@ -20,9 +20,11 @@ from app.agent.multi_agent_state import (
 )
 from app.agent.state_reducers import PlanPatches, TaskPatch
 from app.agent.supervisor import supervisor_node
+from app.agent.fund_scope_agent import fund_scope_node
 from app.agent.rag_agent import rag_agent_node
 from app.agent.market_agent import market_agent_node
 from app.agent.arbiter_agent import arbiter_agent_node
+from app.agent.analysis_agent import analysis_agent_node
 from app.agent.compliance_agent import compliance_agent_node
 from app.agent.synthesizer import synthesizer_node
 from app.agent.reflection_agent import global_reflection_node
@@ -63,19 +65,20 @@ async def route_node(state: MultiAgentState):
     # 传入完整历史，让路由器在追问场景下能结合上下文识别基金和意图
     route_result = await route_query(user_msg, history_messages=messages)
     logger.info(f"[Route] intent={route_result.intent}")
-
     return {"route_result": route_result}
 
 
 # ===== 路由后置分支：敏感问题硬拦截 =====
 def route_after_intent(
     state: MultiAgentState,
-) -> Literal["supervisor", "direct_answer", "out_of_scope_refusal", "sensitive_refusal"]:
-    """route 节点之后的硬性分支：intent == sensitive 时直接拒绝，不进入 supervisor 规划。
-
-    route_result.intent 此前只是写入 state 供 supervisor 的 prompt 参考（软约束），
-    LLM 存在概率不遵循该提示继续规划任务；敏感问题（投资建议/收益预测）属于安全
-    边界，需要用图结构保证确定性拒绝，因此在此处直接短路。
+) -> Literal[
+    "fund_scope",
+    "supervisor",
+    "direct_answer",
+    "out_of_scope_refusal",
+    "sensitive_refusal",
+]:
+    """route 节点之后的硬性分支：intent == sensitive or out_of_scope 时直接拒绝，不进入 supervisor 规划。
     """
     route_result = state.get("route_result")
     intent = route_result.intent if route_result is not None else None
@@ -86,12 +89,35 @@ def route_after_intent(
     if intent == "out_of_scope":
         logger.info("[Router] intent=out_of_scope, short-circuit to out_of_scope_refusal")
         return "out_of_scope_refusal"
+    if intent == "fund_screening":
+        logger.info("[Router] intent=fund_screening, using complete fresh retrieval")
+        return "supervisor"
     if intent in ("chitchat", "general_finance"):
         logger.info("[Router] intent=%s, short-circuit to direct_answer", intent)
         return "direct_answer"
-
     logger.info("[Router] intent=%s, entering fund workflow", intent or "unknown")
-    return "supervisor"
+    return "fund_scope"
+
+
+def after_fund_scope(
+    state: MultiAgentState,
+) -> Literal["supervisor", "planning_failure"]:
+    """只让已确认范围的具体基金问题进入任务规划。"""
+    route_result = state.get("route_result")
+    intent = route_result.intent if route_result is not None else None
+    scope = state.get("fund_scope")
+
+    # 条件筛选允许没有预先枚举出的固定基金集合，由后续全局检索处理。
+    if intent == "fund_screening":
+        return "supervisor"
+    if scope and scope.get("funds"):
+        return "supervisor"
+    logger.warning(
+        "[FundScope] No usable fund scope for intent=%s: %s",
+        intent,
+        state.get("fund_scope_error"),
+    )
+    return "planning_failure"
 
 
 # ===== 敏感问题拒绝处理 =====
@@ -114,11 +140,6 @@ def handle_sensitive_refusal(state: MultiAgentState):
         "messages": [AIMessage(content=refusal_message)],
     }
 
-
-# ===== 任务调度路由函数 =====
-# 注意：Send 只能从 add_conditional_edges 的路由函数返回，不能从普通 node 返回
-# （普通 node 的返回值会被当作状态更新字典处理，返回 list[Send] 会触发 InvalidUpdateError: Expected dict, got [Send(...), ...]）。
-# 因此 dispatch_tasks 不注册为节点，而是直接作为 supervisor / batch_reflection 之后的条件边使用。
 async def direct_answer_node(state: MultiAgentState):
     """回答通用金融知识或闲聊问题，不创建任务计划。"""
     from langchain_core.messages import HumanMessage
@@ -161,7 +182,7 @@ async def direct_answer_node(state: MultiAgentState):
                 "不要提供具体投资建议、基金推荐、收益预测或买卖指令。"
             ),
         },
-        {"role": "user", "content": user_query},
+        {"role": "user", "content": _direct_answer_prompt(user_query, state)},
     ])
     return {
         "draft_answer": response.content,
@@ -171,6 +192,26 @@ async def direct_answer_node(state: MultiAgentState):
         "compliance_retry_count": 0,
         "token_usage": record_usage("direct_answer", response),
     }
+
+
+def _direct_answer_prompt(user_query: str, state: MultiAgentState) -> str:
+    """为通用金融追问补充最近几轮对话上下文。"""
+    from app.tools.conversation_utils import format_history_for_prompt
+
+    history_text = format_history_for_prompt(
+        state.get("messages", []),
+        rounds=3,
+        max_response_length=500,
+        exclude_last=True,
+    )
+    if not history_text:
+        return user_query
+    return (
+        f"{user_query}\n\n"
+        "以下是最近几轮对话历史，仅用于理解当前问题中的省略和指代。"
+        "请以当前问题为准，不要将历史回答中未明确支持的内容当作事实：\n"
+        f"{history_text}"
+    )
 
 
 def handle_out_of_scope_refusal(state: MultiAgentState):
@@ -211,7 +252,10 @@ def prepare_task_dispatch_node(state: MultiAgentState):
         "dispatch_task_ids": ready_ids,
     }
 
-
+# ===== 任务调度路由函数 =====
+# 注意：Send 只能从 add_conditional_edges 的路由函数返回，不能从普通 node 返回
+# （普通 node 的返回值会被当作状态更新字典处理，返回 list[Send] 会触发 InvalidUpdateError: Expected dict, got [Send(...), ...]）。
+# 因此 dispatch_tasks 不注册为节点，而是直接作为 supervisor / batch_reflection 之后的条件边使用。
 def dispatch_tasks(state: MultiAgentState) -> list[Send] | Literal["synthesizer"]:
     """将已持久化为 running 的任务作为独立不可变输入并发分发。"""
     ready_ids = state.get("dispatch_task_ids", [])
@@ -245,6 +289,7 @@ def dispatch_tasks(state: MultiAgentState) -> list[Send] | Literal["synthesizer"
         task_state = {
             "messages": state.get("messages", []),
             "route_result": state.get("route_result"),
+            "fund_scope": state.get("fund_scope"),
             "task_input": task_input,
             "current_task_id": task_id,
             "current_agent": agent_name,
@@ -255,6 +300,8 @@ def dispatch_tasks(state: MultiAgentState) -> list[Send] | Literal["synthesizer"
             sends.append(Send("market_agent", task_state))
         elif agent_name == "arbiter_agent":
             sends.append(Send("arbiter_agent", task_state))
+        elif agent_name == "analysis_agent":
+            sends.append(Send("analysis_agent", task_state))
         else:
             sends.append(Send("agent_error_handler", task_state))
 
@@ -333,7 +380,10 @@ def should_continue_planning(state: MultiAgentState):
 
 def handle_planning_failure(state: MultiAgentState):
     """计划未通过硬校验时直接结束，不让非法 DAG 进入执行或汇总。"""
-    error = state.get("planning_error", "任务规划校验失败")
+    error = state.get("planning_error") or state.get(
+        "fund_scope_error",
+        "任务规划校验失败",
+    )
     message = f"抱歉，系统未能生成可安全执行的任务计划：{error}"
 
     from langchain_core.messages import AIMessage
@@ -497,12 +547,14 @@ def build_multi_agent_graph(checkpointer: BaseCheckpointSaver):
 
     # 添加节点
     graph.add_node("route", route_node)
+    graph.add_node("fund_scope", fund_scope_node)
     graph.add_node("supervisor", supervisor_node)
     graph.add_node("task_dispatcher", prepare_task_dispatch_node)
     graph.add_node("dependency_blocker", block_dependent_tasks_node)
     graph.add_node("rag_agent", rag_agent_node)
     graph.add_node("market_agent", market_agent_node)
     graph.add_node("arbiter_agent", arbiter_agent_node)
+    graph.add_node("analysis_agent", analysis_agent_node)
     graph.add_node("batch_reflection", global_reflection_node)
     graph.add_node("synthesizer", synthesizer_node)
     graph.add_node("compliance", compliance_agent_node)
@@ -520,11 +572,20 @@ def build_multi_agent_graph(checkpointer: BaseCheckpointSaver):
         "route",
         route_after_intent,
         {
+            "fund_scope": "fund_scope",
             "supervisor": "supervisor",
             "direct_answer": "direct_answer",
             "out_of_scope_refusal": "out_of_scope_refusal",
             "sensitive_refusal": "sensitive_refusal",
         }
+    )
+    graph.add_conditional_edges(
+        "fund_scope",
+        after_fund_scope,
+        {
+            "supervisor": "supervisor",
+            "planning_failure": "planning_failure_handler",
+        },
     )
 
     # Supervisor → 各专家 Agent（Send 并发 fan-out）或直接汇总
@@ -535,6 +596,7 @@ def build_multi_agent_graph(checkpointer: BaseCheckpointSaver):
             "rag_agent": "rag_agent",
             "market_agent": "market_agent",
             "arbiter_agent": "arbiter_agent",
+            "analysis_agent": "analysis_agent",
             "agent_error_handler": "agent_error_handler",
             "task_dispatcher": "task_dispatcher",
             "dependency_blocker": "dependency_blocker",
@@ -549,6 +611,7 @@ def build_multi_agent_graph(checkpointer: BaseCheckpointSaver):
             "rag_agent": "rag_agent",
             "market_agent": "market_agent",
             "arbiter_agent": "arbiter_agent",
+            "analysis_agent": "analysis_agent",
             "agent_error_handler": "agent_error_handler",
             "synthesizer": "synthesizer",
         },
@@ -569,6 +632,7 @@ def build_multi_agent_graph(checkpointer: BaseCheckpointSaver):
     graph.add_edge("rag_agent", "batch_reflection")
     graph.add_edge("market_agent", "batch_reflection")
     graph.add_edge("arbiter_agent", "batch_reflection")
+    graph.add_edge("analysis_agent", "batch_reflection")
     graph.add_edge("agent_error_handler", "batch_reflection")
 
     # batch_reflection 完成后：继续调度下一批（Send 并发 fan-out）or 汇总
@@ -579,6 +643,7 @@ def build_multi_agent_graph(checkpointer: BaseCheckpointSaver):
             "rag_agent": "rag_agent",
             "market_agent": "market_agent",
             "arbiter_agent": "arbiter_agent",
+            "analysis_agent": "analysis_agent",
             "agent_error_handler": "agent_error_handler",
             "task_dispatcher": "task_dispatcher",
             "dependency_blocker": "dependency_blocker",

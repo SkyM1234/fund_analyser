@@ -46,7 +46,7 @@ class SubTask(TypedDict, total=False):
     task_type: TaskType             # 任务类型
     description: str                # 任务描述
     assigned_agent: str             # 分配的Agent名称
-    fund_codes: list[str]           # 涉及的基金代码
+    fund_codes: list[str]           # 涉及的基金代码，可为批量目标
     query: str                      # 查询文本
     depends_on: list[str]           # 依赖的任务ID
     status: Literal["pending", "running", "completed", "failed", "blocked"]
@@ -80,6 +80,8 @@ class MultiAgentState(TypedDict):
     
     # 路由结果
     route_result: RouteResult | None
+    fund_scope: dict | None
+    fund_scope_error: str | None
     
     # ===== 多Agent扩展字段 =====
 
@@ -142,6 +144,8 @@ def create_initial_state(
     return MultiAgentState(
         messages=messages,
         route_result=route_result,
+        fund_scope=None,
+        fund_scope_error=None,
         plan=[],
         plan_history=[],  # 初始化历史记录
         current_task_id=None,

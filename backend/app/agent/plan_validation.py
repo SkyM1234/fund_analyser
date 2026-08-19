@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 TASK_AGENT_MAPPING: dict[str, set[str]] = {
     "rag_search": {"rag_agent"},
     "market_data": {"market_agent"},
-    "general_qa": {"rag_agent"},
+    "general_qa": {"rag_agent", "analysis_agent"},
 }
 
 
@@ -28,8 +28,8 @@ class PlannedTask(BaseModel):
     )
     task_type: Literal["rag_search", "market_data", "general_qa"]
     description: str = Field(min_length=1, max_length=1000)
-    assigned_agent: Literal["rag_agent", "market_agent"]
-    fund_codes: list[str] = Field(max_length=1)
+    assigned_agent: Literal["rag_agent", "market_agent", "analysis_agent"]
+    fund_codes: list[str] = Field(max_length=50)
     query: str = Field(min_length=1, max_length=2000)
     depends_on: list[str]
     status: Literal["pending"]
@@ -56,6 +56,10 @@ class PlannedTask(BaseModel):
             raise ValueError(
                 f"task_type={self.task_type} 只能分配给 {sorted(allowed_agents)}"
             )
+        if self.assigned_agent == "analysis_agent" and not self.depends_on:
+            raise ValueError(
+                "analysis_agent must depend on at least one upstream task"
+            )
         return self
 
 
@@ -72,10 +76,20 @@ def validate_supervisor_plan(
     raw_plan: object,
     *,
     explicit_fund_codes: set[str],
+    fund_scope: dict | None = None,
+    require_non_empty_plan: bool = False,
 ) -> list[dict]:
     """解析并验证 Supervisor 的计划，返回可写入状态的规范化任务字典。"""
     parsed_plan = SupervisorPlan.model_validate(raw_plan)
     tasks = parsed_plan.plan
+    if require_non_empty_plan and not tasks:
+        raise PlanValidationError("当前基金数据查询必须生成至少一个检索任务")
+    scoped_fund_codes = {
+        fund.get("fund_code")
+        for fund in (fund_scope or {}).get("funds", [])
+        if isinstance(fund, dict) and fund.get("fund_code")
+    }
+    allowed_fund_codes = explicit_fund_codes | scoped_fund_codes
     task_ids = [task.task_id for task in tasks]
 
     if len(task_ids) != len(set(task_ids)):
@@ -92,7 +106,7 @@ def validate_supervisor_plan(
                 f"任务 {task.task_id} 依赖不存在的任务: {sorted(unknown_dependencies)}"
             )
 
-        unknown_fund_codes = set(task.fund_codes) - explicit_fund_codes
+        unknown_fund_codes = set(task.fund_codes) - allowed_fund_codes
         if unknown_fund_codes:
             raise PlanValidationError(
                 f"任务 {task.task_id} 使用了用户未明确提供的基金代码: "

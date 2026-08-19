@@ -123,7 +123,13 @@ async def _run_chat_turn(run_id: str, req: ChatRequest, user_id: int) -> None:
         logger.info("[chat_task] 使用多Agent架构")
         app = build_multi_agent_graph(checkpointer)
         agent_node_names = ["synthesizer", "direct_answer"]
-        worker_agent_names = {"rag_agent", "market_agent", "arbiter_agent"}
+        worker_agent_names = {
+            "rag_agent",
+            "market_agent",
+            "arbiter_agent",
+            "analysis_agent",
+        }
+        scope_node_name = "fund_scope"
 
         config = {"configurable": {"thread_id": req.session_id, "user_id": str(user_id)}}
 
@@ -224,6 +230,19 @@ async def _run_chat_turn(run_id: str, req: ChatRequest, user_id: int) -> None:
                             "agent_name": name,
                             "task_id": task_id,
                             "description": description,
+                            "sequence": event_count,
+                        })
+                    elif name == scope_node_name and name == meta_node:
+                        task_context_by_run_id[str(event.get("run_id", ""))] = {
+                            "task_id": "fund_scope",
+                            "agent_name": "fund_scope_agent",
+                        }
+                        logger.info("[chat_task] event: agent_start -> fund_scope")
+                        publish_event(run_id, "agent_start", {
+                            "agent_name": "fund_scope_agent",
+                            "task_id": "fund_scope",
+                            "description": "确认当前问题涉及的基金范围",
+                            "sequence": event_count,
                         })
 
                 elif kind == "on_chat_model_stream":
@@ -243,13 +262,18 @@ async def _run_chat_turn(run_id: str, req: ChatRequest, user_id: int) -> None:
                 elif kind == "on_chat_model_end":
                     metadata = event.get("metadata", {})
                     node_name = metadata.get("langgraph_node")
-                    if node_name in worker_agent_names:
+                    if node_name in worker_agent_names or node_name == scope_node_name:
                         output = event.get("data", {}).get("output")
                         reasoning = _extract_reasoning_text(output)
                         task_context = _resolve_task_context(
                             event,
                             task_context_by_run_id,
                         )
+                        if node_name == scope_node_name and not task_context:
+                            task_context = {
+                                "task_id": "fund_scope",
+                                "agent_name": "fund_scope_agent",
+                            }
                         if reasoning and task_context.get("task_id"):
                             task_id = task_context["task_id"]
                             decision_id = f"{run_id}:decision:{trace_sequence + 1}"
@@ -328,6 +352,20 @@ async def _run_chat_turn(run_id: str, req: ChatRequest, user_id: int) -> None:
                         publish_event(run_id, "agent_end", {
                             "agent_name": node_name,
                             "task_id": task_id,
+                            "status": status,
+                        })
+
+                    if node_name == scope_node_name and is_node_level_event:
+                        output = event.get("data", {}).get("output")
+                        status = (
+                            "completed"
+                            if isinstance(output, dict) and output.get("fund_scope")
+                            else "failed"
+                        )
+                        logger.info("[chat_task] event: agent_end -> fund_scope status=%s", status)
+                        publish_event(run_id, "agent_end", {
+                            "agent_name": "fund_scope_agent",
+                            "task_id": "fund_scope",
                             "status": status,
                         })
 

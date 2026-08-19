@@ -117,6 +117,20 @@ def _tool_output_text(output: Any) -> str:
     return output if isinstance(output, str) else str(output)
 
 
+def _missing_batch_rag_coverage(task: dict, tool_call_log: list[dict]) -> list[str]:
+    """Return target codes without an actual filtered rag_search call."""
+    fund_codes = task.get("fund_codes", [])
+    if len(fund_codes) < 2:
+        return []
+    searched_codes = {
+        str(item.get("args", {}).get("filter_fund_code"))
+        for item in tool_call_log
+        if item.get("name") == "rag_search"
+        and item.get("args", {}).get("filter_fund_code")
+    }
+    return [code for code in fund_codes if code not in searched_codes]
+
+
 async def _execute_tool_calls(
     *,
     response,
@@ -270,6 +284,16 @@ def _build_task_message(
         else ""
     )
     if fund_codes:
+        fund_code_list = ", ".join(fund_codes)
+        if len(fund_codes) > 1:
+            return (
+                f"任务：{task_query}\n"
+                f"这是批量基金任务。仅检索以下基金：{fund_code_list}，不要扩展到其他基金。\n"
+                "必须对每只基金分别调用 rag_search（filter_fund_code 使用该基金代码），"
+                "并按基金代码逐只输出结果。某只基金无结果、未披露或检索失败时，必须单独说明；"
+                "不能因部分基金完成而省略其余基金。\n"
+                f"{identify_top_k_hint}"
+            )
         fund_code = fund_codes[0]
         return (
             f"任务：{task_query}\n"
@@ -345,6 +369,12 @@ def make_retrieval_node(agent_config: AgentConfig):
         rag_tool_contexts: list[_RagToolContext] = []
         task_query = current_task.get("query", "")
         allowed_fund_codes = _latest_user_fund_codes(state.get("messages", []))
+        allowed_fund_codes.update(current_task.get("fund_codes", []))
+        allowed_fund_codes.update(
+            fund.get("fund_code")
+            for fund in (state.get("fund_scope") or {}).get("funds", [])
+            if isinstance(fund, dict) and fund.get("fund_code")
+        )
         route_result = state.get("route_result")
         cross_fund_query = (
             getattr(route_result, "intent", None) == "cross_fund_query"
@@ -464,6 +494,35 @@ def make_retrieval_node(agent_config: AgentConfig):
                             continue  # 回到 while 循环，LLM 可调用工具查证
 
                         logger.info(f"[{label}] Task completed: {result_text[:100]}...")
+
+                        missing_coverage = (
+                            _missing_batch_rag_coverage(current_task, tool_call_log)
+                            if label == "rag_agent"
+                            else []
+                        )
+                        if missing_coverage:
+                            coverage_error = (
+                                "批量任务未覆盖基金代码: "
+                                + ", ".join(missing_coverage)
+                            )
+                            result_text += f"\n\n{coverage_error}"
+                            logger.warning("[%s] %s", label, coverage_error)
+                            return {
+                                "plan": TaskPatch(
+                                    current_task_id,
+                                    {
+                                        "status": "failed",
+                                        "result": result_text,
+                                        "error": coverage_error,
+                                        "retry_count": retry_count,
+                                        **_finish_changes(current_task),
+                                    },
+                                ),
+                                "sub_results": {current_task_id: result_text},
+                                "failed_tasks": [current_task_id],
+                                "token_usage": token_usage,
+                                "tool_call_log": tool_call_log,
+                            }
 
                         return {
                             "plan": TaskPatch(
