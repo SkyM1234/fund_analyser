@@ -60,7 +60,7 @@ GLOBAL_REFLECTION_SYSTEM_PROMPT = """你是基金分析系统的全局质量裁�
       "task_ids": ["t1", "t2"],
       "field": "净值",
       "description": "t1 报告净值 1.23，t2 报告净值 1.45，相差 18%",
-      "clarification_query": "请重新确认基金 159103 截至最新日期的准确净值，来源须标注数据日期"
+      "clarification_query": "请重新确认t1 和 t2 截至最新日期的准确净值，来源须标注数据日期"
     }
   ],
   "summary": "发现 N 个冲突，其中 M 个高风险"
