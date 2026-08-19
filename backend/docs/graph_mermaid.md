@@ -6,12 +6,14 @@ config:
 graph TD;
 	__start__([<p>__start__</p>]):::first
 	route(route)
+	fund_scope(fund_scope)
 	supervisor(supervisor)
 	task_dispatcher(task_dispatcher)
 	dependency_blocker(dependency_blocker)
 	rag_agent(rag_agent)
 	market_agent(market_agent)
 	arbiter_agent(arbiter_agent)
+	analysis_agent(analysis_agent)
 	batch_reflection(batch_reflection)
 	synthesizer(synthesizer)
 	compliance(compliance)
@@ -25,8 +27,10 @@ graph TD;
 	__end__([<p>__end__</p>]):::last
 	__start__ --> route;
 	agent_error_handler --> batch_reflection;
+	analysis_agent --> batch_reflection;
 	arbiter_agent --> batch_reflection;
 	batch_reflection -.-> agent_error_handler;
+	batch_reflection -.-> analysis_agent;
 	batch_reflection -.-> arbiter_agent;
 	batch_reflection -.-> dependency_blocker;
 	batch_reflection -.-> market_agent;
@@ -39,13 +43,17 @@ graph TD;
 	dependency_blocker -.-> synthesizer;
 	dependency_blocker -.-> task_dispatcher;
 	direct_answer --> compliance;
+	fund_scope -. &nbsp;planning_failure&nbsp; .-> planning_failure_handler;
+	fund_scope -.-> supervisor;
 	market_agent --> batch_reflection;
 	rag_agent --> batch_reflection;
 	route -.-> direct_answer;
+	route -.-> fund_scope;
 	route -.-> out_of_scope_refusal;
 	route -.-> sensitive_refusal;
 	route -.-> supervisor;
 	supervisor -.-> agent_error_handler;
+	supervisor -.-> analysis_agent;
 	supervisor -.-> arbiter_agent;
 	supervisor -.-> dependency_blocker;
 	supervisor -.-> market_agent;
@@ -55,6 +63,7 @@ graph TD;
 	supervisor -.-> task_dispatcher;
 	synthesizer --> compliance;
 	task_dispatcher -.-> agent_error_handler;
+	task_dispatcher -.-> analysis_agent;
 	task_dispatcher -.-> arbiter_agent;
 	task_dispatcher -.-> market_agent;
 	task_dispatcher -.-> rag_agent;

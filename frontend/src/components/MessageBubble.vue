@@ -37,6 +37,7 @@ interface ExecutionGroup {
   agent_name: string
   description: string
   status?: 'running' | 'completed' | 'failed'
+  first_sequence?: number
   tools: Message['tools']
   thoughts: Message['thoughts']
   events: TraceEvent[]
@@ -51,12 +52,19 @@ const executionGroups = computed<ExecutionGroup[]>(() => {
     agentName: string,
     description: string,
     status?: 'running' | 'completed' | 'failed',
+    firstSequence?: number,
   ) => {
     const existing = byTaskId.get(taskId)
     if (existing) {
       existing.agent_name = agentName || existing.agent_name
       existing.description = description || existing.description
       existing.status = status || existing.status
+      if (
+        firstSequence !== undefined &&
+        (existing.first_sequence === undefined || firstSequence < existing.first_sequence)
+      ) {
+        existing.first_sequence = firstSequence
+      }
       return existing
     }
 
@@ -65,6 +73,7 @@ const executionGroups = computed<ExecutionGroup[]>(() => {
       agent_name: agentName,
       description,
       status,
+      first_sequence: firstSequence,
       tools: [],
       thoughts: [],
       events: [],
@@ -78,7 +87,13 @@ const executionGroups = computed<ExecutionGroup[]>(() => {
     addGroup(task.task_id, task.assigned_agent, task.description)
   }
   for (const agent of props.msg.agents) {
-    addGroup(agent.task_id, agent.agent_name, agent.description, agent.status)
+    addGroup(
+      agent.task_id,
+      agent.agent_name,
+      agent.description,
+      agent.status,
+      agent.sequence,
+    )
   }
 
   for (const tool of props.msg.tools) {
@@ -117,11 +132,22 @@ const executionGroups = computed<ExecutionGroup[]>(() => {
 
     const toolEvents = new Map<string, TraceEvent>()
     for (const event of [...props.msg.trace_events].sort((a, b) => a.sequence - b.sequence)) {
-      const taskId = event.task_id || `trace-${groups.length + 1}`
+      const taskId = event.task_id || `trace-${event.agent_name || 'system'}`
       let group = eventGroups.get(taskId)
       if (!group) {
-        group = addGroup(taskId, event.agent_name || 'unknown_agent', '执行任务')
+        group = addGroup(
+          taskId,
+          event.agent_name || 'unknown_agent',
+          '执行任务',
+          undefined,
+          event.sequence,
+        )
         eventGroups.set(taskId, group)
+      } else if (
+        group.first_sequence === undefined ||
+        event.sequence < group.first_sequence
+      ) {
+        group.first_sequence = event.sequence
       }
 
       if (event.type === 'tool_result' && event.tool_call_id) {
@@ -163,7 +189,11 @@ const executionGroups = computed<ExecutionGroup[]>(() => {
     }
   }
 
-  return groups
+  return groups.sort(
+    (left, right) =>
+      (left.first_sequence ?? Number.POSITIVE_INFINITY) -
+      (right.first_sequence ?? Number.POSITIVE_INFINITY),
+  )
 })
 
 const executionToolCount = computed(() =>

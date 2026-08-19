@@ -27,7 +27,12 @@ export interface StreamHandlers {
     task_id?: string,
     tool_call_id?: string,
   ) => void
-  onAgentStart?: (agent_name: string, task_id: string, description: string) => void
+  onAgentStart?: (
+    agent_name: string,
+    task_id: string,
+    description: string,
+    sequence?: number,
+  ) => void
   onAgentEnd?: (agent_name: string, task_id: string, status: string) => void
   onPlanCreated?: (plan: Array<{ task_id: string; task_type: string; description: string; assigned_agent: string; fund_codes: string[] }>, reasoning: string) => void
   onToolRetry?: (agent_name: string, task_id: string, attempt: number, reason: string) => void
@@ -119,7 +124,12 @@ export async function sendChatStream(opts: SendOptions, handlers: StreamHandlers
         )
         break
       case 'agent_start':
-        handlers.onAgentStart?.(payload.agent_name ?? '', payload.task_id ?? '', payload.description ?? '')
+        handlers.onAgentStart?.(
+          payload.agent_name ?? '',
+          payload.task_id ?? '',
+          payload.description ?? '',
+          payload.sequence,
+        )
         break
       case 'agent_end':
         handlers.onAgentEnd?.(payload.agent_name ?? '', payload.task_id ?? '', payload.status ?? 'completed')

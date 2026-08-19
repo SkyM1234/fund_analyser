@@ -26,7 +26,7 @@ class TaskDependencyContextTests(unittest.TestCase):
                     "status": "running",
                     "description": "use t1",
                     "query": "summarize",
-                    "assigned_agent": "rag_agent",
+                    "assigned_agent": "analysis_agent",
                     "fund_codes": [],
                     "depends_on": ["t1"],
                 },
@@ -42,6 +42,7 @@ class TaskDependencyContextTests(unittest.TestCase):
         sends = dispatch_tasks(state)
 
         self.assertEqual(len(sends), 1)
+        self.assertEqual(sends[0].node, "analysis_agent")
         task_input = sends[0].arg["task_input"]
         self.assertEqual(task_input["dependency_results"], {"t1": "first result"})
         self.assertNotIn("t2", task_input["dependency_results"])

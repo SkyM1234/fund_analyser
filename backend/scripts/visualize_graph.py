@@ -4,14 +4,14 @@ Graph可视化工具测试脚本
 运行方式：
     # Docker 内运行
     docker exec fund-backend python -m scripts.visualize_graph
-    # 裸机运行（在项目根目录下）
-    python backend/scripts/visualize_graph.py
+    # 裸机运行
+    python /scripts/visualize_graph.py
 """
 import sys
 import logging
 from pathlib import Path
 
-# 添加项目路径（scripts/ 的父目录即 backend 根目录）
+# 添加项目路径
 backend_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(backend_root))
 

@@ -9,18 +9,22 @@ const props = defineProps<{
 
 const agentLabel = computed(() => {
   const map: Record<string, string> = {
+    analysis_agent: '结果分析',
     rag_agent: '年报检索',
     market_agent: '实时数据',
     arbiter_agent: '数据仲裁',
+    fund_scope_agent: '范围确认',
   }
   return map[props.agent_name] || props.agent_name
 })
 
 const agentIcon = computed(() => {
   const map: Record<string, typeof Document> = {
+    analysis_agent: DataLine,
     rag_agent: Document,
     market_agent: DataLine,
     arbiter_agent: Connection,
+    fund_scope_agent: Operation,
   }
   return map[props.agent_name] || Operation
 })

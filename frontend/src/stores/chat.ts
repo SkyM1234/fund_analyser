@@ -48,6 +48,7 @@ export interface AgentStep {
   task_id: string
   description: string
   status: 'running' | 'completed' | 'failed'
+  sequence?: number
 }
 
 export interface PlanTask {
@@ -233,12 +234,13 @@ export const useChatStore = defineStore('chat', () => {
               })
             }
           },
-          onAgentStart: (agent_name, task_id, description) => {
+          onAgentStart: (agent_name, task_id, description, sequence) => {
             assistant.agents.push({
               agent_name,
               task_id,
               description,
               status: 'running',
+              sequence: Number.isFinite(Number(sequence)) ? Number(sequence) : undefined,
             })
           },
           onAgentEnd: (agent_name, task_id, status) => {

@@ -86,6 +86,45 @@ class SupervisorPlanValidationTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             validate_supervisor_plan(plan, explicit_fund_codes={"159103"})
 
+    def test_accepts_dependency_analysis_task(self) -> None:
+        plan = {
+            "plan": [
+                _task("t1"),
+                _task(
+                    "t2",
+                    task_type="general_qa",
+                    assigned_agent="analysis_agent",
+                    fund_codes=[],
+                    query="Sort the results from t1 and identify the latest fund.",
+                    depends_on=["t1"],
+                ),
+            ],
+            "reasoning": "Retrieve data first, then analyze the retrieved results.",
+        }
+
+        validated = validate_supervisor_plan(
+            plan,
+            explicit_fund_codes={"159103"},
+        )
+
+        self.assertEqual(validated[1]["assigned_agent"], "analysis_agent")
+
+    def test_rejects_general_qa_without_dependency(self) -> None:
+        plan = {
+            "plan": [
+                _task(
+                    "t1",
+                    task_type="general_qa",
+                    assigned_agent="analysis_agent",
+                    fund_codes=[],
+                )
+            ],
+            "reasoning": "Invalid analysis task without upstream data.",
+        }
+
+        with self.assertRaises(ValidationError):
+            validate_supervisor_plan(plan, explicit_fund_codes={"159103"})
+
     def test_rejects_invalid_or_unprovided_fund_code(self) -> None:
         invalid_format = {
             "plan": [_task("t1", fund_codes=["15910A"])],
@@ -101,6 +140,26 @@ class SupervisorPlanValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(PlanValidationError, "未明确提供"):
             validate_supervisor_plan(unprovided, explicit_fund_codes={"159103"})
 
+    def test_accepts_batch_task_for_confirmed_scope(self) -> None:
+        plan = {
+            "plan": [_task("t1", fund_codes=["159103", "159299"])],
+            "reasoning": "Batch query for the same metric and data source.",
+        }
+        scope = {
+            "funds": [
+                {"fund_code": "159103", "fund_name": "fund one"},
+                {"fund_code": "159299", "fund_name": "fund two"},
+            ],
+        }
+
+        validated = validate_supervisor_plan(
+            plan,
+            explicit_fund_codes=set(),
+            fund_scope=scope,
+        )
+
+        self.assertEqual(validated[0]["fund_codes"], ["159103", "159299"])
+
     def test_planning_error_routes_to_failure_handler(self) -> None:
         self.assertEqual(
             should_continue_planning(
@@ -112,6 +171,13 @@ class SupervisorPlanValidationTests(unittest.TestCase):
             "planning_failure",
         )
 
+    def test_rejects_empty_plan_when_retrieval_is_required(self) -> None:
+        with self.assertRaisesRegex(PlanValidationError, "至少一个检索任务"):
+            validate_supervisor_plan(
+                {"plan": [], "reasoning": "没有任务。"},
+                explicit_fund_codes={"159103"},
+                require_non_empty_plan=True,
+            )
 
 if __name__ == "__main__":
     unittest.main()
