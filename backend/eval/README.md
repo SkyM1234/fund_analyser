@@ -40,9 +40,9 @@
 
 | Key | 类型 | 含义 |
 |---|---|---|
-| `hit_rate` | 规则 | top-K 是否包含至少 1 个相关 chunk |
-| `session_mrr` | 规则 | 会话内合并检索结果中首个相关 chunk 排名的倒数 |
-| `session_ndcg` | 规则 | 会话内合并检索结果的折损累计增益 |
+| `hit_rate` | 规则 | 回答评测中为 `relevant_chunk_ids` 的召回覆盖率；直接 RAG 评测仍为至少命中一个相关 chunk |
+| `session_mrr` | 规则 | 对每个标注相关 chunk 计算倒数排名并取平均；未命中 chunk 记为 0 |
+| `session_ndcg` | 规则 | 基于扁平 `relevant_chunk_ids` 计算 NDCG；理想 DCG 使用全部标注 chunk，因此漏召回会扣分 |
 | `fund_code_recall` | 规则 | 期望基金代码被召回的比例 |
 | `context_relevance` | LLM-judge | 整体片段对问题的语义相关性 |
 

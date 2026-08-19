@@ -69,13 +69,26 @@ def _missing_chunk_truth(truth: dict) -> bool:
     return not truth.get("relevant_chunk_ids")
 
 
+def _unique_chunks(chunks: list[dict]) -> list[dict]:
+    """Preserve ranking while preventing duplicate chunk IDs from inflating metrics."""
+    seen_ids: set[str] = set()
+    unique = []
+    for chunk in chunks:
+        chunk_id = chunk.get("id")
+        if not chunk_id or chunk_id in seen_ids:
+            continue
+        seen_ids.add(chunk_id)
+        unique.append(chunk)
+    return unique
+
+
 def hit_rate(run: Any, example: Any) -> dict:
     """top-K 命中率：至少一个相关 chunk 进入结果集。"""
     skip, reason = _should_skip_retrieval(run)
     if skip:
         return {"key": "hit_rate", "score": None, "comment": f"跳过检索评测({reason})"}
 
-    results = _get_results(run)
+    results = _unique_chunks(_get_results(run))
     truth = _get_truth(example)
     if _missing_chunk_truth(truth):
         return {
@@ -93,7 +106,7 @@ def mrr(run: Any, example: Any) -> dict:
     if skip:
         return {"key": "mrr", "score": None, "comment": f"skip({reason})"}
 
-    results = _get_results(run)
+    results = _unique_chunks(_get_results(run))
     truth = _get_truth(example)
     if _missing_chunk_truth(truth):
         return {
@@ -113,7 +126,7 @@ def ndcg(run: Any, example: Any) -> dict:
     if skip:
         return {"key": "ndcg", "score": None, "comment": f"skip({reason})"}
 
-    results = _get_results(run)
+    results = _unique_chunks(_get_results(run))
     truth = _get_truth(example)
     if _missing_chunk_truth(truth):
         return {
@@ -127,25 +140,99 @@ def ndcg(run: Any, example: Any) -> dict:
     rels = [1.0 if _chunk_relevance(c, truth) else 0.0 for c in results]
     dcg = sum(rel / math.log2(i + 2) for i, rel in enumerate(rels))
 
-    ideal_count = int(sum(rels))
+    ideal_count = len(set(truth.get("relevant_chunk_ids") or []))
     if ideal_count == 0:
         return {"key": "ndcg", "score": 0.0}
     idcg = sum(1.0 / math.log2(i + 2) for i in range(ideal_count))
     return {"key": "ndcg", "score": dcg / idcg if idcg > 0 else 0.0}
 
 
+def session_hit_rate(run: Any, example: Any) -> dict:
+    """Relevant chunk coverage among all ground-truth chunk IDs."""
+    skip, reason = _should_skip_retrieval(run)
+    if skip:
+        return {"key": "hit_rate", "score": None, "comment": f"skip({reason})"}
+
+    truth = _get_truth(example)
+    if _missing_chunk_truth(truth):
+        return {
+            "key": "hit_rate",
+            "score": None,
+            "comment": "no relevant_chunk_ids ground truth",
+        }
+
+    relevant_ids = set(truth["relevant_chunk_ids"])
+    returned_ids = {
+        chunk.get("id") for chunk in _unique_chunks(_get_results(run))
+    }
+    hit_count = len(relevant_ids & returned_ids)
+    total = len(relevant_ids)
+    return {
+        "key": "hit_rate",
+        "score": hit_count / total if total else 0.0,
+        "comment": f"relevant_chunk_coverage={hit_count}/{total}",
+    }
+
+
 def session_mrr(run: Any, example: Any) -> dict:
-    """端到端对话级 MRR：对该会话合并后的检索结果计算首个相关 chunk 的倒数排名。"""
-    result = mrr(run, example)
-    result["key"] = "session_mrr"
-    return result
+    """Average reciprocal rank for every ground-truth chunk; misses score zero."""
+    skip, reason = _should_skip_retrieval(run)
+    if skip:
+        return {"key": "session_mrr", "score": None, "comment": f"skip({reason})"}
+
+    truth = _get_truth(example)
+    if _missing_chunk_truth(truth):
+        return {
+            "key": "session_mrr",
+            "score": None,
+            "comment": "no relevant_chunk_ids ground truth",
+        }
+
+    relevant_ids = set(truth["relevant_chunk_ids"])
+    ranks = {
+        chunk.get("id"): index
+        for index, chunk in enumerate(_unique_chunks(_get_results(run)), start=1)
+        if chunk.get("id") in relevant_ids
+    }
+    scores = [1.0 / ranks[chunk_id] if chunk_id in ranks else 0.0
+              for chunk_id in relevant_ids]
+    return {
+        "key": "session_mrr",
+        "score": sum(scores) / len(scores) if scores else 0.0,
+        "comment": f"per_chunk_rank={ranks}",
+    }
 
 
 def session_ndcg(run: Any, example: Any) -> dict:
-    """端到端对话级 NDCG：对该会话合并后的检索结果计算排序质量。"""
-    result = ndcg(run, example)
-    result["key"] = "session_ndcg"
-    return result
+    """NDCG using every ground-truth chunk in IDCG, so misses reduce the score."""
+    skip, reason = _should_skip_retrieval(run)
+    if skip:
+        return {"key": "session_ndcg", "score": None, "comment": f"skip({reason})"}
+
+    truth = _get_truth(example)
+    if _missing_chunk_truth(truth):
+        return {
+            "key": "session_ndcg",
+            "score": None,
+            "comment": "no relevant_chunk_ids ground truth",
+        }
+
+    relevant_ids = set(truth["relevant_chunk_ids"])
+    results = _unique_chunks(_get_results(run))
+    dcg = sum(
+        1.0 / math.log2(index + 1)
+        for index, chunk in enumerate(results, start=1)
+        if chunk.get("id") in relevant_ids
+    )
+    idcg = sum(
+        1.0 / math.log2(index + 1)
+        for index in range(1, len(relevant_ids) + 1)
+    )
+    return {
+        "key": "session_ndcg",
+        "score": dcg / idcg if idcg else 0.0,
+        "comment": f"relevant_chunk_count={len(relevant_ids)}",
+    }
 
 
 def fund_code_recall(run: Any, example: Any) -> dict:

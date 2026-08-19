@@ -47,7 +47,7 @@ def _get_evaluators(use_judge: bool) -> list:
         am.key_fact_coverage,
         am.intent_accuracy,
         am.tool_call_accuracy,
-        rm.hit_rate,
+        rm.session_hit_rate,
         rm.session_mrr,
         rm.session_ndcg,
     ]
@@ -70,10 +70,10 @@ async def _run_langsmith(
     client = Client()
     evaluators = _get_evaluators(use_judge)
 
-    logger.info(f"开始单基金回答评测：dataset={s.DATASET_SINGLE_FUND_ANSWER_NAME} concurrency={concurrency}")
+    logger.info(f"开始跨基金回答评测：dataset={s.DATASET_CROSS_FUND_ANSWER_NAME} concurrency={concurrency}")
     results = await aevaluate(
         target,
-        data=s.DATASET_SINGLE_FUND_ANSWER_NAME,
+        data=s.DATASET_CROSS_FUND_ANSWER_NAME,
         evaluators=evaluators,
         experiment_prefix=experiment_prefix,
         max_concurrency=concurrency,

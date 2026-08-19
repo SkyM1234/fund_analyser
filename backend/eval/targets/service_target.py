@@ -219,6 +219,13 @@ class AnswerServiceTarget:
             for task_id in retrieval_context_task_order
             for chunk in retrieval_contexts_by_task[task_id]
         ]
+        retrieved_contexts = [
+            {
+                "task_id": task_id,
+                "chunks": retrieval_contexts_by_task[task_id],
+            }
+            for task_id in retrieval_context_task_order
+        ]
         answer = "".join(answer_parts)
         return {
             "answer": answer,
@@ -226,6 +233,7 @@ class AnswerServiceTarget:
             "intent": intent,
             "tool_calls": tool_calls,
             "retrieved_chunks": retrieved_chunks,
+            "retrieved_contexts": retrieved_contexts,
             "retrieved_chunk_ids": [chunk["id"] for chunk in retrieved_chunks],
             "retrieved_chunk_scores": [
                 {

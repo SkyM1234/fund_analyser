@@ -46,10 +46,9 @@ FUND_SCOPE_SYSTEM_PROMPT = """你是基金范围确认 Agent。你的唯一职�
 1. 明确点名的基金必须逐只确认；用户给出 6 位代码时可直接使用，但不得修改代码。
 2. 板块、主题或“所有基金”问题，必须调用 rag_identify_funds 查询候选基金；必要时提高 top_k，
    去重并返回实际确认的基金数量。不要只返回默认 top_k 的前几只。
-3. 可用 rag_list_funds 核对名称，但不能凭名称猜测代码。
-4. 只能把工具返回或用户明确给出的基金写入 funds。无法确认的名称写入 missing_or_uncertain。
-5. 最终只输出 JSON，不要 Markdown。原始问题由系统节点自动写入状态。
-6. funds 输出 requested_name、fund_name、fund_code 和 confidence。
+3. 只能把工具返回或用户明确给出的基金写入 funds。无法确认的名称写入 missing_or_uncertain。
+4. 最终只输出 JSON，不要 Markdown。原始问题由系统节点自动写入状态。
+5. funds 输出 requested_name、fund_name、fund_code 和 confidence。
 
 JSON 输出示例：
 {
@@ -69,7 +68,7 @@ def _get_scope_tools() -> list:
     return [
         tool
         for tool in _get_tools_for_agent("rag_agent")
-        if tool.name in {"rag_identify_funds", "rag_list_funds", "rag_match_fund_codes"}
+        if tool.name in {"rag_identify_funds", "rag_match_fund_codes"}
     ]
 
 
