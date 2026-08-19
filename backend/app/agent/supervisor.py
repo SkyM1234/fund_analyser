@@ -121,7 +121,7 @@ async def supervisor_node(state: MultiAgentState) -> dict[str, Any]:
 
     if (
         route_result
-        and route_result.intent in ("single_fund_query", "cross_fund_query")
+        and route_result.intent == "fund_query"
         and (not fund_scope or not fund_scope.get("funds"))
     ):
         error = fund_scope_error or "未确认到可用于检索的基金范围"
@@ -319,11 +319,7 @@ async def _generate_new_plan(
                 fund_scope=fund_scope,
                 require_non_empty_plan=bool(
                     route_result
-                    and route_result.intent in (
-                        "single_fund_query",
-                        "cross_fund_query",
-                        "fund_screening",
-                    )
+                    and route_result.intent in ("fund_query", "fund_screening")
                 ),
             )
             logger.info(

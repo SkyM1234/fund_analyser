@@ -17,7 +17,7 @@ class SupervisorScopeContextTests(unittest.TestCase):
 
     def test_confirmed_scope_uses_authoritative_scope_context(self) -> None:
         context = _scope_planning_context(
-            RouteResult(intent="single_fund_query"),
+            RouteResult(intent="fund_query"),
             {"funds": [{"fund_code": "159103"}]},
         )
 

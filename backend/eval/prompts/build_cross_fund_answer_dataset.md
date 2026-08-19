@@ -11,7 +11,7 @@
 当前主线为：
 
 ```text
-intent = "cross_fund_query"
+intent = "fund_query"
 category = "cross_fund_strategy"
 ```
 
@@ -37,7 +37,7 @@ category = "cross_fund_strategy"
 
 ### 分类规则
 
-1. 所有样本的 `intent` 必须是 `cross_fund_query`。
+1. 所有样本的 `intent` 必须是 `fund_query`。
 2. 所有样本的 `category` 必须是 `cross_fund_strategy`。
 
 ### 候选与 query 构建
@@ -61,7 +61,7 @@ category = "cross_fund_strategy"
   "expected_fund_codes": ["159101", "159125"],
   "key_facts": ["..."],
   "should_refuse": false,
-  "intent": "cross_fund_query",
+  "intent": "fund_query",
   "category": "cross_fund_strategy",
   "relevant_chunk_ids": ["真实 Milvus id"],
   "expected_tool_calls": [],

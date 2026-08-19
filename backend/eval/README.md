@@ -79,7 +79,7 @@
   "key_facts": ["金融科技", "被动", "指数"],
   "relevant_chunk_ids": ["778279457f99a750795ed1dec5d4c072"],
   "should_refuse": false,
-  "intent": "single_fund_query",
+  "intent": "fund_query",
   "expected_tool_calls": [],
   "note": "159103: chunk=... id=..."
 }
@@ -95,7 +95,7 @@
   "expected_fund_codes": ["159101", "159125", "159128", "159251", "159636"],
   "key_facts": ["腾讯控股", "15.32%", "15.31%", "15.40%", "15.38%"],
   "should_refuse": false,
-  "intent": "cross_fund_query",
+  "intent": "fund_query",
   "category": "cross_fund_strategy",
   "relevant_chunk_ids": ["28e8098a682ed795ba94cec05956e0c4", "eb38ef52f4555edb5f5dfea90f85355e", "0fee37803dd46eef7a9263b0bec6dba8", "9daeaa5e91cfec3312c27ddd5dabc147", "7eebd2c5ef04fe52cd57d795209d03aa"],
   "expected_tool_calls": [],

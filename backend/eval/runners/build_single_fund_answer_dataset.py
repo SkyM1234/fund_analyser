@@ -268,7 +268,7 @@ def fetch_chunks(client: MilvusClient, collection: str, ids: list[str]) -> dict[
     return {row["id"]: row for row in rows}
 
 
-def validate_single_fund_query(source: dict) -> None:
+def validate_fund_query(source: dict) -> None:
     fund_code = source["filter_fund_code"]
     query = source["query"]
     markers = [fund_code, *FUND_QUERY_MARKERS.get(fund_code, [])]
@@ -309,7 +309,7 @@ def build_strategy_examples(
             raise ValueError(f"Missing retrieval sample: {retrieval_id}")
         spec = ANSWER_SPECS[retrieval_id]
         fund_code = source["filter_fund_code"]
-        validate_single_fund_query(source)
+        validate_fund_query(source)
 
         selected_chunks = []
         for chunk_id in source["relevant_chunk_ids"]:
@@ -343,7 +343,7 @@ def build_strategy_examples(
                 "expected_fund_codes": source["expected_fund_codes"],
                 "key_facts": source["relevant_keywords"],
                 "should_refuse": False,
-                "intent": "single_fund_query",
+                "intent": "fund_query",
                 "category": "single_fund_strategy",
                 "relevant_chunk_ids": source["relevant_chunk_ids"],
                 "expected_tool_calls": build_expected_tool_calls(source["query"], fund_code),

@@ -273,16 +273,9 @@ def _build_task_message(
     current_task: dict,
     agent_name: str,
     query: str | None = None,
-    cross_fund_query: bool = False,
 ) -> str:
     task_query = query if query is not None else current_task.get("query", "")
     fund_codes = current_task.get("fund_codes", [])
-    identify_top_k_hint = (
-        "\n本轮是跨基金/板块查询：调用 rag_identify_funds 时应将 top_k "
-        "从默认 5 提高到通常 10；候选基金范围明显更广时可继续提高。"
-        if agent_name == "rag_agent" and cross_fund_query
-        else ""
-    )
     if fund_codes:
         fund_code_list = ", ".join(fund_codes)
         if len(fund_codes) > 1:
@@ -292,14 +285,12 @@ def _build_task_message(
                 "必须对每只基金分别调用 rag_search（filter_fund_code 使用该基金代码），"
                 "并按基金代码逐只输出结果。某只基金无结果、未披露或检索失败时，必须单独说明；"
                 "不能因部分基金完成而省略其余基金。\n"
-                f"{identify_top_k_hint}"
             )
         fund_code = fund_codes[0]
         return (
             f"任务：{task_query}\n"
             f"只检索/查询基金 {fund_code}，不要查询其他基金。\n"
             f"返回检索到的原始数据，不要与其他基金对比。"
-            f"{identify_top_k_hint}"
         )
     # fund_codes 为空时，注入强制识别提醒（与各 agent 的 system prompt 呼应）
     # description 通常比 query 更完整（如"查询万家科创债ETF的当前净值"），直接带给 Agent 作为基金线索
@@ -316,9 +307,8 @@ def _build_task_message(
             f"⚠️ 此任务未提供基金代码。若任务涉及特定基金（非全局检索），"
             f"你必须先调用 {_identify_tool} 查询基金代码，确认后再调用 {_search_hint}。\n"
             f"返回查询到的原始数据即可。"
-            f"{identify_top_k_hint}"
         )
-    return f"任务：{task_hint}\n返回查询到的原始数据即可。{identify_top_k_hint}"
+    return f"任务：{task_hint}\n返回查询到的原始数据即可。"
 
 
 def make_retrieval_node(agent_config: AgentConfig):
@@ -375,10 +365,6 @@ def make_retrieval_node(agent_config: AgentConfig):
             for fund in (state.get("fund_scope") or {}).get("funds", [])
             if isinstance(fund, dict) and fund.get("fund_code")
         )
-        route_result = state.get("route_result")
-        cross_fund_query = (
-            getattr(route_result, "intent", None) == "cross_fund_query"
-        )
         max_query_retries = settings.MAX_QUERY_RETRIES
         max_self_check_retries = max(0, settings.MAX_SELF_CHECK_RETRIES)
         retry_count = 0
@@ -401,7 +387,6 @@ def make_retrieval_node(agent_config: AgentConfig):
                     current_task,
                     agent_config.agent_name,
                     task_query,
-                    cross_fund_query=cross_fund_query,
                 )
                 messages.append(HumanMessage(
                     content=task_message + format_dependency_results(current_task)

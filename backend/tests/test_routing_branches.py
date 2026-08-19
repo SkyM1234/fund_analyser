@@ -23,13 +23,11 @@ class RoutingBranchTests(unittest.TestCase):
             "sensitive_refusal",
         )
 
-    def test_specific_fund_intents_enter_scope_confirmation(self) -> None:
-        for intent in ("single_fund_query", "cross_fund_query"):
-            with self.subTest(intent=intent):
-                self.assertEqual(
-                    route_after_intent(self._state(intent)),
-                    "fund_scope",
-                )
+    def test_fund_query_enters_scope_confirmation(self) -> None:
+        self.assertEqual(
+            route_after_intent(self._state("fund_query")),
+            "fund_scope",
+        )
 
     def test_fund_screening_bypasses_scope_confirmation(self) -> None:
         self.assertEqual(

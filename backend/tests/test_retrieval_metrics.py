@@ -12,7 +12,7 @@ def _example(outputs: dict) -> SimpleNamespace:
 def _run(contexts: list[dict]) -> SimpleNamespace:
     return SimpleNamespace(
         outputs={
-            "intent": "cross_fund_query",
+            "intent": "fund_query",
             "retrieved_contexts": contexts,
             "retrieved_chunks": [
                 chunk for context in contexts for chunk in context["chunks"]
