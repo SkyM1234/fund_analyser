@@ -14,6 +14,10 @@ from typing import Any
 
 # 中国基金代码：6 位数字
 FUND_CODE_RE = re.compile(r"(?<!\d)\d{6}(?!\d)")
+DATE_RE = re.compile(
+    r"(?<!\d)(\d{4})\s*(?:年|[-/.])\s*(\d{1,2})\s*(?:月|[-/.])\s*(\d{1,2})\s*日?(?!\d)"
+)
+NUMBER_RE = re.compile(r"\d{1,3}(?:[,，]\d{3})+|\d+")
 
 # 触发"拒绝"语义的关键词（需与 multi_agent_controller.handle_compliance_failure 的拒答文案保持兼容）
 REFUSAL_MARKERS = (
@@ -114,6 +118,57 @@ def refusal_correctness(run: Any, example: Any) -> dict:
     }
 
 
+def _number_pattern(number: str) -> str:
+    """构造同时接受有无千分位分隔符的数字匹配模式。"""
+    digits = number.replace(",", "").replace("，", "")
+    if len(digits) <= 3:
+        return re.escape(digits)
+
+    first_group_size = len(digits) % 3 or 3
+    groups = [digits[:first_group_size]]
+    groups.extend(
+        digits[index:index + 3]
+        for index in range(first_group_size, len(digits), 3)
+    )
+    return r"[,，]?".join(map(re.escape, groups))
+
+
+def _key_fact_pattern(fact: str) -> str:
+    """构造兼容关键事实常见格式变体的正则表达式。"""
+    parts: list[str] = []
+    position = 0
+
+    for date_match in DATE_RE.finditer(fact):
+        parts.append(_text_pattern(fact[position:date_match.start()]))
+        year, month, day = date_match.groups()
+        parts.append(
+            rf"{year}\s*(?:年|[-/.])\s*0?{int(month)}\s*"
+            rf"(?:月|[-/.])\s*0?{int(day)}\s*日?"
+        )
+        position = date_match.end()
+
+    parts.append(_text_pattern(fact[position:]))
+    return "".join(parts)
+
+
+def _text_pattern(text: str) -> str:
+    """转义普通文本，并使数字和百分号兼容不同格式。"""
+    parts: list[str] = []
+    position = 0
+    for number_match in NUMBER_RE.finditer(text):
+        parts.append(_escape_text(text[position:number_match.start()]))
+        parts.append(_number_pattern(number_match.group()))
+        position = number_match.end()
+
+    parts.append(_escape_text(text[position:]))
+    return "".join(parts)
+
+
+def _escape_text(text: str) -> str:
+    """转义文本中的字面量，并允许省略百分号。"""
+    return "".join(r"[%％]?" if char in {"%", "％"} else re.escape(char) for char in text)
+
+
 def key_fact_coverage(run: Any, example: Any) -> dict:
     """关键事实覆盖率：key_facts 中有多少作为子串出现在回答里。
 
@@ -126,7 +181,11 @@ def key_fact_coverage(run: Any, example: Any) -> dict:
         return {"key": "key_fact_coverage", "score": 1.0, "comment": "no key_facts"}
 
     answer = outputs.get("answer") or ""
-    hit = sum(1 for f in facts if f in answer)
+    hit = sum(
+        1
+        for fact in facts
+        if re.search(_key_fact_pattern(str(fact)), answer)
+    )
     return {
         "key": "key_fact_coverage",
         "score": hit / len(facts),
