@@ -1,19 +1,32 @@
 # Python
 __pycache__/
+.pycache/
 *.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.venv/
+venv/
+env/
 
 # Node.js and frontend builds
 node_modules/
 frontend/dist/
 
 # Local environment and secrets
-.env
+.env*
+!.env.example
 /mineru-docker/mineru.json
 /.claude/settings.local.json
 
 # Generated outputs and runtime data
 *.log
 /backend/eval/reports/
+/backend/logs/
 /milvus-docker/volumes/
 /backend/scripts/chunk.txt
 /vectorize/table.html
