@@ -3,7 +3,7 @@
 从裸机 `python embedding_service.py` 到 `docker compose up -d` 一键启动，整个过程踩过的坑。
 
 
-## 设计要点（面试可讲的点）
+## 设计要点
 
 
 ### 1. Milvus `load_collection` 是异步的——"连上了"≠"能查了"

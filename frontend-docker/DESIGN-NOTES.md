@@ -3,7 +3,7 @@
 从裸机 `npm run dev` 到 `docker compose up -d` 一键启动，整个过程踩过的坑。
 
 
-## 设计要点（面试可讲的点）
+## 设计要点
 
 
 ### 1. `crypto.randomUUID()` 只在安全上下文可用
