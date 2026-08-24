@@ -19,7 +19,7 @@ docker exec fund-backend alembic -c /app/alembic.ini downgrade -1
 
 ```bash
 cd backend
-export MYSQL_PASSWORD=your_password
+export MYSQL_PASSWORD=your_password #  $env:MYSQL_PASSWORD=your_password
 alembic upgrade head
 ```
 
@@ -29,6 +29,10 @@ alembic upgrade head
 |------|------|
 | `88116c7fba19` | 创建 users、refresh_tokens、sessions 表 |
 | `a1b2c3d4e5f6` | 添加 user role 字段 |
+| `c3d4e5f6a7b8` | 创建 task_runs 表 |
+| `d4e5f6a7b8c9` | 允许删除 session，保留 task_runs|
+| `e5f6a7b8c9d0` | 增加任务运行租约|
+| `f6a7b8c9d0e1` | 增加任务请求 payload|
 
 ## 注意事项
 

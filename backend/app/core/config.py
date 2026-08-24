@@ -90,6 +90,23 @@ class Settings(BaseSettings):
     CELERY_TASK_SOFT_TIME_LIMIT: int = int(os.getenv("CELERY_TASK_SOFT_TIME_LIMIT", "330"))
     CELERY_TASK_TIME_LIMIT: int = int(os.getenv("CELERY_TASK_TIME_LIMIT", "360"))
     CELERY_RESULT_EXPIRES: int = int(os.getenv("CELERY_RESULT_EXPIRES", "3600"))
+    CELERY_TASK_MAX_ATTEMPTS: int = int(os.getenv("CELERY_TASK_MAX_ATTEMPTS", "3"))
+    CELERY_RETRY_BACKOFF_SECONDS: int = int(
+        os.getenv("CELERY_RETRY_BACKOFF_SECONDS", "5")
+    )
+    CELERY_RETRY_BACKOFF_MAX_SECONDS: int = int(
+        os.getenv("CELERY_RETRY_BACKOFF_MAX_SECONDS", "60")
+    )
+    TASK_LEASE_SECONDS: int = int(os.getenv("TASK_LEASE_SECONDS", "30"))
+    TASK_HEARTBEAT_INTERVAL_SECONDS: int = int(
+        os.getenv("TASK_HEARTBEAT_INTERVAL_SECONDS", "10")
+    )
+    TASK_RECOVERY_SCAN_INTERVAL_SECONDS: int = int(
+        os.getenv("TASK_RECOVERY_SCAN_INTERVAL_SECONDS", "15")
+    )
+    TASK_RECOVERY_BATCH_SIZE: int = int(
+        os.getenv("TASK_RECOVERY_BATCH_SIZE", "20")
+    )
 
     # JWT（内部签名密钥，非外部凭证；未设置环境变量时使用开发默认值）
     JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "dev-secret-change-me")

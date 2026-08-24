@@ -69,10 +69,22 @@ JWT_SECRET_KEY=replace-with-a-random-production-secret
 CORS_ORIGINS=http://localhost:5173
 ```
 
-启动 API 和一个 Worker：
+首次部署或包含数据库迁移的更新，先启动 API 并执行迁移：
 
 ```powershell
-docker compose up -d --build
+docker compose up -d --build backend
+docker compose exec backend alembic -c /app/alembic.ini upgrade head
+docker compose up -d --build worker beat
+```
+
+`beat` 是单实例定时调度器：它会按 `TASK_RECOVERY_SCAN_INTERVAL_SECONDS`
+向 `default` 队列投递过期租约扫描任务；Worker 同时消费 `default,agent_queue`。
+不要对 `beat` 使用 `--scale`。
+
+后续无迁移的常规启动可直接执行：
+
+```powershell
+docker compose up -d
 ```
 
 生产环境建议通过增加独立 Worker 实例提升并发，而非增加单个 Worker 的并发度：

@@ -29,17 +29,29 @@ import logging
 import uuid
 from typing import AsyncGenerator
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 
 from app.core.security import get_current_user
+from app.core.config import get_settings
+from app.core.celery_app import celery_app
 from app.db.models import ChatSession, User
 from app.db.mysql import get_db
 from app.models.chat import ChatRequest
-from app.services.task_events import subscribe_events
+from app.services.task_events import (
+    publish_event,
+    signal_task_cancel,
+    subscribe_events,
+)
+from app.services.task_runs import (
+    get_or_create_task_run,
+    mark_submission_failed,
+    request_task_cancel,
+    set_celery_task_id,
+)
 from app.tasks.chat_tasks import run_chat_turn
 
 logger = logging.getLogger(__name__)
@@ -92,21 +104,117 @@ async def chat_stream(
     request: Request,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
     # 归属校验放在建立 SSE 流之前做，这样越权/新建会话失败会是干净的 403 响应，
     # 而不是流已经开始后再中途报错
     await _ensure_session_ownership(db, req.session_id, user.id, req.message)
 
-    run_id = uuid.uuid4().hex
+    # Old clients can still submit work, but only requests with the same header
+    # can be deduplicated across network retries.
+    idempotency_key = idempotency_key or uuid.uuid4().hex
+    if len(idempotency_key) > 128:
+        raise HTTPException(status_code=400, detail="Idempotency-Key too long")
+
     req_payload = {
         "message": req.message,
         "session_id": req.session_id,
         "history": [{"role": h.role, "content": h.content} for h in req.history],
     }
-    async_result = run_chat_turn.delay(run_id, req_payload, user.id)
+    task_run, created = await get_or_create_task_run(
+        db,
+        user_id=user.id,
+        session_id=req.session_id,
+        idempotency_key=idempotency_key,
+        request_payload=req_payload,
+        max_attempts=get_settings().CELERY_TASK_MAX_ATTEMPTS,
+    )
+    if not created:
+        if not task_run.celery_task_id:
+            raise HTTPException(status_code=409, detail="Task is being submitted")
+        return EventSourceResponse(
+            _relay_from_task(task_run.run_id, task_run.celery_task_id, request)
+        )
+
+    run_id = task_run.run_id
+    try:
+        async_result = run_chat_turn.delay(run_id, req_payload, user.id)
+        await set_celery_task_id(db, task_run, async_result.id)
+    except Exception as exc:
+        logger.exception(f"[chat] Failed to submit Celery task: run_id={run_id}")
+        await mark_submission_failed(
+            db,
+            task_run,
+            error_code="BROKER_SUBMIT_FAILED",
+            error_message=str(exc),
+        )
+        raise HTTPException(status_code=503, detail="Task submission failed") from exc
     logger.info(
         f"[chat] 已分派任务: run_id={run_id}, task_id={async_result.id}, "
         f"session_id={req.session_id}, user_id={user.id}"
     )
 
+    # Expose the identifiers needed by the cooperative cancellation API.
+    publish_event(
+        run_id,
+        "started",
+        {"run_id": run_id, "task_id": async_result.id},
+    )
     return EventSourceResponse(_relay_from_task(run_id, async_result.id, request))
+
+
+@router.post("/chat/tasks/{run_id}/cancel")
+async def cancel_chat_task(
+    run_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Request cooperative cancellation for one task run."""
+    task_run = await request_task_cancel(
+        db,
+        run_id=run_id,
+        user_id=user.id,
+    )
+    if task_run is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    if task_run.celery_task_id and task_run.status not in {
+        "SUCCESS",
+        "FAILED",
+        "TIMED_OUT",
+    }:
+        try:
+            await signal_task_cancel(run_id)
+        except Exception:
+            logger.exception(
+                "[chat] failed to signal task cancellation: run_id=%s",
+                run_id,
+            )
+        try:
+            celery_app.control.revoke(
+                task_run.celery_task_id,
+                terminate=False,
+            )
+        except Exception:
+            logger.exception(
+                "[chat] failed to revoke cancelled task: run_id=%s",
+                run_id,
+            )
+
+    if task_run.status == "CANCELLED":
+        publish_event(
+            run_id,
+            "cancelled",
+            {"message": "Task cancelled by user"},
+        )
+    status = task_run.status if task_run.status in {
+        "SUCCESS",
+        "FAILED",
+        "CANCELLED",
+        "TIMED_OUT",
+    } else "CANCEL_REQUESTED"
+    return {
+        "run_id": task_run.run_id,
+        "status": status,
+        "cancel_requested": task_run.cancel_requested,
+    }

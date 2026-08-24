@@ -11,7 +11,7 @@ Docker/Linux 部署后可切换为 prefork 或 gevent 以获得并发（mcp还�
     celery -A app.core.celery_app worker --pool=prefork --concurrency=4 --loglevel=info
 """
 from celery import Celery
-from celery.signals import worker_init, worker_shutdown
+from celery.signals import worker_init, worker_ready, worker_shutdown
 
 from app.core.config import get_settings
 
@@ -21,7 +21,7 @@ celery_app = Celery(
     "fund_analyser",
     broker=settings.CELERY_BROKER_URL,
     backend=settings.CELERY_RESULT_BACKEND,
-    include=["app.tasks.chat_tasks"],
+    include=["app.tasks.chat_tasks", "app.tasks.task_recovery"],
 )
 
 celery_app.conf.update(
@@ -57,6 +57,13 @@ celery_app.conf.update(
         "app.tasks.chat_tasks.*": {"queue": "agent_queue"},
     },
     task_default_queue="default",
+    beat_schedule={
+        "recover-expired-task-runs": {
+            "task": "app.tasks.task_recovery.recover_expired_task_runs",
+            "schedule": settings.TASK_RECOVERY_SCAN_INTERVAL_SECONDS,
+            "options": {"queue": "default"},
+        },
+    },
 )
 
 from app.core import worker_lifecycle  # noqa: E402  (注册 signal handlers)
@@ -70,3 +77,19 @@ from app.core import worker_lifecycle  # noqa: E402  (注册 signal handlers)
 # 以保持“每进程一份 MCP/连接池”的模型简单可靠）。
 worker_init.connect(worker_lifecycle.on_worker_process_init)
 worker_shutdown.connect(worker_lifecycle.on_worker_process_shutdown)
+
+
+@worker_ready.connect
+def enqueue_startup_task_recovery(**kwargs) -> None:
+    """Run a recovery sweep after every worker restart; DB locks make duplicates safe."""
+    try:
+        celery_app.send_task(
+            "app.tasks.task_recovery.recover_expired_task_runs",
+            queue="default",
+        )
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).exception(
+            "[celery] failed to enqueue startup task recovery"
+        )

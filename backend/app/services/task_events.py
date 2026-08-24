@@ -28,7 +28,7 @@ _ALIVE_STATES = {"PENDING", "STARTED", "RETRY"}
 
 _REPLAY_MAX_LEN = 500  # 单次对话正常不会超过几十个事件，留足余量
 _REPLAY_TTL_SECONDS = 600  # 回放缓冲存活时间，覆盖客户端断线重连的合理窗口
-_DONE_EVENTS = {"done", "error"}  # 收到即视为流结束，两端都据此停止
+_DONE_EVENTS = {"done", "error", "cancelled"}  # 收到即视为流结束，两端都据此停止
 
 
 def _channel(run_id: str) -> str:
@@ -37,6 +37,24 @@ def _channel(run_id: str) -> str:
 
 def _replay_key(run_id: str) -> str:
     return f"chat:events:replay:{run_id}"
+
+
+_CANCEL_SIGNAL_TTL_SECONDS = 3600
+
+
+def _cancel_key(run_id: str) -> str:
+    return f"chat:cancel:{run_id}"
+
+
+async def signal_task_cancel(run_id: str) -> None:
+    """Wake the active worker immediately; MySQL remains the source of truth."""
+    client = get_redis_client()
+    await client.set(_cancel_key(run_id), "1", ex=_CANCEL_SIGNAL_TTL_SECONDS)
+
+
+async def is_task_cancel_signalled(run_id: str) -> bool:
+    client = get_redis_client()
+    return bool(await client.exists(_cancel_key(run_id)))
 
 
 def publish_event(run_id: str, event: str, data: dict) -> None:

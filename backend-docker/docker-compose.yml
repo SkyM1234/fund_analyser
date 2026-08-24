@@ -2,8 +2,8 @@
 # Fund Analyser — Backend（FastAPI + Celery Workers）
 # ============================================================================
 # 启动:
-#   docker compose up -d                    # API + 1 worker
-#   docker compose up -d --scale worker=4   # API + 4 workers（多用户并发）
+#   docker compose up -d                    # API + 1 worker + 1 beat
+#   docker compose up -d --scale worker=4   # API + 4 workers + 1 beat（多用户并发）
 # 停止:
 #   docker compose down
 # ============================================================================
@@ -29,6 +29,11 @@ x-backend-env: &backend-env
   # ── 其他 ──
   - LLM_MAX_CONCURRENCY=${LLM_MAX_CONCURRENCY:-10}
   - MCP_ENABLED=${MCP_ENABLED:-true}
+  # ── Task lease / recovery ──
+  - TASK_LEASE_SECONDS=${TASK_LEASE_SECONDS:-45}
+  - TASK_HEARTBEAT_INTERVAL_SECONDS=${TASK_HEARTBEAT_INTERVAL_SECONDS:-10}
+  - TASK_RECOVERY_SCAN_INTERVAL_SECONDS=${TASK_RECOVERY_SCAN_INTERVAL_SECONDS:-15}
+  - TASK_RECOVERY_BATCH_SIZE=${TASK_RECOVERY_BATCH_SIZE:-20}
 
 x-backend-volumes: &backend-volumes
   - ../backend:/app:ro
@@ -66,9 +71,28 @@ services:
     command: >
       celery -A app.core.celery_app worker
       --pool=solo
-      -Q agent_queue
+      -Q default,agent_queue
       --hostname=worker@%h
       --loglevel=info
+    networks:
+      - default
+      - milvus
+
+  # ------------------------------------------------------------------
+  # Celery Beat (single instance only)
+  #   Periodically sends expired-lease recovery scans to the default queue.
+  #   The schedule database is under /tmp because /app is mounted read-only.
+  # ------------------------------------------------------------------
+  beat:
+    build: .
+    restart: unless-stopped
+    volumes: *backend-volumes
+    environment: *backend-env
+    command: >
+      celery -A app.core.celery_app beat
+      --loglevel=info
+      --pidfile=/tmp/celerybeat.pid
+      --schedule=/tmp/celerybeat-schedule
     networks:
       - default
       - milvus

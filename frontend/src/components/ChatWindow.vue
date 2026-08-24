@@ -77,7 +77,13 @@ watch(
         <div class="composer-footer">
           <span class="keyboard-hint">Enter 发送 · Shift + Enter 换行</span>
           <div class="actions">
-            <el-button v-if="store.streaming" :icon="CircleClose" @click="store.abort">
+            <el-button
+              v-if="store.streaming"
+              :icon="CircleClose"
+              :loading="store.cancelling"
+              :disabled="store.cancelling"
+              @click="store.abort"
+            >
               中断
             </el-button>
             <el-button

@@ -11,6 +11,7 @@ export interface ChatHistoryItem {
 import { authFetch } from './http'
 
 export interface StreamHandlers {
+  onStarted?: (runId: string, taskId: string) => void
   onMessageStart?: () => void
   onToken?: (delta: string) => void
   onRetryNotice?: (reason: string) => void
@@ -44,6 +45,7 @@ export interface StreamHandlers {
   ) => void
   onTraceEvent?: (event: any) => void
   onDone?: () => void
+  onCancelled?: (message: string) => void
   onError?: (msg: string) => void
 }
 
@@ -97,6 +99,9 @@ export async function sendChatStream(opts: SendOptions, handlers: StreamHandlers
       payload = raw
     }
     switch (event) {
+      case 'started':
+        handlers.onStarted?.(payload.run_id ?? '', payload.task_id ?? '')
+        break
       case 'message_start':
         handlers.onMessageStart?.()
         break
@@ -151,6 +156,9 @@ export async function sendChatStream(opts: SendOptions, handlers: StreamHandlers
       case 'done':
         handlers.onDone?.()
         break
+      case 'cancelled':
+        handlers.onCancelled?.(payload.message ?? 'Task cancelled by user')
+        break
       case 'error':
         handlers.onError?.(payload.message ?? 'unknown error')
         break
@@ -180,4 +188,28 @@ export async function sendChatStream(opts: SendOptions, handlers: StreamHandlers
   } catch (e: any) {
     if (e?.name !== 'AbortError') handlers.onError?.(String(e?.message ?? e))
   }
+}
+
+export async function cancelChatTask(runId: string) {
+  const resp = await authFetch(`/api/chat/tasks/${encodeURIComponent(runId)}/cancel`, {
+    method: 'POST',
+    headers: { Accept: 'application/json' },
+  })
+
+  if (!resp.ok) {
+    let detail = `HTTP ${resp.status}`
+    try {
+      const payload = await resp.json()
+      detail = payload.detail ?? detail
+    } catch {
+      // Keep the HTTP status when the error response is not JSON.
+    }
+    throw new Error(detail)
+  }
+
+  return resp.json() as Promise<{
+    run_id: string
+    status: string
+    cancel_requested: boolean
+  }>
 }

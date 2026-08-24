@@ -86,10 +86,10 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(name="rag_health", description="检查 RAG 服务健康状态", inputSchema={"type": "object", "properties": {}}),
         Tool(name="rag_stats", description="获取 RAG 服务统计信息", inputSchema={"type": "object", "properties": {}}),
-        Tool(name="rag_list_funds", description="获取基金清单（从年报索引读取，兼容旧接口）", inputSchema={"type": "object", "properties": {}}),
+        Tool(name="rag_list_funds", description="获取基金清单", inputSchema={"type": "object", "properties": {}}),
         Tool(
             name="rag_match_fund_codes",
-            description="从文本中提取基金代码（字符串匹配，已被 rag_identify_funds 语义识别所替代，保留作兜底）",
+            description="基金代码匹配基金名称，返回基金代码 + 基金名称",
             inputSchema={"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]},
         ),
     ]

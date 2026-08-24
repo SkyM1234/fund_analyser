@@ -10,6 +10,7 @@
 """
 import asyncio
 import logging
+import random
 from collections.abc import Iterable
 
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage
@@ -17,15 +18,212 @@ from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage
 from app.core.celery_app import celery_app
 from app.core.config import get_settings
 from app.core.worker_lifecycle import run_coro
+from app.db.mysql import get_session_factory
 from app.models.chat import ChatMessage, ChatRequest
 from app.services.rag_result_parser import tool_output_to_text
-from app.services.task_events import publish_event
+from app.services.task_events import is_task_cancel_signalled, publish_event
+from app.services.task_runs import (
+    claim_task_run,
+    is_task_cancel_requested,
+    mark_task_cancelled,
+    mark_task_finished,
+    mark_task_retrying,
+    renew_task_lease,
+)
 
 # 锁自动过期时间必须大于 AGENT_TIMEOUT，确保即使任务超时，finally 块也有机会
 # 主动释放锁，避免 LockNotOwnedError（锁已被 Redis 自动过期删除）。
-CHAT_LOCK_TIMEOUT_SECONDS = 360  # AGENT_TIMEOUT(300) + 60s 缓冲
 
 logger = logging.getLogger(__name__)
+
+
+class LeaseLostError(RuntimeError):
+    """Raised when this worker no longer owns the task run lease."""
+
+
+class SessionBusyError(RuntimeError):
+    """Raised when another worker is currently processing the session."""
+
+
+class TaskCancelledError(asyncio.CancelledError):
+    """Raised when a task observes a user cancellation request."""
+
+
+async def _session_lock_heartbeat(
+    lock,
+    timeout_seconds: int,
+    stop_event: asyncio.Event,
+    lock_lost_event: asyncio.Event | None = None,
+) -> None:
+    """Keep the session lock alive while the agent is running."""
+    interval = max(1, timeout_seconds // 3)
+    while True:
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=interval)
+            return
+        except asyncio.TimeoutError:
+            pass
+
+        try:
+            await lock.reacquire()
+        except Exception:
+            logger.exception("[chat_task] session lock heartbeat failed")
+            if lock_lost_event is not None:
+                lock_lost_event.set()
+            return
+
+
+async def _claim_task_run(
+    run_id: str,
+    attempt: int,
+    timeout_seconds: int,
+    lease_seconds: int,
+):
+    async with get_session_factory()() as db:
+        return await claim_task_run(
+            db,
+            run_id=run_id,
+            attempt=attempt,
+            timeout_seconds=timeout_seconds,
+            lease_seconds=lease_seconds,
+        )
+
+
+async def _renew_lease(
+    run_id: str,
+    lease_token: str,
+    lease_seconds: int,
+) -> bool:
+    async with get_session_factory()() as db:
+        return await renew_task_lease(
+            db,
+            run_id=run_id,
+            lease_token=lease_token,
+            lease_seconds=lease_seconds,
+        )
+
+
+async def _mark_retrying(
+    run_id: str,
+    lease_token: str,
+    error_code: str,
+    error_message: str,
+) -> bool:
+    async with get_session_factory()() as db:
+        return await mark_task_retrying(
+            db,
+            run_id=run_id,
+            lease_token=lease_token,
+            error_code=error_code,
+            error_message=error_message,
+        )
+
+
+async def _mark_finished(
+    run_id: str,
+    lease_token: str,
+    status: str,
+    error_code: str | None = None,
+    error_message: str | None = None,
+) -> bool:
+    async with get_session_factory()() as db:
+        return await mark_task_finished(
+            db,
+            run_id=run_id,
+            lease_token=lease_token,
+            status=status,
+            error_code=error_code,
+            error_message=error_message,
+        )
+
+
+async def _is_cancel_requested(run_id: str, lease_token: str) -> bool:
+    async with get_session_factory()() as db:
+        return await is_task_cancel_requested(
+            db,
+            run_id=run_id,
+            lease_token=lease_token,
+        )
+
+
+async def _mark_cancelled(run_id: str, lease_token: str) -> bool:
+    async with get_session_factory()() as db:
+        return await mark_task_cancelled(
+            db,
+            run_id=run_id,
+            lease_token=lease_token,
+        )
+
+
+async def _heartbeat_loop(
+    run_id: str,
+    lease_token: str,
+    lease_seconds: int,
+    interval_seconds: int,
+    stop_event: asyncio.Event,
+    lease_lost_event: asyncio.Event,
+) -> None:
+    interval = max(1, min(interval_seconds, max(1, lease_seconds // 2)))
+    while True:
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=interval)
+            return
+        except asyncio.TimeoutError:
+            pass
+
+        try:
+            renewed = await _renew_lease(run_id, lease_token, lease_seconds)
+        except Exception:
+            logger.exception("[chat_task] task lease heartbeat failed: run_id=%s", run_id)
+            continue
+
+        if not renewed:
+            lease_lost_event.set()
+            logger.warning("[chat_task] task lease lost: run_id=%s", run_id)
+            return
+
+
+async def _cancel_monitor_loop(
+    run_id: str,
+    lease_token: str,
+    stop_event: asyncio.Event,
+    cancel_requested_event: asyncio.Event,
+) -> None:
+    """Poll durable cancellation state so blocked agent calls can be stopped."""
+    while True:
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=1)
+            return
+        except asyncio.TimeoutError:
+            pass
+
+        try:
+            if (
+                await is_task_cancel_signalled(run_id)
+                or await _is_cancel_requested(run_id, lease_token)
+            ):
+                cancel_requested_event.set()
+                logger.info("[chat_task] cancellation requested: run_id=%s", run_id)
+                return
+        except Exception:
+            logger.exception(
+                "[chat_task] cancellation monitor failed: run_id=%s",
+                run_id,
+            )
+
+
+def _failure_code(exc: Exception) -> str:
+    return type(exc).__name__.upper()[:64]
+
+
+def _is_retryable_failure(exc: Exception) -> bool:
+    return isinstance(exc, (ConnectionError, OSError, SessionBusyError)) or type(exc).__name__ in {
+        "APIConnectionError",
+        "APITimeoutError",
+        "ConnectError",
+        "ReadTimeout",
+        "RemoteProtocolError",
+    }
 
 
 def _resolve_task_context(
@@ -95,24 +293,44 @@ def _extract_reasoning_text(message: object) -> str:
     return ""
 
 
-async def _run_chat_turn(run_id: str, req: ChatRequest, user_id: int) -> None:
+async def _run_chat_turn(
+    run_id: str,
+    req: ChatRequest,
+    user_id: int,
+    lease_lost_event: asyncio.Event | None = None,
+    cancel_requested_event: asyncio.Event | None = None,
+) -> None:
     from app.agent.multi_agent_controller import build_multi_agent_graph
     from app.db.redis import get_redis_client
     from app.services.checkpoint import get_checkpointer
     from app.services.mcp_client import get_mcp_client
 
     redis_client = get_redis_client()
+    settings = get_settings()
+    # The lock is a short-lived Redis mutex. Healthy tasks renew it; after a
+    # worker crash it should expire no later than the task lease.
+    lock_timeout_seconds = max(15, settings.TASK_LEASE_SECONDS)
     lock = redis_client.lock(
         f"chat:lock:{req.session_id}",
-        timeout=CHAT_LOCK_TIMEOUT_SECONDS,
+        timeout=lock_timeout_seconds,
         blocking_timeout=0,  # 拿不到锁立刻失败，不排队等待
     )
     acquired = await lock.acquire()
     if not acquired:
+        raise SessionBusyError(f"Session is busy: {req.session_id}")
         logger.warning(f"[chat_task] 会话正在处理中，拒绝并发请求: session_id={req.session_id}")
         publish_event(run_id, "error", {"message": "该会话正在处理中，请稍候再试"})
         return
 
+    lock_stop_event = asyncio.Event()
+    lock_heartbeat = asyncio.create_task(
+        _session_lock_heartbeat(
+            lock,
+            lock_timeout_seconds,
+            lock_stop_event,
+            lease_lost_event,
+        )
+    )
     try:
         logger.info("=" * 80)
         logger.info(f"[chat_task] 新请求: run_id={run_id}, session_id={req.session_id}, user_id={user_id}")
@@ -200,6 +418,14 @@ async def _run_chat_turn(run_id: str, req: ChatRequest, user_id: int) -> None:
                 publish_event(run_id, event_name, payload)
 
             async for event in app.astream_events(input_state, config=config, version="v2"):
+                if lease_lost_event is not None and lease_lost_event.is_set():
+                    raise LeaseLostError(f"Task lease lost: {run_id}")
+                if (
+                    cancel_requested_event is not None
+                    and cancel_requested_event.is_set()
+                ):
+                    raise TaskCancelledError()
+
                 while not retry_events.empty():
                     evt_type, evt_data = retry_events.get_nowait()
                     logger.info(f"[chat_task] event: {evt_type} -> {evt_data['agent_name']} task={evt_data['task_id']} attempt={evt_data['attempt']}")
@@ -475,21 +701,46 @@ async def _run_chat_turn(run_id: str, req: ChatRequest, user_id: int) -> None:
                 logger.info(f"[chat_task] event (final drain): {evt_type} -> {evt_data['agent_name']}")
                 emit_trace(evt_type, evt_data)
 
+            if (
+                cancel_requested_event is not None
+                and cancel_requested_event.is_set()
+            ):
+                raise TaskCancelledError()
+
             await app.aupdate_state(
                 config=config,
                 values={"trace_events": {run_id: trace_events}},
             )
 
             logger.info(f"[chat_task] 流式处理完成，共 {event_count} 个事件")
+            if lease_lost_event is not None and lease_lost_event.is_set():
+                raise LeaseLostError(f"Task lease lost: {run_id}")
+            if (
+                cancel_requested_event is not None
+                and cancel_requested_event.is_set()
+            ):
+                raise TaskCancelledError()
             publish_event(run_id, "done", {"finish_reason": "stop"})
 
+        except TaskCancelledError:
+            raise
         except (asyncio.TimeoutError, asyncio.CancelledError):
+            if lease_lost_event is not None and lease_lost_event.is_set():
+                raise LeaseLostError(f"Task lease lost: {run_id}")
+            if (
+                cancel_requested_event is not None
+                and cancel_requested_event.is_set()
+            ):
+                raise TaskCancelledError()
             logger.error(f"[chat_task] 超时: run_id={run_id}, session_id={req.session_id}")
             publish_event(run_id, "error", {"message": "处理超时，请稍后重试"})
+            raise
+        except LeaseLostError:
             raise
         except Exception as e:
             logger.exception(f"[chat_task] 处理异常: session_id={req.session_id}")
             publish_event(run_id, "error", {"message": str(e)})
+            raise
 
         try:
             final_state = await app.aget_state(config)
@@ -511,6 +762,12 @@ async def _run_chat_turn(run_id: str, req: ChatRequest, user_id: int) -> None:
         logger.info("=" * 80)
 
     finally:
+        lock_stop_event.set()
+        lock_heartbeat.cancel()
+        try:
+            await lock_heartbeat
+        except asyncio.CancelledError:
+            pass
         try:
             await lock.release()
         except Exception as e:
@@ -522,6 +779,100 @@ async def _run_chat_turn(run_id: str, req: ChatRequest, user_id: int) -> None:
                 )
             else:
                 logger.exception(f"[chat_task] 释放会话锁失败: session_id={req.session_id}")
+
+
+async def _run_chat_turn_with_lease(
+    run_id: str,
+    req: ChatRequest,
+    user_id: int,
+    lease_token: str,
+    lease_seconds: int,
+    heartbeat_interval_seconds: int,
+) -> None:
+    stop_event = asyncio.Event()
+    lease_lost_event = asyncio.Event()
+    cancel_requested_event = asyncio.Event()
+    heartbeat = asyncio.create_task(
+        _heartbeat_loop(
+            run_id,
+            lease_token,
+            lease_seconds,
+            heartbeat_interval_seconds,
+            stop_event,
+            lease_lost_event,
+        )
+    )
+    chat_task = asyncio.create_task(
+        _run_chat_turn(
+            run_id,
+            req,
+            user_id,
+            lease_lost_event,
+            cancel_requested_event,
+        )
+    )
+    lease_lost_waiter = asyncio.create_task(lease_lost_event.wait())
+    cancel_waiter = asyncio.create_task(cancel_requested_event.wait())
+    cancel_monitor = asyncio.create_task(
+        _cancel_monitor_loop(
+            run_id,
+            lease_token,
+            stop_event,
+            cancel_requested_event,
+        )
+    )
+    try:
+        done, _ = await asyncio.wait(
+            {chat_task, lease_lost_waiter, cancel_waiter},
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        if lease_lost_waiter in done:
+            chat_task.cancel()
+            try:
+                await chat_task
+            except asyncio.CancelledError:
+                pass
+            raise LeaseLostError(f"Task lease lost: {run_id}")
+        if cancel_waiter in done:
+            chat_task.cancel()
+            try:
+                await chat_task
+            except (asyncio.CancelledError, TaskCancelledError):
+                pass
+            raise TaskCancelledError()
+
+        await chat_task
+        if lease_lost_event.is_set():
+            raise LeaseLostError(f"Task lease lost: {run_id}")
+    finally:
+        stop_event.set()
+        heartbeat.cancel()
+        lease_lost_waiter.cancel()
+        cancel_waiter.cancel()
+        cancel_monitor.cancel()
+        if not chat_task.done():
+            chat_task.cancel()
+        try:
+            await heartbeat
+        except asyncio.CancelledError:
+            pass
+        try:
+            await lease_lost_waiter
+        except asyncio.CancelledError:
+            pass
+        try:
+            await cancel_waiter
+        except asyncio.CancelledError:
+            pass
+        try:
+            await cancel_monitor
+        except asyncio.CancelledError:
+            pass
+        if not chat_task.done():
+            try:
+                await chat_task
+            except asyncio.CancelledError:
+                pass
 
 
 @celery_app.task(bind=True, name="app.tasks.chat_tasks.run_chat_turn")
@@ -541,8 +892,148 @@ def run_chat_turn(self, run_id: str, req_payload: dict, user_id: int) -> None:
         history=[ChatMessage(**h) for h in req_payload.get("history", [])],
     )
     settings = get_settings()
+    attempt = self.request.retries + 1
+    task_run = run_coro(
+        _claim_task_run(
+            run_id,
+            attempt,
+            settings.AGENT_TIMEOUT,
+            settings.TASK_LEASE_SECONDS,
+        ),
+        timeout=30,
+    )
+    if task_run is None:
+        logger.info("[chat_task] task was already claimed or completed: run_id=%s", run_id)
+        return
+    lease_token = task_run.lease_token
+    if lease_token is None:
+        raise RuntimeError(f"Claimed task has no lease token: {run_id}")
+    max_attempts = max(1, task_run.max_attempts)
     try:
-        run_coro(_run_chat_turn(run_id, req, user_id), timeout=settings.AGENT_TIMEOUT)
+        run_coro(
+            _run_chat_turn_with_lease(
+                run_id,
+                req,
+                user_id,
+                lease_token,
+                settings.TASK_LEASE_SECONDS,
+                settings.TASK_HEARTBEAT_INTERVAL_SECONDS,
+            ),
+            timeout=settings.AGENT_TIMEOUT,
+        )
+    except TaskCancelledError:
+        updated = run_coro(
+            _mark_cancelled(run_id, lease_token),
+            timeout=30,
+        )
+        if updated:
+            publish_event(run_id, "cancelled", {"message": "Task cancelled by user"})
+        return
     except (asyncio.TimeoutError, asyncio.CancelledError):
-        # 已在 _run_chat_turn 内发布 error 事件，这里让 Celery 记录任务失败即可
+        updated = run_coro(
+            _mark_finished(
+                run_id,
+                lease_token,
+                "TIMED_OUT",
+                "AGENT_TIMEOUT",
+                f"Agent exceeded {settings.AGENT_TIMEOUT} seconds",
+            ),
+            timeout=30,
+        )
+        if updated:
+            publish_event(run_id, "error", {"message": "Task execution timed out"})
         raise
+    except LeaseLostError:
+        logger.warning("[chat_task] task stopped after losing lease: run_id=%s", run_id)
+        raise
+    except Exception as exc:
+        error_code = _failure_code(exc)
+        error_message = str(exc) or type(exc).__name__
+        if _is_retryable_failure(exc) and attempt < max_attempts:
+            updated = run_coro(
+                _mark_retrying(run_id, lease_token, error_code, error_message),
+                timeout=30,
+            )
+            if not updated:
+                cancelled = run_coro(
+                    _mark_cancelled(run_id, lease_token),
+                    timeout=30,
+                )
+                if cancelled:
+                    publish_event(
+                        run_id,
+                        "cancelled",
+                        {"message": "Task cancelled by user"},
+                    )
+                    return
+                logger.warning(
+                    "[chat_task] retry state rejected because lease was lost: run_id=%s",
+                    run_id,
+                )
+                raise
+            publish_event(
+                run_id,
+                "retry_notice",
+                {
+                    "reason": (
+                        f"Temporary dependency failure; retrying "
+                        f"({attempt + 1}/{max_attempts})"
+                    ),
+                },
+            )
+            countdown = min(
+                settings.CELERY_RETRY_BACKOFF_SECONDS * (2 ** (self.request.retries + 1)),
+                settings.CELERY_RETRY_BACKOFF_MAX_SECONDS,
+            )
+            raise self.retry(
+                exc=exc,
+                countdown=countdown,
+                max_retries=max_attempts - 1,
+            )
+        updated = run_coro(
+            _mark_finished(
+                run_id,
+                lease_token,
+                "FAILED",
+                error_code,
+                error_message,
+            ),
+            timeout=30,
+        )
+        if updated:
+            publish_event(run_id, "error", {"message": "Task execution failed"})
+        else:
+            cancelled = run_coro(
+                _mark_cancelled(run_id, lease_token),
+                timeout=30,
+            )
+            if cancelled:
+                publish_event(
+                    run_id,
+                    "cancelled",
+                    {"message": "Task cancelled by user"},
+                )
+                return
+        raise
+    else:
+        updated = run_coro(
+            _mark_finished(run_id, lease_token, "SUCCESS"),
+            timeout=30,
+        )
+        if not updated:
+            cancelled = run_coro(
+                _mark_cancelled(run_id, lease_token),
+                timeout=30,
+            )
+            if cancelled:
+                publish_event(
+                    run_id,
+                    "cancelled",
+                    {"message": "Task cancelled by user"},
+                )
+            else:
+                logger.warning(
+                    "[chat_task] success state rejected because lease was lost: run_id=%s",
+                    run_id,
+                )
+        return

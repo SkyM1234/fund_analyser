@@ -1,7 +1,6 @@
 """基金代码字符串匹配兜底
 
 为 rag_match_fund_codes 工具提供纯规则匹配（6位代码 + 精确别名子串），
-作为 rag_identify_funds 语义识别失败时的兜底方案。
 """
 import re
 from dataclasses import dataclass

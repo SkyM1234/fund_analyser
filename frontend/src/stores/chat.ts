@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, reactive, ref } from 'vue'
-import { sendChatStream, type ChatHistoryItem } from '../api/chat'
+import { cancelChatTask, sendChatStream, type ChatHistoryItem } from '../api/chat'
 
 export interface ToolStep {
   name: string
@@ -102,6 +102,8 @@ export const useChatStore = defineStore('chat', () => {
   const sessionsVersion = ref(0)
   const conversations = reactive(new Map<string, ConversationState>())
   const aborters = new Map<string, AbortController>()
+  const taskRunIds = new Map<string, string>()
+  const cancellingSessions = reactive(new Set<string>())
 
   function createConversation(loaded = true): ConversationState {
     return reactive({
@@ -126,6 +128,7 @@ export const useChatStore = defineStore('chat', () => {
   const currentConversation = computed(() => getConversation(sessionId.value))
   const messages = computed(() => currentConversation.value.messages)
   const streaming = computed(() => currentConversation.value.streaming)
+  const cancelling = computed(() => cancellingSessions.has(sessionId.value))
   const loadingSession = computed(() => currentConversation.value.loading)
   const runningSessions = computed<RunningSession[]>(() =>
     Array.from(conversations.entries())
@@ -188,6 +191,9 @@ export const useChatStore = defineStore('chat', () => {
           signal: aborter.signal,
         },
         {
+          onStarted: (runId) => {
+            if (runId) taskRunIds.set(targetSessionId, runId)
+          },
           onMessageStart: () => {
             assistant.content = ''
             assistant.retryNotice = undefined
@@ -277,6 +283,17 @@ export const useChatStore = defineStore('chat', () => {
             assistant.retryNotice = undefined
             sessionsVersion.value++
           },
+          onCancelled: (message) => {
+            assistant.pending = false
+            assistant.retryNotice = undefined
+            assistant.error = undefined
+            conversation.streaming = false
+            taskRunIds.delete(targetSessionId)
+            sessionsVersion.value++
+            if (message) {
+              assistant.content = assistant.content || message
+            }
+          },
           onError: (message) => {
             assistant.error = message
             assistant.pending = false
@@ -294,17 +311,36 @@ export const useChatStore = defineStore('chat', () => {
         aborters.delete(targetSessionId)
         conversation.streaming = false
       }
+      taskRunIds.delete(targetSessionId)
+      cancellingSessions.delete(targetSessionId)
       assistant.pending = false
     }
   }
 
-  function abort() {
-    const conversation = getConversation(sessionId.value)
-    aborters.get(sessionId.value)?.abort()
-    aborters.delete(sessionId.value)
-    conversation.streaming = false
+  async function abort() {
+    const targetSessionId = sessionId.value
+    const conversation = getConversation(targetSessionId)
+    const aborter = aborters.get(targetSessionId)
+    if (!aborter || cancellingSessions.has(targetSessionId)) return
+
+    const runId = taskRunIds.get(targetSessionId)
     const last = conversation.messages[conversation.messages.length - 1]
-    if (last?.pending) last.pending = false
+    cancellingSessions.add(targetSessionId)
+    try {
+      if (runId) await cancelChatTask(runId)
+    } catch (error: any) {
+      if (last?.pending) {
+        last.error = `取消请求失败：${String(error?.message ?? error)}`
+      }
+    } finally {
+      aborter.abort()
+      aborters.delete(targetSessionId)
+      taskRunIds.delete(targetSessionId)
+      cancellingSessions.delete(targetSessionId)
+      conversation.streaming = false
+      if (last?.pending) last.pending = false
+      sessionsVersion.value++
+    }
   }
 
   function clear() {
@@ -317,6 +353,8 @@ export const useChatStore = defineStore('chat', () => {
   function reset() {
     for (const aborter of aborters.values()) aborter.abort()
     aborters.clear()
+    taskRunIds.clear()
+    cancellingSessions.clear()
     conversations.clear()
     const newSessionId = uid()
     conversations.set(newSessionId, createConversation())
@@ -404,6 +442,7 @@ export const useChatStore = defineStore('chat', () => {
     sessionsVersion,
     send,
     abort,
+    cancelling,
     clear,
     reset,
     loadSession,
