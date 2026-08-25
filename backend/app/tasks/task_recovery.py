@@ -131,16 +131,6 @@ def recover_expired_task_runs() -> int:
             continue
 
         recovered += 1
-        publish_event(
-            candidate.run_id,
-            "retry_notice",
-            {
-                "reason": (
-                    "Worker lease expired; recovering "
-                    f"({candidate.attempt + 1}/{candidate.max_attempts})"
-                ),
-            },
-        )
         logger.warning(
             "[task_recovery] redelivered lost task: run_id=%s session_id=%s "
             "checkpoint_id=%s celery_task_id=%s attempt=%s/%s",

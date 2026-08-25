@@ -459,6 +459,9 @@ export const useChatStore = defineStore('chat', () => {
           agents: (message.agents || []).map((agent) => ({
             ...agent,
             status: agent.status as 'running' | 'completed' | 'failed',
+            sequence: Number.isFinite(Number(agent.sequence))
+              ? Number(agent.sequence)
+              : undefined,
           })),
           plan: message.plan,
           pending: Boolean(message.pending),
@@ -491,9 +494,17 @@ export const useChatStore = defineStore('chat', () => {
             checkpointTrace || [],
           )
           markInterruptedTraceTools(assistant.trace_events)
+          assistant.retryNotice = undefined
         },
-        onMessageStart: () => { assistant.content = '' },
+        onMessageStart: () => {
+          assistant.content = ''
+          assistant.retryNotice = undefined
+        },
         onToken: (delta) => { assistant.content += delta },
+        onRetryNotice: (reason) => {
+          assistant.content = ''
+          assistant.retryNotice = reason
+        },
         onToolCall: (name, args, agentName, taskId, toolCallId) => {
           if (toolCallId && assistant.tools.some((tool) => tool.tool_call_id === toolCallId)) {
             return
@@ -548,11 +559,13 @@ export const useChatStore = defineStore('chat', () => {
         },
         onDone: () => {
           assistant.pending = false
+          assistant.retryNotice = undefined
           conversation.streaming = false
           sessionsVersion.value++
         },
         onCancelled: () => {
           assistant.pending = false
+          assistant.retryNotice = undefined
           conversation.streaming = false
         },
         onError: (message) => {

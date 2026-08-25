@@ -79,6 +79,46 @@ class SessionDetail(BaseModel):
     active_task: dict[str, Any] | None = None
 
 
+def _build_execution_summaries(
+    channel_values: dict[str, Any],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Build reloadable execution steps from checkpoint state."""
+    plan_summary: list[dict[str, Any]] = []
+    agent_summary: list[dict[str, Any]] = []
+
+    fund_scope = channel_values.get("fund_scope")
+    fund_scope_error = channel_values.get("fund_scope_error")
+    if fund_scope is not None or fund_scope_error:
+        agent_summary.append({
+            "agent_name": "fund_scope_agent",
+            "task_id": "fund_scope",
+            "description": "确认当前问题涉及的基金范围",
+            "status": "completed" if fund_scope is not None else "failed",
+            # Keep this non-plan step ahead of the planned workers after reload.
+            "sequence": -1,
+        })
+
+    current_plan = channel_values.get("plan", []) or []
+    for task in current_plan:
+        if not isinstance(task, dict):
+            continue
+        plan_summary.append({
+            "task_id": task.get("task_id", ""),
+            "task_type": task.get("task_type", ""),
+            "description": task.get("description", ""),
+            "assigned_agent": task.get("assigned_agent", ""),
+            "fund_codes": task.get("fund_codes", []),
+        })
+        agent_summary.append({
+            "agent_name": task.get("assigned_agent", ""),
+            "task_id": task.get("task_id", ""),
+            "description": task.get("description", ""),
+            "status": task.get("status", "completed"),
+        })
+
+    return plan_summary, agent_summary
+
+
 async def _get_owned_session(db: AsyncSession, thread_id: str, user_id: int) -> ChatSession:
     """校验 thread_id 属于当前用户，返回对应的 sessions 行；不存在/不属于该用户则 404。"""
     owned = (await db.execute(
@@ -190,7 +230,6 @@ async def _load_session_detail(
             )
         tool_call_log = channel_values.get("tool_call_log", []) or []
         trace_events_by_run = channel_values.get("trace_events", {}) or {}
-        current_plan = channel_values.get("plan", []) or []
 
         formatted_messages = []
         tool_log_index = 0
@@ -346,36 +385,20 @@ async def _load_session_detail(
                 "pending": True,
             })
 
-        if formatted_messages and current_plan:
-            plan_summary = []
-            agent_summary = []
-            for task in current_plan:
-                if not isinstance(task, dict):
-                    continue
-                plan_summary.append({
-                    "task_id": task.get("task_id", ""),
-                    "task_type": task.get("task_type", ""),
-                    "description": task.get("description", ""),
-                    "assigned_agent": task.get("assigned_agent", ""),
-                    "fund_codes": task.get("fund_codes", []),
-                })
-                agent_summary.append({
-                    "agent_name": task.get("assigned_agent", ""),
-                    "task_id": task.get("task_id", ""),
-                    "description": task.get("description", ""),
-                    "status": task.get("status", "completed"),
-                })
-            if plan_summary:
-                last_assistant = next(
-                    (
-                        message
-                        for message in reversed(formatted_messages)
-                        if message["role"] == "assistant"
-                    ),
-                    None,
-                )
-                if last_assistant is not None:
+        plan_summary, agent_summary = _build_execution_summaries(channel_values)
+        if formatted_messages and (plan_summary or agent_summary):
+            last_assistant = next(
+                (
+                    message
+                    for message in reversed(formatted_messages)
+                    if message["role"] == "assistant"
+                ),
+                None,
+            )
+            if last_assistant is not None:
+                if plan_summary:
                     last_assistant["plan"] = plan_summary
+                if agent_summary:
                     last_assistant["agents"] = agent_summary
 
         return SessionDetail(

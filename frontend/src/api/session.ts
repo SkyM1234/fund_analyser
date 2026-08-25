@@ -37,7 +37,13 @@ export interface SessionDetail {
       sequence: number
       [key: string]: any
     }>
-    agents?: Array<{ agent_name: string; task_id: string; description: string; status: string }>
+    agents?: Array<{
+      agent_name: string
+      task_id: string
+      description: string
+      status: string
+      sequence?: number
+    }>
     plan?: Array<{
       task_id: string
       task_type: string

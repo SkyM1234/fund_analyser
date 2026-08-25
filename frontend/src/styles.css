@@ -191,6 +191,15 @@ pre code {
   border-radius: var(--radius-md);
 }
 
+.el-message-box.admin-action-message-box {
+  width: min(420px, calc(100vw - 32px));
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: calc(100vh - 32px);
+  margin: 0;
+  overflow-y: auto;
+}
+
 @keyframes fade-in {
   from {
     opacity: 0;

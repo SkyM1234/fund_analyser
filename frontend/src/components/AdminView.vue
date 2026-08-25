@@ -56,7 +56,11 @@ async function onResetPassword(userId: number, username: string) {
     const { value } = await ElMessageBox.prompt(
       `为用户 "${username}" 设置新密码（至少 6 位，将强制其重新登录）`,
       '重置密码',
-      { inputPattern: /.{6,}/, inputErrorMessage: '密码至少 6 位' }
+      {
+        customClass: 'admin-action-message-box',
+        inputPattern: /.{6,}/,
+        inputErrorMessage: '密码至少 6 位',
+      }
     )
     await admin.resetUserPassword(userId, value)
     ElMessage.success('密码已重置')
@@ -104,7 +108,10 @@ async function onViewSession(threadId: string) {
 
 async function onDeleteSession(threadId: string) {
   try {
-    await ElMessageBox.confirm('删除后无法恢复，确认删除该会话？', '确认删除', { type: 'warning' })
+    await ElMessageBox.confirm('删除后无法恢复，确认删除该会话？', '确认删除', {
+      type: 'warning',
+      customClass: 'admin-action-message-box',
+    })
     await admin.removeSession(threadId)
     ElMessage.success('已删除')
   } catch (e: any) {
@@ -118,7 +125,12 @@ async function onDeleteUser(userId: number, username: string) {
     await ElMessageBox.confirm(
       `将删除用户 "${username}" 及其所有会话数据，此操作不可恢复！确认删除？`,
       '删除用户',
-      { type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消' }
+      {
+        type: 'warning',
+        customClass: 'admin-action-message-box',
+        confirmButtonText: '确认删除',
+        cancelButtonText: '取消',
+      }
     )
     await admin.removeUser(userId)
     ElMessage.success(`用户 "${username}" 已删除`)
@@ -343,6 +355,7 @@ async function onDeleteUser(userId: number, username: string) {
   margin: 3px 8px;
   border-radius: var(--radius-sm);
   color: var(--text);
+  user-select: none;
 }
 .admin-menu :deep(.el-menu-item.is-active) {
   color: var(--primary);
