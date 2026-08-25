@@ -107,15 +107,14 @@ async def resume_chat_task_stream(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Reattach to an existing task after a browser reconnect."""
+    """浏览器重连后重新挂接到已存在的任务。"""
     task_run = await get_task_run_for_user(db, run_id=run_id, user_id=user.id)
     if task_run is None:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    # The session detail and task submission are separate database writes.
-    # During that small window the browser can discover an active QUEUED run
-    # before the Celery id has been persisted. Wait briefly instead of turning
-    # a recoverable reconnect into a terminal frontend error.
+    # 会话详情写入与任务提交是两次独立的数据库写入。
+    # 在这个短暂窗口内，浏览器可能发现一个活跃的 QUEUED 任务，但 Celery
+    # 任务 id 尚未落库。短暂等待，避免把可恢复的重连变成前端终态错误。
     for _ in range(20):
         if task_run.celery_task_id:
             break
@@ -146,8 +145,8 @@ async def chat_stream(
     # 而不是流已经开始后再中途报错
     await _ensure_session_ownership(db, req.session_id, user.id, req.message)
 
-    # Old clients can still submit work, but only requests with the same header
-    # can be deduplicated across network retries.
+    # 旧客户端仍然可以提交任务，但只有携带相同请求头的请求
+    # 才能在网络重试时被去重。
     idempotency_key = idempotency_key or uuid.uuid4().hex
     if len(idempotency_key) > 128:
         raise HTTPException(status_code=400, detail="Idempotency-Key too long")
@@ -190,7 +189,7 @@ async def chat_stream(
         f"session_id={req.session_id}, user_id={user.id}"
     )
 
-    # Expose the identifiers needed by the cooperative cancellation API.
+    # 暴露协作取消 API 所需的标识符。
     publish_event(
         run_id,
         "started",
@@ -205,7 +204,7 @@ async def cancel_chat_task(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Request cooperative cancellation for one task run."""
+    """请求对某个任务运行进行协作式取消。"""
     task_run = await request_task_cancel(
         db,
         run_id=run_id,

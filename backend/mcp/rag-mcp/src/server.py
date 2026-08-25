@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""RAG MCP Server"""
+"""RAG MCP 服务"""
 
 import asyncio
 import json

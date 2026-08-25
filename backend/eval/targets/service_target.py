@@ -1,4 +1,4 @@
-"""Answer evaluation target backed by the running Docker HTTP service."""
+"""由运行中的 Docker HTTP 服务支撑的回答评测目标。"""
 from __future__ import annotations
 
 import asyncio
@@ -31,7 +31,7 @@ def _extract_tool_fund_codes(tool_calls: list[dict]) -> list[str]:
 
 
 async def _iter_sse(response: httpx.Response) -> AsyncIterator[tuple[str, str]]:
-    """Parse SSE event names and multi-line data fields."""
+    """解析 SSE 事件名和多行 data 字段。"""
     event_name = "message"
     data_lines: list[str] = []
 
@@ -55,7 +55,7 @@ async def _iter_sse(response: httpx.Response) -> AsyncIterator[tuple[str, str]]:
 
 
 class AnswerServiceTarget:
-    """Call the deployed chat SSE API and adapt its events to evaluator outputs."""
+    """调用已部署的聊天 SSE API，并将其事件适配为评测器输出。"""
 
     def __init__(
         self,

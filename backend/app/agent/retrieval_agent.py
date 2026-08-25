@@ -118,7 +118,7 @@ def _tool_output_text(output: Any) -> str:
 
 
 def _missing_batch_rag_coverage(task: dict, tool_call_log: list[dict]) -> list[str]:
-    """Return target codes without an actual filtered rag_search call."""
+    """返回缺少实际过滤 rag_search 调用的目标基金代码。"""
     fund_codes = task.get("fund_codes", [])
     if len(fund_codes) < 2:
         return []
@@ -243,7 +243,7 @@ async def _execute_tool_calls(
 def _unique_rag_chunks_for_observability(
     contexts: list[_RagToolContext],
 ) -> list[dict]:
-    """Deduplicate only the SSE/metrics payload, never the LLM tool messages."""
+    """仅对 SSE/指标载荷去重，绝不去重 LLM 工具消息。"""
     best_by_id: dict[str, dict] = {}
     for context in contexts:
         for chunk in parse_rag_search_result(context.output):

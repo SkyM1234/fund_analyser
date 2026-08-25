@@ -1,1 +1,1 @@
-"""Evaluators package."""
+"""评测器包。"""

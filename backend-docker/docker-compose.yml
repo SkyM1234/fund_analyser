@@ -1,15 +1,15 @@
 # ============================================================================
-# Fund Analyser — Backend（FastAPI + Celery Workers）
+# Fund Analyser — 后端（FastAPI + Celery Workers）
 # ============================================================================
 # 启动:
-#   docker compose up -d                    # API + 1 worker + 1 beat
-#   docker compose up -d --scale worker=4   # API + 4 workers + 1 beat（多用户并发）
+#   docker compose up -d                    # API + 1 个 worker + 1 个 beat
+#   docker compose up -d --scale worker=4   # API + 4 个 worker + 1 个 beat（多用户并发）
 # 停止:
 #   docker compose down
 # ============================================================================
 
 x-backend-env: &backend-env
-  # ── GPU / Embedding Service（milvus-docker）──
+  # ── GPU / Embedding 服务（milvus-docker）──
   - GPU_HOST=embedding-service
   - GPU_PORT=8001
   # ── 数据库（sql-docker 服务名）──
@@ -17,19 +17,19 @@ x-backend-env: &backend-env
   - MYSQL_HOST=mysql
   - MYSQL_PASSWORD=${MYSQL_ROOT_PASSWORD:-skc393720}
   - REDIS_URL=redis://redis:6379/0
-  # ── Celery ──
+  # ── Celery（任务队列）──
   - CELERY_BROKER_URL=redis://redis:6379/1
   - CELERY_RESULT_BACKEND=redis://redis:6379/2
-  # ── LLM API Key ──
+  # ── LLM API 密钥 ──
   - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
-  # ── JWT ──
+  # ── JWT（签名密钥）──
   - JWT_SECRET_KEY=${JWT_SECRET_KEY:-dev-secret-change-me}
-  # ── CORS ──
+  # ── CORS（跨域）──
   - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5173}
   # ── 其他 ──
   - LLM_MAX_CONCURRENCY=${LLM_MAX_CONCURRENCY:-10}
   - MCP_ENABLED=${MCP_ENABLED:-true}
-  # ── Task lease / recovery ──
+  # ── 任务租约 / 恢复 ──
   - TASK_LEASE_SECONDS=${TASK_LEASE_SECONDS:-45}
   - TASK_HEARTBEAT_INTERVAL_SECONDS=${TASK_HEARTBEAT_INTERVAL_SECONDS:-10}
   - TASK_RECOVERY_SCAN_INTERVAL_SECONDS=${TASK_RECOVERY_SCAN_INTERVAL_SECONDS:-15}
@@ -43,7 +43,7 @@ x-backend-volumes: &backend-volumes
 
 services:
   # ------------------------------------------------------------------
-  # API Server — FastAPI（单实例）
+  # API 服务 — FastAPI（单实例）
   # ------------------------------------------------------------------
   backend:
     build: .
@@ -59,7 +59,7 @@ services:
       - milvus
 
   # ------------------------------------------------------------------
-  # Worker — Celery solo（可横向扩展）
+  # Worker（工作进程） — Celery solo（可横向扩展）
   #   每个 worker = 独立进程 = 自己的 MCP + rag-mcp + stdio 管道
   #   多 worker 间真正并发，无 MCP 串行瓶颈
   # ------------------------------------------------------------------
@@ -79,9 +79,9 @@ services:
       - milvus
 
   # ------------------------------------------------------------------
-  # Celery Beat (single instance only)
-  #   Periodically sends expired-lease recovery scans to the default queue.
-  #   The schedule database is under /tmp because /app is mounted read-only.
+  # Celery Beat（仅单实例）
+  #   周期性向默认队列发送过期租约的恢复扫描。
+  #   调度数据库放在 /tmp 下，因为 /app 是以只读方式挂载的。
   # ------------------------------------------------------------------
   beat:
     build: .

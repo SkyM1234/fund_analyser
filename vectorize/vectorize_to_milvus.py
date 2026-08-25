@@ -303,7 +303,7 @@ class FundVectorizer:
         index_params.add_index(
             field_name="sparse_embedding",
             index_type="SPARSE_INVERTED_INDEX",
-            metric_type="IP",  # Inner Product for sparse vectors
+            metric_type="IP",  # 稀疏向量使用内积（Inner Product）
             params={"drop_ratio_build": 0.2}
         )
 
@@ -695,11 +695,11 @@ class FundVectorizer:
                         })
                         offset = para_end
                     else:
-                        offset += len(raw_para) + 2  # +2 for '\n\n'
+                        offset += len(raw_para) + 2  # +2 补回 '\n\n'
 
             # 添加结构单元
             segments.append({
-                'type': struct['type'].lower(),  # 'table' or 'image'
+                'type': struct['type'].lower(),  # 'table' 或 'image'
                 'text': struct['content'],
                 'start': struct['start'],
                 'end': struct['end'],
@@ -1833,7 +1833,7 @@ class FundVectorizer:
         force_all = "ALL" in force_set
 
         # ── 分类文件：跳过 / 强制覆盖 / 新增 ──
-        to_process: list[tuple[Path, str, bool]] = []  # (path, fund_code, need_delete_first)
+        to_process: list[tuple[Path, str, bool]] = []  # (路径, 基金代码, 是否需要先删除)
         skipped = 0
 
         for file_path in analyzed_files:

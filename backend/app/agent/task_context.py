@@ -1,10 +1,10 @@
-"""Task-input helpers shared by specialized agents."""
+"""各专项 agent 共享的任务输入辅助函数。"""
 from collections.abc import Mapping
 from typing import Any
 
 
 def format_dependency_results(task: Mapping[str, Any]) -> str:
-    """Render the direct dependency result snapshot included in a dispatched task."""
+    """渲染已派发任务中携带的直接依赖结果快照。"""
     dependency_results = task.get("dependency_results", {})
     if not dependency_results:
         return ""

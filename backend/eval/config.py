@@ -19,13 +19,13 @@ class EvalSettings(BaseSettings):
         extra="ignore",
     )
 
-    # ===== LangSmith =====
+    # ===== LangSmith（追踪） =====
     LANGSMITH_API_KEY: str = ""
     LANGSMITH_PROJECT: str = "fund-analyser-eval"
     LANGSMITH_TRACING: bool = True
     LANGSMITH_ENDPOINT: str = "https://api.smith.langchain.com"
 
-    # ===== LLM Judge =====
+    # ===== LLM Judge（评测） =====
     JUDGE_LLM_BASE_URL: str = "https://api.deepseek.com/v1"
     JUDGE_LLM_API_KEY: str = Field(
         default="",

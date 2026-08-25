@@ -1,4 +1,4 @@
-"""DeepSeek-specific compatibility for reasoning content."""
+"""DeepSeek 特有的推理内容兼容层。"""
 from __future__ import annotations
 
 from typing import Any, Optional, Union
@@ -12,7 +12,7 @@ from app.core.config import get_settings
 
 
 class DeepSeekChatOpenAI(ChatOpenAI):
-    """Keep DeepSeek reasoning_content when ChatOpenAI parses a response."""
+    """在 ChatOpenAI 解析响应时保留 DeepSeek 的 reasoning_content。"""
 
     def _get_request_payload(
         self,
@@ -96,7 +96,7 @@ class DeepSeekChatOpenAI(ChatOpenAI):
 
 
 def create_chat_llm(*, temperature: float | None = None) -> DeepSeekChatOpenAI:
-    """Create the project LLM with DeepSeek thinking explicitly enabled."""
+    """创建项目 LLM，并显式开启 DeepSeek 思考模式。"""
     settings = get_settings()
     kwargs: dict[str, Any] = {
         "base_url": settings.LLM_BASE_URL,

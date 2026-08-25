@@ -1,9 +1,8 @@
-"""Build the first batch of single-fund strategy answer examples.
+"""构建第一批单基金策略回答示例。
 
-The selected questions come from retrieval.jsonl. Reference answers and key
-facts are manually grounded in the corresponding Milvus chunks, while this
-script verifies that every chunk ID and keyword still matches the live
-collection before writing answer_single_fund.jsonl.
+所选问题来自 retrieval.jsonl。参考答案和关键事实人工对齐到对应的
+Milvus chunk，本脚本在写入 answer_single_fund.jsonl 前会校验每个
+chunk ID 和关键词仍与线上集合匹配。
 """
 from __future__ import annotations
 
@@ -279,7 +278,7 @@ def validate_fund_query(source: dict) -> None:
 
 
 def build_expected_tool_calls(query: str, fund_code: str) -> list[dict]:
-    """Return the expected RAG workflow for a single-fund query."""
+    """返回单基金查询的预期 RAG 工作流。"""
     calls = []
     if not FUND_CODE_RE.search(query):
         calls.append(

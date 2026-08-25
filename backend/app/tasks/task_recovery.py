@@ -1,4 +1,4 @@
-"""Periodic and startup recovery for task runs whose worker lease expired."""
+"""对 worker 租约过期的任务运行进行周期性及启动时恢复。"""
 from __future__ import annotations
 
 import logging
@@ -79,7 +79,7 @@ def _load_checkpoint_trace(candidate: TaskRecoveryCandidate) -> list[dict]:
 
 @celery_app.task(name="app.tasks.task_recovery.recover_expired_task_runs")
 def recover_expired_task_runs() -> int:
-    """Mark expired leases LOST and redeliver persisted requests at most once per scan."""
+    """把过期租约标记为 LOST，并在每次扫描中最多重新投递一次已持久化的请求。"""
     settings = get_settings()
     batch_size = max(1, settings.TASK_RECOVERY_BATCH_SIZE)
     expired = run_coro(_mark_expired_runs(batch_size), timeout=30)

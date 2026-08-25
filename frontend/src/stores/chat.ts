@@ -599,9 +599,9 @@ export const useChatStore = defineStore('chat', () => {
         const targetConversation = getConversation(target)
         let assistant = targetConversation.messages[targetConversation.messages.length - 1]
         if (activeTask?.run_id && assistant?.role !== 'assistant') {
-          // A checkpoint may contain only the user message while the worker
-          // is between its first state write and the first AI/trace write.
-          // Keep an event sink so the reconnect cannot discard the stream.
+          // checkpoint 可能只包含用户消息，此时 worker
+          // 正处于首次状态写入与首次 AI/trace 写入之间。
+          // 保留事件接收端，让重连不会丢弃流。
           assistant = {
             id: uid(),
             role: 'assistant',

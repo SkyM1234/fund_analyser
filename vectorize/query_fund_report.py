@@ -8,7 +8,7 @@
     python vectorize/query_fund_report.py 159103                  # 全部 chunk
     python vectorize/query_fund_report.py 159103 --chunk 5        # 第 5 个 chunk
     python vectorize/query_fund_report.py 159103 --chunks 3,6,10  # 多个指定 chunk
-    python vectorize/query_fund_report.py 159103 --from 0 --to 9  # chunk 0~9
+    python vectorize/query_fund_report.py 159103 --from 0 --to 9  # 第 0~9 个 chunk
     python vectorize/query_fund_report.py 159103 --headers        # 仅显示 chunk 目录结构
 
     # 批量查询多个基金
@@ -217,7 +217,7 @@ def print_usage():
     print("  python vectorize/query_fund_report.py 159103                  # 全部 chunk")
     print("  python vectorize/query_fund_report.py 159103 --chunk 5        # 第 5 个 chunk")
     print("  python vectorize/query_fund_report.py 159103 --chunks 3,6,10  # 多个指定 chunk")
-    print("  python vectorize/query_fund_report.py 159103 --from 0 --to 9  # chunk 0~9")
+    print("  python vectorize/query_fund_report.py 159103 --from 0 --to 9  # 第 0~9 个 chunk")
     print("  python vectorize/query_fund_report.py 159103 --headers        # 仅显示目录结构")
     print()
     print("  # 批量查询")
@@ -240,7 +240,7 @@ def main():
     args = parse_args(sys.argv[1:])
     client = connect()
 
-    # ── --list ──
+    # ── 列出已索引基金 --list ──
     if args["list_mode"]:
         funds = list_funds(client)
         print(f"\n已索引基金: {len(funds)} 只\n")

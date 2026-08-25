@@ -38,7 +38,7 @@ class RetrievalExample(BaseModel):
     )
     top_k: int = Field(10, ge=10, description="检索返回数量，不能低于 10")
 
-    # ---- ground truth ----
+    # ---- ground truth（标准答案）----
     expected_fund_codes: list[str] = Field(
         default_factory=list,
         description="期望被召回的基金代码集合（任意 chunk 命中即视为该基金被召回）",
@@ -73,7 +73,7 @@ class NameResolutionExample(BaseModel):
     top_k: int = Field(5, description="最多返回几个候选基金")
     min_score: float = Field(0.5, description="最低置信度阈值")
 
-    # ---- ground truth ----
+    # ---- ground truth（标准答案）----
     expected_fund_code: Optional[str] = Field(
         None, description="期望识别到的基金代码；None 表示期望不命中（如描述过于模糊/无对应基金）"
     )
@@ -92,7 +92,7 @@ class AnswerExample(BaseModel):
     id: str = Field(..., description="样本唯一 ID，建议 answer-001")
     query: str = Field(..., description="用户查询")
 
-    # ---- ground truth ----
+    # ---- ground truth（标准答案）----
     reference_answer: str = Field(
         "", description="参考答案；敏感问题样本可留空，靠 should_refuse 判定"
     )

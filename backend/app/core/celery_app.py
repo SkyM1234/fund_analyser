@@ -81,7 +81,7 @@ worker_shutdown.connect(worker_lifecycle.on_worker_process_shutdown)
 
 @worker_ready.connect
 def enqueue_startup_task_recovery(**kwargs) -> None:
-    """Run a recovery sweep after every worker restart; DB locks make duplicates safe."""
+    """每次 worker 重启后执行一次恢复扫描；数据库锁保证重复执行是安全的。"""
     try:
         celery_app.send_task(
             "app.tasks.task_recovery.recover_expired_task_runs",

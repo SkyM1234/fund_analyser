@@ -1,5 +1,5 @@
 # ============================================================================
-# Embedding Service — Docker Image（GPU 机器上运行）
+# Embedding 服务 — Docker 镜像（GPU 机器上运行）
 # ============================================================================
 # 构建:  docker build -t embedding-service:latest .
 # 启动:  在 docker-compose.yml 同目录下 docker compose up -d

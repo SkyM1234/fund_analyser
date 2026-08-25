@@ -47,7 +47,7 @@ def _cancel_key(run_id: str) -> str:
 
 
 async def signal_task_cancel(run_id: str) -> None:
-    """Wake the active worker immediately; MySQL remains the source of truth."""
+    """立即唤醒当前活跃的 worker；MySQL 仍是权威数据源。"""
     client = get_redis_client()
     await client.set(_cancel_key(run_id), "1", ex=_CANCEL_SIGNAL_TTL_SECONDS)
 

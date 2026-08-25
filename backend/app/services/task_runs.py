@@ -1,4 +1,4 @@
-"""Persistent task submission and idempotency helpers."""
+"""任务提交与幂等性的持久化辅助函数。"""
 from __future__ import annotations
 
 import uuid
@@ -32,7 +32,7 @@ async def get_or_create_task_run(
     request_payload: dict[str, Any],
     max_attempts: int = 1,
 ) -> tuple[TaskRun, bool]:
-    """Return (task, created), resolving concurrent unique-key inserts."""
+    """返回 (task, created)，解决并发唯一键插入的冲突。"""
     existing = (
         await db.execute(
             select(TaskRun).where(
@@ -112,7 +112,7 @@ async def set_celery_task_id(
     task: TaskRun,
     celery_task_id: str,
 ) -> TaskRun:
-    """Persist the broker task id after Celery accepts the message."""
+    """在 Celery 接受消息后持久化 broker 任务 id。"""
     task.celery_task_id = celery_task_id
     await db.commit()
     return task
@@ -125,7 +125,7 @@ async def set_task_checkpoint_id(
     lease_token: str,
     checkpoint_id: str,
 ) -> bool:
-    """Persist the latest checkpoint only for the current lease owner."""
+    """仅当当前租约所有者持有时，才持久化最新 checkpoint。"""
     task = (
         await db.execute(
             select(TaskRun).where(TaskRun.run_id == run_id).with_for_update()
@@ -153,7 +153,7 @@ async def request_task_cancel(
     run_id: str,
     user_id: int,
 ) -> TaskRun | None:
-    """Request cancellation and immediately finish work that has not started."""
+    """请求取消，并立即结束尚未开始的工作。"""
     task = (
         await db.execute(
             select(TaskRun)
@@ -189,7 +189,7 @@ async def is_task_cancel_requested(
     run_id: str,
     lease_token: str,
 ) -> bool:
-    """Read cancellation only for the worker that currently owns the lease."""
+    """仅当前持有租约的 worker 读取取消状态。"""
     task = (
         await db.execute(
             select(TaskRun.cancel_requested).where(
@@ -208,7 +208,7 @@ async def mark_task_cancelled(
     run_id: str,
     lease_token: str,
 ) -> bool:
-    """Commit CANCELLED only when this worker still owns the active lease."""
+    """仅当本 worker 仍持有活跃租约时才提交 CANCELLED 状态。"""
     task = (
         await db.execute(
             select(TaskRun).where(TaskRun.run_id == run_id).with_for_update()
@@ -244,7 +244,7 @@ async def mark_submission_failed(
     error_code: str,
     error_message: str,
 ) -> None:
-    """Keep a durable record when broker submission itself fails."""
+    """当 broker 提交本身失败时保留持久化记录。"""
     task.status = "FAILED"
     task.error_code = error_code
     task.error_message = error_message[:1024]
@@ -259,7 +259,7 @@ async def claim_task_run(
     timeout_seconds: int,
     lease_seconds: int,
 ) -> TaskRun | None:
-    """Claim an available run and issue a fencing token for this worker."""
+    """认领一个可用的运行，并为该 worker 签发隔离令牌。"""
     task = (
         await db.execute(
             select(TaskRun).where(TaskRun.run_id == run_id).with_for_update()
@@ -311,7 +311,7 @@ async def renew_task_lease(
     lease_token: str,
     lease_seconds: int,
 ) -> bool:
-    """Renew only the lease currently owned by this worker."""
+    """仅续期当前由本 worker 持有的租约。"""
     task = (
         await db.execute(
             select(TaskRun).where(TaskRun.run_id == run_id).with_for_update()
@@ -342,7 +342,7 @@ async def mark_task_retrying(
     error_code: str,
     error_message: str,
 ) -> bool:
-    """Return a failed transient attempt to QUEUED before Celery retries it."""
+    """在 Celery 重试之前，把失败的临时尝试恢复为 QUEUED。"""
     task = (
         await db.execute(
             select(TaskRun).where(TaskRun.run_id == run_id).with_for_update()
@@ -382,7 +382,7 @@ async def mark_task_finished(
     error_code: str | None = None,
     error_message: str | None = None,
 ) -> bool:
-    """Persist a terminal state only when this worker still owns the lease."""
+    """仅当本 worker 仍持有租约时才持久化终态。"""
     task = (
         await db.execute(
             select(TaskRun).where(TaskRun.run_id == run_id).with_for_update()
@@ -417,7 +417,7 @@ async def mark_expired_task_runs_lost(
     *,
     batch_size: int,
 ) -> list[TaskRecoveryCandidate]:
-    """Mark expired active leases LOST and return runs eligible for redelivery."""
+    """把过期的活跃租约标记为 LOST，并返回可重新投递的运行。"""
     now = datetime.now()
     tasks = (
         await db.execute(
@@ -476,7 +476,7 @@ async def set_recovery_celery_task_id(
     run_id: str,
     celery_task_id: str,
 ) -> bool:
-    """Record a redelivery id only while the run is still awaiting recovery."""
+    """仅在运行仍等待恢复时记录重新投递 id。"""
     task = (
         await db.execute(
             select(TaskRun).where(TaskRun.run_id == run_id).with_for_update()
@@ -496,7 +496,7 @@ async def list_recoverable_lost_task_runs(
     *,
     batch_size: int,
 ) -> list[TaskRecoveryCandidate]:
-    """Return persisted LOST runs, including runs left behind during a restart."""
+    """返回已持久化的 LOST 运行，包括重启期间遗留的运行。"""
     tasks = (
         await db.execute(
             select(TaskRun)

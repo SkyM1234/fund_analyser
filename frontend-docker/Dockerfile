@@ -1,5 +1,5 @@
 # ============================================================================
-# Frontend — Vite Dev Server（Node.js 镜像）
+# 前端 — Vite Dev Server（Node.js 镜像）
 # ============================================================================
 # 构建:  docker build -t fund-frontend:latest .
 # 启动:  docker compose up -d

@@ -1,7 +1,7 @@
 """
-Standalone HTML table normalization tester.
+独立的 HTML 表格归一化测试工具。
 
-Examples:
+示例：
     python test_html_table_parser.py --file table.html
     Get-Content -Raw table.html | python test_html_table_parser.py
 """

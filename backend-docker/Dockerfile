@@ -1,5 +1,5 @@
 # ============================================================================
-# Backend — FastAPI + MCP（Python + Node.js）
+# 后端 — FastAPI + MCP（Python + Node.js）
 # ============================================================================
 # 构建:  docker build -t fund-backend:latest .
 # 启动:  docker compose up -d

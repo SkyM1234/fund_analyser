@@ -25,7 +25,7 @@ router = APIRouter()
 
 
 async def _load_replay_trace(run_id: str) -> list[dict[str, Any]]:
-    """Load in-flight trace events when the final checkpoint is not available."""
+    """加载进行中的 trace 事件（最终 checkpoint 尚不可用时）。"""
     from app.db.redis import get_redis_client
 
     trace_types = {"agent_thought", "tool_call", "tool_result", "tool_retry"}
@@ -82,7 +82,7 @@ class SessionDetail(BaseModel):
 def _build_execution_summaries(
     channel_values: dict[str, Any],
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Build reloadable execution steps from checkpoint state."""
+    """根据 checkpoint 状态构建可重放的执行步骤。"""
     plan_summary: list[dict[str, Any]] = []
     agent_summary: list[dict[str, Any]] = []
 
@@ -94,7 +94,7 @@ def _build_execution_summaries(
             "task_id": "fund_scope",
             "description": "确认当前问题涉及的基金范围",
             "status": "completed" if fund_scope is not None else "failed",
-            # Keep this non-plan step ahead of the planned workers after reload.
+            # 重放时让这个非 plan 步骤排在计划中的 worker 之前。
             "sequence": -1,
         })
 
@@ -367,9 +367,9 @@ async def _load_session_detail(
                     if last_assistant is not None:
                         last_assistant["trace_events"] = replay_trace
 
-        # The checkpoint can contain the user message before the first AI
-        # message or trace event is persisted. Create the pending assistant
-        # from the durable task state so a reconnect always has an event sink.
+        # checkpoint 可能只包含用户消息，此时第一条 AI 消息或 trace 事件
+        # 尚未持久化。根据持久的任务状态创建 pending 的 assistant，
+        # 这样重连时始终有一个事件接收端。
         if (
             (active_task is not None or trace_runs)
             and formatted_messages
@@ -491,7 +491,7 @@ def _select_rewind_checkpoint(
     history: list[Any],
     target_user_count: int,
 ) -> Any | None:
-    """Return the newest state before the selected user turn."""
+    """返回所选用户轮次之前的最新状态。"""
     for item in history:
         checkpoint = getattr(item, "checkpoint", None)
         if not checkpoint:
@@ -519,7 +519,7 @@ async def rewind_session(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Rewind from the LangGraph checkpoint history, without trusting frontend history."""
+    """从 LangGraph checkpoint 历史回退，不信任前端历史。"""
     await _get_owned_session(db, thread_id, user.id)
     checkpointer = await get_checkpointer()
 

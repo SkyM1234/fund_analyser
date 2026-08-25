@@ -44,7 +44,7 @@ class BatchEncoder:
         self.model = model
         self.max_wait = max_wait_ms / 1000
         self.max_batch = max_batch
-        self._queue: list = []  # [(query, future), ...]
+        self._queue: list = []  # [(查询, future), ...]
         self._lock = asyncio.Lock()
         self._inference_lock = asyncio.Lock()
         self._flush_event = asyncio.Event()
@@ -105,7 +105,7 @@ class BatchReranker:
 
     使用方式：
         scores = await batch_reranker.compute(pairs)
-        # pairs: [[query, passage], ...] → scores: [float, ...]
+        # pairs: [[查询, 段落], ...] → scores: [float, ...]
     """
 
     def __init__(self, reranker, max_wait_ms: float = 50, max_batch: int = 128):
@@ -114,7 +114,7 @@ class BatchReranker:
         self.reranker = reranker
         self.max_wait = max_wait_ms / 1000
         self.max_batch = max_batch
-        self._queue: list = []  # [(pairs, future), ...]
+        self._queue: list = []  # [(配对列表, future), ...]
         self._lock = asyncio.Lock()
         self._inference_lock = asyncio.Lock()
         self._flush_event = asyncio.Event()
@@ -285,7 +285,7 @@ class SearchRequest(BaseModel):
     # 只接受单基金代码字符串或 None（全局检索）
     filter_fund_code: Optional[str] = None
     collection_name: str = "fund_reports_mineru"
-    search_type: str = "hybrid"  # "dense", "sparse", "hybrid"
+    search_type: str = "hybrid"  # "dense"（稠密）、"sparse"（稀疏）、"hybrid"（混合）
     use_reranker: bool = True
 
 

@@ -65,12 +65,12 @@ def _chunk_relevance(chunk: dict, truth: dict) -> bool:
 
 
 def _missing_chunk_truth(truth: dict) -> bool:
-    """Chunk ranking metrics require exact chunk-level ground truth."""
+    """chunk 排名类指标要求精确到 chunk 级的 ground truth。"""
     return not truth.get("relevant_chunk_ids")
 
 
 def _unique_chunks(chunks: list[dict]) -> list[dict]:
-    """Preserve ranking while preventing duplicate chunk IDs from inflating metrics."""
+    """保持排名顺序，同时防止重复的 chunk ID 抬高指标。"""
     seen_ids: set[str] = set()
     unique = []
     for chunk in chunks:
@@ -148,7 +148,7 @@ def ndcg(run: Any, example: Any) -> dict:
 
 
 def session_hit_rate(run: Any, example: Any) -> dict:
-    """Relevant chunk coverage among all ground-truth chunk IDs."""
+    """相关 chunk 在所有 ground-truth chunk ID 中的覆盖率。"""
     skip, reason = _should_skip_retrieval(run)
     if skip:
         return {"key": "hit_rate", "score": None, "comment": f"skip({reason})"}
@@ -175,7 +175,7 @@ def session_hit_rate(run: Any, example: Any) -> dict:
 
 
 def session_mrr(run: Any, example: Any) -> dict:
-    """Average reciprocal rank for every ground-truth chunk; misses score zero."""
+    """每个 ground-truth chunk 的平均倒数排名；未命中的记 0 分。"""
     skip, reason = _should_skip_retrieval(run)
     if skip:
         return {"key": "session_mrr", "score": None, "comment": f"skip({reason})"}
@@ -204,7 +204,7 @@ def session_mrr(run: Any, example: Any) -> dict:
 
 
 def session_ndcg(run: Any, example: Any) -> dict:
-    """NDCG using every ground-truth chunk in IDCG, so misses reduce the score."""
+    """NDCG：IDCG 使用全部 ground-truth chunk，因此未命中会拉低分数。"""
     skip, reason = _should_skip_retrieval(run)
     if skip:
         return {"key": "session_ndcg", "score": None, "comment": f"skip({reason})"}

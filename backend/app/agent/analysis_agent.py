@@ -1,4 +1,4 @@
-"""No-tool agent for synthesizing direct dependency results."""
+"""无工具 agent，用于汇总直接依赖结果。"""
 import logging
 import time
 from typing import Any
@@ -26,7 +26,7 @@ ANALYSIS_SYSTEM_PROMPT = """你是基金数据分析 Agent。
 
 
 async def analysis_agent_node(state: MultiAgentState) -> dict[str, Any]:
-    """Analyze completed dependency results without external tools."""
+    """不使用外部工具分析已完成的依赖结果。"""
     current_task = state.get("task_input")
     if not current_task:
         logger.error("[analysis_agent] No task_input")

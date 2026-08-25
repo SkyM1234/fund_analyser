@@ -1,4 +1,4 @@
-"""Parse structured chunk metadata from rag_search text results."""
+"""从 rag_search 文本结果中解析结构化的 chunk 元数据。"""
 from __future__ import annotations
 
 import re
@@ -8,7 +8,7 @@ from typing import Any
 
 @dataclass(frozen=True)
 class RagSearchChunkSection:
-    """One chunk block from a rag-mcp text response."""
+    """rag-mcp 文本响应中的单个 chunk 块。"""
 
     chunk_id: str
     score: float | None
@@ -18,7 +18,7 @@ _RESULT_SPLIT_RE = re.compile(r"^--- 结果\s+\d+\s+\(相似度:\s*([^)]+)\)\s+-
 
 
 def parse_rag_search_result(text: str) -> list[dict]:
-    """Return ranked chunk metadata embedded in rag-mcp's text response."""
+    """返回 rag-mcp 文本响应中嵌入的、带排名的 chunk 元数据。"""
     matches = list(_RESULT_SPLIT_RE.finditer(text or ""))
     chunks: list[dict] = []
 
@@ -51,7 +51,7 @@ def parse_rag_search_result(text: str) -> list[dict]:
 
 
 def parse_rag_search_sections(text: str) -> list[RagSearchChunkSection]:
-    """Return chunk blocks with original text for prompt-context de-duplication."""
+    """返回带原始文本的 chunk 块，用于 prompt 上下文的去重。"""
     matches = list(_RESULT_SPLIT_RE.finditer(text or ""))
     sections: list[RagSearchChunkSection] = []
 
@@ -79,7 +79,7 @@ def parse_rag_search_sections(text: str) -> list[RagSearchChunkSection]:
 
 
 def tool_output_to_text(output: Any) -> str:
-    """Normalize LangChain tool output content to the text emitted by rag-mcp."""
+    """把 LangChain 工具输出内容规范化为 rag-mcp 输出的文本。"""
     content = getattr(output, "content", output)
     if isinstance(content, str):
         return content

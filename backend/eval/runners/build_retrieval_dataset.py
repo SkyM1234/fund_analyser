@@ -1,7 +1,7 @@
-"""Build the retrieval evaluation dataset from the first 50 MinerU reports.
+"""基于前 50 份 MinerU 报告构建检索评测数据集。
 
-The question specifications are curated, while relevant chunk IDs and headers
-are resolved from the live Milvus collection so the labels match indexed data.
+问题规格是人工筛选的，而相关的 chunk ID 与标题根据线上 Milvus 集合
+解析，确保标签与已索引的数据一致。
 """
 
 import argparse

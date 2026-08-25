@@ -88,7 +88,7 @@ def fix_main_title(content: str) -> str:
                 pos = h1_idx + 1  # 回到 h1 后继续扫描
                 continue
             # Fix G: 日期被 MinerU 错误识别为 h1 标题 → 降级为纯文本
-            # e.g. "# 2025 年 12 月 31 日" → "2025 年 12 月 31 日"
+            # 例如 "# 2025 年 12 月 31 日" → "2025 年 12 月 31 日"
             if re.match(r'^#\s*' + date_re + r'\s*$', stripped):
                 idx = pos - 1
                 lines[idx] = stripped.lstrip('#').strip()

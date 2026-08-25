@@ -40,15 +40,15 @@ logger = logging.getLogger(__name__)
 
 
 class LeaseLostError(RuntimeError):
-    """Raised when this worker no longer owns the task run lease."""
+    """当本 worker 不再持有任务运行租约时抛出。"""
 
 
 class SessionBusyError(RuntimeError):
-    """Raised when another worker is currently processing the session."""
+    """当另一个 worker 正在处理该会话时抛出。"""
 
 
 class TaskCancelledError(asyncio.CancelledError):
-    """Raised when a task observes a user cancellation request."""
+    """当任务观察到用户取消请求时抛出。"""
 
 
 async def _session_lock_heartbeat(
@@ -57,7 +57,7 @@ async def _session_lock_heartbeat(
     stop_event: asyncio.Event,
     lock_lost_event: asyncio.Event | None = None,
 ) -> None:
-    """Keep the session lock alive while the agent is running."""
+    """在 agent 运行期间维持会话锁的有效性。"""
     interval = max(1, timeout_seconds // 3)
     while True:
         try:
@@ -172,11 +172,10 @@ async def _persist_checkpoint_id(
 
 
 async def _load_replayed_trace(run_id: str) -> list[dict]:
-    """Load trace events already published for this run.
+    """加载本运行已发布的 trace 事件。
 
-    Redis replay is the durable event journal for an in-flight run. It is
-    intentionally used to rebuild the UI and event sequence after recovery;
-    it must not be used as the LangGraph resume checkpoint.
+    Redis 回放是在途运行的持久化事件日志，专门用于在恢复后重建 UI 和
+    事件序列；绝不能把它当作 LangGraph 的恢复 checkpoint。
     """
     from app.db.redis import get_redis_client
 
@@ -203,7 +202,7 @@ async def _load_replayed_trace(run_id: str) -> list[dict]:
 
 
 def _mark_interrupted_tool_calls(trace_events: list[dict]) -> None:
-    """Mark calls abandoned by a dead worker before a recovery attempt."""
+    """标记被已死 worker 遗弃、需要在恢复前处理的工具调用。"""
     completed_call_ids = {
         str(event.get("tool_call_id"))
         for event in trace_events
@@ -252,7 +251,7 @@ async def _cancel_monitor_loop(
     stop_event: asyncio.Event,
     cancel_requested_event: asyncio.Event,
 ) -> None:
-    """Poll durable cancellation state so blocked agent calls can be stopped."""
+    """轮询持久化的取消状态，以便停止被阻塞的 agent 调用。"""
     while True:
         try:
             await asyncio.wait_for(stop_event.wait(), timeout=1)
@@ -293,7 +292,7 @@ def _resolve_task_context(
     event: dict,
     task_context_by_run_id: dict[str, dict[str, str]],
 ) -> dict[str, str]:
-    """Find the task context inherited by a LangChain child run."""
+    """查找 LangChain 子运行继承的任务上下文。"""
     run_id = str(event.get("run_id", ""))
     if run_id in task_context_by_run_id:
         return task_context_by_run_id[run_id]
@@ -307,7 +306,7 @@ def _resolve_task_context(
 
 
 def _extract_reasoning_text(message: object) -> str:
-    """Extract provider-exposed reasoning without treating normal content as reasoning."""
+    """提取 provider 暴露的推理内容，不把普通正文当作推理内容。"""
     candidates: list[object] = []
     if isinstance(message, dict):
         content = message.get("content")
@@ -372,8 +371,8 @@ async def _run_chat_turn(
 
     redis_client = get_redis_client()
     settings = get_settings()
-    # The lock is a short-lived Redis mutex. Healthy tasks renew it; after a
-    # worker crash it should expire no later than the task lease.
+    # 锁是短生命周期的 Redis 互斥锁。健康的任务会续期；worker 崩溃后，
+    # 它应在不晚于任务租约到期时过期。
     lock_timeout_seconds = max(15, settings.TASK_LEASE_SECONDS)
     lock = redis_client.lock(
         f"chat:lock:{req.session_id}",
@@ -979,10 +978,9 @@ async def _run_chat_turn(
                     f"session_id={req.session_id}, "
                     f"checkpoint_id={final_checkpoint_id}"
                 )
-            # Persist the completed turn's display trace only after the real
-            # graph checkpoint has been captured.  During execution, writing
-            # trace_events with aupdate_state(as_node="__start__") creates a
-            # synthetic branch that must never become the recovery pointer.
+            # 只在真实图 checkpoint 被捕获之后，才持久化本回合的展示 trace。
+            # 执行期间用 update_state(as_node="__start__") 写入 trace_events 会
+            # 产生一个合成分支，绝不能让它成为恢复指针。
             await persist_trace_progress(force=True)
 
             logger.info(f"[chat_task] 流式处理完成，共 {event_count} 个事件")

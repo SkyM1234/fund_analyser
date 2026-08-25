@@ -239,7 +239,7 @@ export async function cancelChatTask(runId: string) {
       const payload = await resp.json()
       detail = payload.detail ?? detail
     } catch {
-      // Keep the HTTP status when the error response is not JSON.
+      // 错误响应不是 JSON 时保留 HTTP 状态码。
     }
     throw new Error(detail)
   }

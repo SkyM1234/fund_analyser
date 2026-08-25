@@ -12,7 +12,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
-    # LLM
+    # LLM（大语言模型）
     LLM_BASE_URL: str = "https://api.deepseek.com/v1"
     LLM_API_KEY: str = os.getenv("DEEPSEEK_API_KEY", "")
     LLM_MODEL: str = "deepseek-v4-flash"
@@ -23,14 +23,14 @@ class Settings(BaseSettings):
     LLM_THINKING_LANGUAGE: str = os.getenv("LLM_THINKING_LANGUAGE", "中文")
     LLM_MAX_CONCURRENCY: int = int(os.getenv("LLM_MAX_CONCURRENCY", "10"))  # 单进程内并发 LLM 调用上限
 
-    # GPU
+    # GPU（图形处理器）
     GPU_HOST: str = os.getenv("GPU_HOST", "localhost")
     GPU_PORT: int = 8001
     RAG_REQUEST_TIMEOUT_SECONDS: float = float(
         os.getenv("RAG_REQUEST_TIMEOUT_SECONDS", "90")
     )
 
-    # Agent
+    # Agent（智能体）
     AGENT_TIMEOUT: int = 300
     MAX_QUERY_RETRIES: int = int(os.getenv("MAX_QUERY_RETRIES", "1"))
     AGENT_SELF_CHECK_ENABLED: bool = os.getenv(
@@ -114,7 +114,7 @@ class Settings(BaseSettings):
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
-    # Server
+    # Server（服务端）
     APP_HOST: str = "0.0.0.0"
     APP_PORT: int = 8800
     CORS_ORIGINS: str = "http://localhost:5173"

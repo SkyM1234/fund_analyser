@@ -75,7 +75,7 @@ def _split_inputs_outputs(item, schema_kind: str) -> tuple[dict, dict]:
         outputs = {
             "expected_fund_code": data.get("expected_fund_code"),
         }
-    else:  # answer
+    else:  # answer（回答评测）
         inputs = {"query": data["query"]}
         outputs = {
             "reference_answer": data.get("reference_answer", ""),

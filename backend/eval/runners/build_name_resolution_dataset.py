@@ -1,11 +1,11 @@
-"""Build the fund-name resolution evaluation dataset from MinerU reports.
+"""基于 MinerU 报告构建基金名称解析评测数据集。
 
-Each report contributes five title forms:
-1. short fund name from the report directory
-2. full fund name from the report directory
-3. short fund name with the annual-report suffix
-4. original H1 title from the analyzed Markdown
-5. original report directory title, including the fund code
+每份报告贡献五种标题形式：
+1. 报告目录中的基金简称
+2. 报告目录中的基金全称
+3. 带年度报告后缀的基金简称
+4. 分析后 Markdown 中的原始 H1 标题
+5. 原始报告目录标题（含基金代码）
 """
 from __future__ import annotations
 
@@ -44,7 +44,7 @@ def _parse_report(directory: Path) -> dict[str, str]:
     short_name = match.group("short_name").strip()
     report_title = match.group("report_title").strip()
 
-    # One historical directory repeats the fund code before the full report title.
+    # 某个历史目录在完整报告标题前重复了基金代码。
     report_title = re.sub(rf"^{re.escape(fund_code)}_", "", report_title, count=1)
     full_name = ANNUAL_REPORT_SUFFIX_RE.sub("", report_title).strip()
     if not full_name or full_name == report_title:

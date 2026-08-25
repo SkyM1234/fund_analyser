@@ -60,7 +60,7 @@ class SubTask(TypedDict, total=False):
     duration_ms: float | None       # 执行耗时（毫秒），finished_at - started_at
 
 
-    dependency_results: dict[str, str]  # Direct dependency result snapshot for task_input only.
+    dependency_results: dict[str, str]  # 仅为 task_input 保存直接依赖结果快照
 
 
 class PlanExecution(TypedDict, total=False):
@@ -68,7 +68,7 @@ class PlanExecution(TypedDict, total=False):
     round_id: str                   # 轮次ID（如 "round_1", "round_2"）
     user_query: str                 # 用户问题
     plan: list[SubTask]             # 任务列表
-    results: dict[str, str]         # task_id -> result
+    results: dict[str, str]         # task_id -> 结果
     final_answer: str | None        # 最终答案
     timestamp: str                  # 时间戳
 
@@ -100,7 +100,7 @@ class MultiAgentState(TypedDict):
     blocked_tasks: Annotated[list[str], merge_str_list_unique]    # 被失败依赖阻断的任务ID列表
 
     # 子任务结果存储（按 task_id 合并；supervisor 新一轮规划时返回 CLEARED 清空）
-    sub_results: Annotated[dict[str, str], merge_dict]  # {task_id: result_text}
+    sub_results: Annotated[dict[str, str], merge_dict]  # {task_id: 结果文本}
 
     # Agent调度
     current_agent: str | None       # 当前执行的Agent名称

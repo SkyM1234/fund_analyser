@@ -1,4 +1,4 @@
-"""Shared helpers for writing evaluation aggregate reports."""
+"""编写评测汇总报告的公共辅助函数。"""
 from __future__ import annotations
 
 from collections import defaultdict
@@ -14,7 +14,7 @@ def build_aggregate_report(
     rows: list[dict[str, Any]],
     generated_at: datetime,
 ) -> dict[str, Any]:
-    """Build a serializable metric summary from per-sample evaluation rows."""
+    """根据逐样本评测行构建可序列化的指标汇总。"""
     metric_values: dict[str, list[float]] = defaultdict(list)
     failed_sample_count = 0
 

@@ -1,7 +1,7 @@
-"""Build the dedicated cross-fund answer dataset.
+"""构建专用的跨基金回答数据集。
 
-The questions are grounded in Markdown-derived fund/report positions and are
-resolved against the live Milvus collection before writing the JSONL file.
+问题以 Markdown 派生的基金/报告位置为基准，并在写入 JSONL 文件前
+对照线上 Milvus 集合解析答案。
 """
 from __future__ import annotations
 
@@ -45,7 +45,7 @@ SKIPPABLE_DETAIL_LABELS = {
 
 
 def split_compound_key_fact(fact: str) -> list[str]:
-    """Split fund-prefixed compound facts into atomic entities and values."""
+    """把带基金前缀的复合事实拆分为原子实体和值。"""
     if re.search(r"[:：]", fact):
         entity, detail = re.split(r"[:：]", fact, maxsplit=1)
         parts = [entity.strip()]
@@ -81,7 +81,7 @@ def split_compound_key_fact(fact: str) -> list[str]:
 
 
 def normalize_key_facts(key_facts: list[str]) -> list[str]:
-    """Split compound facts into atomic entities and values."""
+    """把复合事实拆分为原子实体和值。"""
     normalized = []
     for fact in key_facts:
         for value in split_compound_key_fact(fact):
@@ -1339,7 +1339,7 @@ def fetch_chunks_by_fund_and_index(
     collection: str,
     fund_chunks: dict[str, int],
 ) -> list[dict]:
-    """Resolve the current Milvus chunk IDs from stable fund/report positions."""
+    """根据稳定的基金/报告位置解析当前的 Milvus chunk ID。"""
     rows = []
     for fund_code, chunk_index in fund_chunks.items():
         result = client.query(

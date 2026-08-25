@@ -651,7 +651,7 @@ def build_multi_agent_graph(checkpointer: BaseCheckpointSaver):
         }
     )
 
-    # Synthesizer → Compliance
+    # Synthesizer（汇总） → Compliance（合规检查）
     graph.add_edge("synthesizer", "compliance")
     graph.add_edge("direct_answer", "compliance")
 
