@@ -48,7 +48,8 @@ fund_analyser/
 ├── backend/                  # FastAPI、Celery、LangGraph、MCP 与测试
 ├── backend-docker/           # 后端 API 和 Worker Docker Compose
 ├── sql-docker/               # PostgreSQL、MySQL、Redis
-├── milvus-docker/            # Milvus、Attu、embedding/RAG 服务
+├── milvus-docker/            # Milvus、Attu
+├── embedding-service-docker/ # embedding/RAG 服务
 ├── vectorize/                # PDF 到 Milvus 的离线入库脚本
 ├── mineru-docker/            # MinerU PDF 解析服务
 ├── annual_reports_2025_funds/# 原始基金年报（本地数据，已忽略）
@@ -64,7 +65,7 @@ fund_analyser/
 ### 前置条件
 
 - Docker Desktop 与 Docker Compose。
-- NVIDIA GPU、NVIDIA 驱动和 NVIDIA Container Toolkit，用于 `milvus-docker` 中的 embedding 服务。
+- NVIDIA GPU、NVIDIA 驱动和 NVIDIA Container Toolkit，用于 embedding/RAG 服务。
 - 本地模型目录 `embedding_model/`，其中包含 `bge-m3` 和 `bge-reranker-v2-m3`。
 - DeepSeek 或其他 OpenAI 兼容 LLM 的 API 密钥。
 
