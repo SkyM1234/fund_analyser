@@ -70,11 +70,12 @@ fund_analyser/
 
 ### 1. 配置环境变量
 
-为三个 Compose 项目准备环境文件。三个文件中的 MySQL 密码必须一致。
+为各 Compose 项目准备环境文件。后端和 embedding 服务中的 MySQL 密码必须一致。
 
 ```powershell
 # 在仓库根目录执行
 Copy-Item milvus-docker\.env.example milvus-docker\.env
+Copy-Item embedding-service-docker\.env.example embedding-service-docker\.env
 Copy-Item backend-docker\.env.example backend-docker\.env
 New-Item -ItemType File -Path sql-docker\.env
 ```
@@ -85,7 +86,7 @@ New-Item -ItemType File -Path sql-docker\.env
 MYSQL_ROOT_PASSWORD=replace-with-a-strong-password
 ```
 
-在 `milvus-docker/.env` 中设置相同的 `MYSQL_PASSWORD`，并确认模型目录：
+在 `embedding-service-docker/.env` 中设置相同的 `MYSQL_PASSWORD`，并确认模型目录：
 
 ```dotenv
 MYSQL_PASSWORD=replace-with-a-strong-password
@@ -109,6 +110,10 @@ docker compose up -d
 
 cd ..\milvus-docker
 docker compose up -d
+
+cd ..\embedding-service-docker
+docker compose up -d
+
 ```
 
 等待 embedding 服务就绪：

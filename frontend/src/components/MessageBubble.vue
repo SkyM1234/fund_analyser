@@ -210,7 +210,7 @@ const executionThoughtCount = computed(() =>
   ),
 )
 
-const executionOpen = ref(true)
+const executionOpen = ref(false)
 const openThoughts = ref(new Set<string>())
 const collapsedTasks = ref(new Set<string>())
 const isEditing = ref(false)

@@ -1,0 +1,57 @@
+services:
+  embedding-service:
+    image: milvus-docker-embedding-service:latest
+    container_name: embedding-service
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    volumes:
+      - ${EMBEDDING_MODEL_DIR:-../embedding_model}:/app/embedding_model:ro
+      - ./wait-for-milvus.py:/opt/wait-for-milvus.py:ro
+    environment:
+      MILVUS_URL: ${MILVUS_URL:-http://milvus-standalone:19530}
+      MILVUS_HEALTH_URL: ${MILVUS_HEALTH_URL:-http://milvus-standalone:9091/healthz}
+      MILVUS_WAIT_TIMEOUT_SECONDS: ${MILVUS_WAIT_TIMEOUT_SECONDS:-300}
+      MILVUS_WAIT_INTERVAL_SECONDS: ${MILVUS_WAIT_INTERVAL_SECONDS:-5}
+      GPU_CONCURRENCY: ${GPU_CONCURRENCY:-1}
+      BATCH_RERANK_WAIT_MS: ${BATCH_RERANK_WAIT_MS:-50}
+      BATCH_RERANK_MAX: ${BATCH_RERANK_MAX:-128}
+      EMBEDDING_MODEL_PATH: /app/embedding_model/bge-m3
+      RERANKER_MODEL_PATH: /app/embedding_model/bge-reranker-v2-m3
+      MYSQL_HOST: ${MYSQL_HOST:-host.docker.internal}
+      MYSQL_PORT: ${MYSQL_PORT:-3306}
+      MYSQL_USER: ${MYSQL_USER:-root}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-fund_analyser}
+      MYSQL_CONNECT_TIMEOUT: ${MYSQL_CONNECT_TIMEOUT:-5}
+      MYSQL_READ_TIMEOUT: ${MYSQL_READ_TIMEOUT:-5}
+    command: ["python", "/opt/wait-for-milvus.py"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ulimits:
+      memlock: -1
+    ipc: host
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8001/health', timeout=3)"
+      interval: 30s
+      timeout: 5s
+      start_period: 120s
+      retries: 3
+    networks:
+      - milvus
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["0"]
+              capabilities: [gpu]
+
+networks:
+  milvus:
+    external: true
+    name: milvus

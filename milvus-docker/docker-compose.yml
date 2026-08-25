@@ -92,52 +92,6 @@ services:
     depends_on:
       - "milvus-standalone"
 
-  # ------------------------------------------------------------------
-  # Embedding Service — BGE-M3 + BGE-Reranker-v2-m3 一体化查询服务
-  # ------------------------------------------------------------------
-  embedding-service:
-    build: .
-    container_name: embedding-service
-    restart: unless-stopped
-    ports:
-      - "8001:8001"
-    volumes:
-      # 模型挂载（~4GB，太大不适合打入镜像）
-      - ${EMBEDDING_MODEL_DIR:-../embedding_model}:/app/embedding_model:ro
-      # 代码挂载（修改后只需 docker compose restart，无需重新 build）
-      - ./embedding_service.py:/app/embedding_service.py:ro
-      - ./hybrid_search.py:/app/hybrid_search.py:ro
-    environment:
-      - MILVUS_URL=http://milvus-standalone:19530
-      - GPU_CONCURRENCY=${GPU_CONCURRENCY:-1}
-      - BATCH_RERANK_WAIT_MS=${BATCH_RERANK_WAIT_MS:-50}
-      - BATCH_RERANK_MAX=${BATCH_RERANK_MAX:-128}
-      - EMBEDDING_MODEL_PATH=/app/embedding_model/bge-m3
-      - RERANKER_MODEL_PATH=/app/embedding_model/bge-reranker-v2-m3
-      - MYSQL_HOST=${MYSQL_HOST:-host.docker.internal}
-      - MYSQL_PORT=${MYSQL_PORT:-3306}
-      - MYSQL_USER=${MYSQL_USER:-root}
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-}
-      - MYSQL_DATABASE=${MYSQL_DATABASE:-fund_analyser}
-      - MYSQL_CONNECT_TIMEOUT=${MYSQL_CONNECT_TIMEOUT:-5}
-      - MYSQL_READ_TIMEOUT=${MYSQL_READ_TIMEOUT:-5}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    ulimits:
-      memlock: -1
-    ipc: host
-    depends_on:
-      milvus-standalone:
-        condition: service_healthy
-    # GPU 支持
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              device_ids: ["0"]
-              capabilities: [gpu]
-
 networks:
   default:
     name: milvus
