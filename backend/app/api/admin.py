@@ -252,7 +252,7 @@ async def get_any_session(
     )).scalar_one_or_none()
     if exists is None:
         raise HTTPException(status_code=404, detail="Session not found")
-    return await _load_session_detail(thread_id)
+    return await _load_session_detail(thread_id, db, exists.user_id)
 
 
 @router.delete("/admin/sessions/{thread_id}")

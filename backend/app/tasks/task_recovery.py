@@ -8,6 +8,7 @@ from app.core.celery_app import celery_app
 from app.core.config import get_settings
 from app.core.worker_lifecycle import run_coro
 from app.db.mysql import get_session_factory
+from app.services.checkpoint import get_checkpointer
 from app.services.task_events import publish_event
 from app.services.task_runs import (
     TaskRecoveryCandidate,
@@ -39,6 +40,43 @@ async def _record_recovery_task_id(run_id: str, celery_task_id: str) -> bool:
         )
 
 
+def _load_checkpoint_trace(candidate: TaskRecoveryCandidate) -> list[dict]:
+    session_id = candidate.request_payload.get("session_id")
+    if not candidate.checkpoint_id or not session_id:
+        return []
+
+    async def _load() -> list[dict]:
+        checkpointer = await get_checkpointer()
+        config = {
+            "configurable": {
+                "thread_id": candidate.request_payload.get("session_id"),
+                "checkpoint_id": candidate.checkpoint_id,
+            }
+        }
+        checkpoint_tuple = await checkpointer.aget_tuple(config)
+        if not checkpoint_tuple or not checkpoint_tuple.checkpoint:
+            return []
+        trace_events = checkpoint_tuple.checkpoint.get("channel_values", {}).get(
+            "trace_events",
+            {},
+        )
+        if not isinstance(trace_events, dict):
+            return []
+        events = trace_events.get(candidate.run_id, [])
+        return [event for event in events if isinstance(event, dict)]
+
+    try:
+        return run_coro(_load(), timeout=30)
+    except Exception:
+        logger.exception(
+            "[task_recovery] failed to load checkpoint trace; "
+            "continuing with an empty recovery snapshot: run_id=%s checkpoint_id=%s",
+            candidate.run_id,
+            candidate.checkpoint_id,
+        )
+        return []
+
+
 @celery_app.task(name="app.tasks.task_recovery.recover_expired_task_runs")
 def recover_expired_task_runs() -> int:
     """Mark expired leases LOST and redeliver persisted requests at most once per scan."""
@@ -59,6 +97,17 @@ def recover_expired_task_runs() -> int:
             continue
 
         try:
+            checkpoint_trace = _load_checkpoint_trace(candidate)
+            publish_event(
+                candidate.run_id,
+                "attempt_start",
+                {
+                    "attempt": candidate.attempt + 1,
+                    "worker_recovery": True,
+                    "checkpoint_id": candidate.checkpoint_id,
+                    "checkpoint_trace": checkpoint_trace,
+                },
+            )
             if not candidate.checkpoint_id:
                 logger.warning(
                     "[task_recovery] checkpoint_id missing; falling back to legacy "

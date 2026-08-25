@@ -72,6 +72,41 @@ async def get_or_create_task_run(
     return task, True
 
 
+async def get_task_run_for_user(
+    db: AsyncSession,
+    *,
+    run_id: str,
+    user_id: int,
+) -> TaskRun | None:
+    return (
+        await db.execute(
+            select(TaskRun).where(
+                TaskRun.run_id == run_id,
+                TaskRun.user_id == user_id,
+            )
+        )
+    ).scalar_one_or_none()
+
+
+async def get_active_task_run(
+    db: AsyncSession,
+    *,
+    session_id: str,
+    user_id: int,
+) -> TaskRun | None:
+    return (
+        await db.execute(
+            select(TaskRun)
+            .where(
+                TaskRun.session_id == session_id,
+                TaskRun.user_id == user_id,
+                TaskRun.status.in_(("QUEUED", "RUNNING", "LOST")),
+            )
+            .order_by(TaskRun.created_at.desc())
+        )
+    ).scalars().first()
+
+
 async def set_celery_task_id(
     db: AsyncSession,
     task: TaskRun,

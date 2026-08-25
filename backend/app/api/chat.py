@@ -26,6 +26,7 @@ message_start / retry_notice 显式标记消息边界，交由前端在收到 me
 """
 import json
 import logging
+import asyncio
 import uuid
 from typing import AsyncGenerator
 
@@ -47,6 +48,7 @@ from app.services.task_events import (
     subscribe_events,
 )
 from app.services.task_runs import (
+    get_task_run_for_user,
     get_or_create_task_run,
     mark_submission_failed,
     request_task_cancel,
@@ -96,6 +98,40 @@ async def _relay_from_task(run_id: str, task_id: str, request: Request) -> Async
         logger.exception(f"[chat] 转发任务事件异常: run_id={run_id}")
         yield _sse("error", {"message": "内部错误，请稍后重试"})
     logger.info(f"[chat] 事件转发结束: run_id={run_id}")
+
+
+@router.get("/chat/tasks/{run_id}/stream")
+async def resume_chat_task_stream(
+    run_id: str,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Reattach to an existing task after a browser reconnect."""
+    task_run = await get_task_run_for_user(db, run_id=run_id, user_id=user.id)
+    if task_run is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    # The session detail and task submission are separate database writes.
+    # During that small window the browser can discover an active QUEUED run
+    # before the Celery id has been persisted. Wait briefly instead of turning
+    # a recoverable reconnect into a terminal frontend error.
+    for _ in range(20):
+        if task_run.celery_task_id:
+            break
+        if task_run.status not in {"QUEUED", "RUNNING", "LOST"}:
+            raise HTTPException(status_code=409, detail="Task is no longer active")
+        await asyncio.sleep(0.25)
+        task_run = await get_task_run_for_user(db, run_id=run_id, user_id=user.id)
+        if task_run is None:
+            raise HTTPException(status_code=404, detail="Task not found")
+
+    if not task_run.celery_task_id:
+        raise HTTPException(status_code=409, detail="Task is still being submitted")
+
+    return EventSourceResponse(
+        _relay_from_task(run_id, task_run.celery_task_id, request)
+    )
 
 
 @router.post("/chat/stream")

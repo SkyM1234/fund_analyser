@@ -344,6 +344,7 @@ const copyContent = async () => {
                         name: event.name || '',
                         args: event.args,
                         output: event.output,
+                        interrupted: event.interrupted,
                         tool_call_id: event.tool_call_id,
                         agent_name: event.agent_name,
                         task_id: event.task_id,

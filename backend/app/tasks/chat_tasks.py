@@ -9,6 +9,7 @@
   之前声明但未生效的 AGENT_TIMEOUT。
 """
 import asyncio
+import json
 import logging
 import random
 from collections.abc import Iterable
@@ -168,6 +169,53 @@ async def _persist_checkpoint_id(
             lease_token=lease_token,
             checkpoint_id=checkpoint_id,
         )
+
+
+async def _load_replayed_trace(run_id: str) -> list[dict]:
+    """Load trace events already published for this run.
+
+    Redis replay is the durable event journal for an in-flight run. It is
+    intentionally used to rebuild the UI and event sequence after recovery;
+    it must not be used as the LangGraph resume checkpoint.
+    """
+    from app.db.redis import get_redis_client
+
+    trace_event_types = {
+        "agent_thought",
+        "tool_call",
+        "tool_result",
+        "tool_retry",
+    }
+    events: list[dict] = []
+    for raw in await get_redis_client().lrange(f"chat:events:replay:{run_id}", 0, -1):
+        try:
+            frame = json.loads(raw)
+        except (TypeError, json.JSONDecodeError):
+            continue
+        if not isinstance(frame, dict):
+            continue
+        if frame.get("event") not in trace_event_types:
+            continue
+        data = frame.get("data")
+        if isinstance(data, dict):
+            events.append({"type": frame["event"], **data})
+    return events
+
+
+def _mark_interrupted_tool_calls(trace_events: list[dict]) -> None:
+    """Mark calls abandoned by a dead worker before a recovery attempt."""
+    completed_call_ids = {
+        str(event.get("tool_call_id"))
+        for event in trace_events
+        if event.get("type") == "tool_result" and event.get("tool_call_id")
+    }
+    for event in trace_events:
+        if (
+            event.get("type") == "tool_call"
+            and event.get("tool_call_id")
+            and str(event["tool_call_id"]) not in completed_call_ids
+        ):
+            event["interrupted"] = True
 
 
 async def _heartbeat_loop(
@@ -387,6 +435,20 @@ async def _run_chat_turn(
                 f"Task checkpoint no longer exists for recovery: {run_id}"
             )
 
+        checkpoint_trace_events: list[dict] = []
+        if has_checkpoint:
+            persisted_trace_events = (
+                checkpoint_tuple.checkpoint
+                .get("channel_values", {})
+                .get("trace_events", {})
+            )
+            if isinstance(persisted_trace_events, dict):
+                checkpoint_trace_events = [
+                    event
+                    for event in persisted_trace_events.get(run_id, [])
+                    if isinstance(event, dict)
+                ]
+
         if checkpoint_id is None and not has_checkpoint and req.history:
             logger.info(f"[chat_task] 从前端 history 初始化，共 {len(req.history)} 条消息")
             init_messages = []
@@ -466,8 +528,34 @@ async def _run_chat_turn(
             event_count = 0
             seen_run_ids: set[str] = set()
             task_context_by_run_id: dict[str, dict[str, str]] = {}
-            trace_events: list[dict] = []
+            replayed_trace_events = await _load_replayed_trace(run_id)
+            trace_events_by_id = {}
+            for index, event in enumerate(
+                [*checkpoint_trace_events, *replayed_trace_events]
+            ):
+                if not isinstance(event, dict):
+                    continue
+                event_id = event.get("event_id")
+                key = (
+                    str(event_id)
+                    if event_id
+                    else f"{event.get('type', '')}:{event.get('sequence', index)}"
+                )
+                trace_events_by_id[key] = event
+            trace_events = list(trace_events_by_id.values())
+            def _trace_sequence(event: dict) -> int:
+                try:
+                    return int(event.get("sequence", 0))
+                except (TypeError, ValueError):
+                    return 0
+
+            trace_events.sort(key=_trace_sequence)
             trace_sequence = 0
+            for event in trace_events:
+                trace_sequence = max(trace_sequence, _trace_sequence(event))
+            if checkpoint_id is not None:
+                _mark_interrupted_tool_calls(trace_events)
+            persisted_trace_count = len(trace_events)
             streamed_answer = ""
             decision_by_task: dict[str, str] = {}
             decision_tools: dict[str, list[str]] = {}
@@ -485,6 +573,26 @@ async def _run_chat_turn(
                 }
                 trace_events.append({"type": event_name, **payload})
                 publish_event(run_id, event_name, payload)
+
+            async def persist_trace_progress(force: bool = False) -> None:
+                nonlocal persisted_trace_count
+                if not trace_events:
+                    return
+                if not force and len(trace_events) == persisted_trace_count:
+                    return
+                progress_config = {
+                    "configurable": {
+                        key: value
+                        for key, value in config["configurable"].items()
+                        if key != "checkpoint_id"
+                    }
+                }
+                await app.aupdate_state(
+                    config=progress_config,
+                    values={"trace_events": {run_id: list(trace_events)}},
+                    as_node="__start__",
+                )
+                persisted_trace_count = len(trace_events)
 
             async for event in app.astream_events(input_state, config=config, version="v2"):
                 if lease_lost_event is not None and lease_lost_event.is_set():
@@ -810,11 +918,6 @@ async def _run_chat_turn(
                     if key != "checkpoint_id"
                 }
             }
-            await app.aupdate_state(
-                config=latest_config,
-                values={"trace_events": {run_id: trace_events}},
-                as_node="__start__",
-            )
             final_state = await app.aget_state(latest_config)
             final_messages = (
                 final_state.values.get("messages", [])
@@ -876,6 +979,11 @@ async def _run_chat_turn(
                     f"session_id={req.session_id}, "
                     f"checkpoint_id={final_checkpoint_id}"
                 )
+            # Persist the completed turn's display trace only after the real
+            # graph checkpoint has been captured.  During execution, writing
+            # trace_events with aupdate_state(as_node="__start__") creates a
+            # synthetic branch that must never become the recovery pointer.
+            await persist_trace_progress(force=True)
 
             logger.info(f"[chat_task] 流式处理完成，共 {event_count} 个事件")
             if lease_lost_event is not None and lease_lost_event.is_set():

@@ -8,10 +8,11 @@ const props = defineProps<{ step: ToolStep }>()
 const open = ref(false)
 
 const isRetry = computed(() => (props.step.retry_attempt ?? 0) > 0)
+const isInterrupted = computed(() => Boolean(props.step.interrupted))
 </script>
 
 <template>
-  <div :class="['tool', { retry: isRetry }]">
+  <div :class="['tool', { retry: isRetry, interrupted: isInterrupted }]">
     <div class="head" @click="open = !open">
       <el-icon class="tag-icon"><Tools /></el-icon>
       <span class="name">{{ step.name }}</span>
@@ -51,6 +52,19 @@ const isRetry = computed(() => (props.step.retry_attempt ?? 0) > 0)
 .tool.retry {
   border-color: var(--warning);
   background: var(--warning-soft);
+}
+.tool.interrupted {
+  border-color: var(--muted);
+}
+.tool.interrupted .status {
+  font-size: 0;
+}
+.tool.interrupted .status .spin {
+  display: none;
+}
+.tool.interrupted .status::after {
+  content: '执行中断';
+  font-size: 11px;
 }
 .head {
   display: flex;

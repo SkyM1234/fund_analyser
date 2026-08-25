@@ -6,6 +6,7 @@ PostgreSQL 的 checkpoints 表存 LangGraph 的执行状态快照。所有接口
 凭空猜一个 thread_id 就看到/删掉别人的会话。
 """
 import logging
+import json
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -17,9 +18,50 @@ from app.core.security import get_current_user
 from app.db.models import ChatSession, User
 from app.db.mysql import get_db
 from app.services.checkpoint import get_checkpointer
+from app.services.task_runs import get_active_task_run
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+async def _load_replay_trace(run_id: str) -> list[dict[str, Any]]:
+    """Load in-flight trace events when the final checkpoint is not available."""
+    from app.db.redis import get_redis_client
+
+    trace_types = {"agent_thought", "tool_call", "tool_result", "tool_retry"}
+    events: list[dict[str, Any]] = []
+    try:
+        frames = await get_redis_client().lrange(f"chat:events:replay:{run_id}", 0, -1)
+    except Exception:
+        logger.exception("[session] failed to load replay trace: run_id=%s", run_id)
+        return []
+
+    for raw in frames:
+        try:
+            frame = json.loads(raw)
+        except (TypeError, json.JSONDecodeError):
+            continue
+        if (
+            not isinstance(frame, dict)
+            or frame.get("event") not in trace_types
+            or not isinstance(frame.get("data"), dict)
+        ):
+            continue
+        events.append({"type": frame["event"], **frame["data"]})
+
+    by_id: dict[str, dict[str, Any]] = {}
+    for index, event in enumerate(events):
+        event_id = event.get("event_id")
+        key = str(event_id) if event_id else f"{event.get('type', '')}:{event.get('sequence', index)}"
+        by_id[key] = event
+
+    def sequence(event: dict[str, Any]) -> int:
+        try:
+            return int(event.get("sequence", 0))
+        except (TypeError, ValueError):
+            return 0
+
+    return sorted(by_id.values(), key=sequence)
 
 
 class SessionItem(BaseModel):
@@ -34,6 +76,7 @@ class SessionDetail(BaseModel):
     thread_id: str
     messages: list[dict[str, Any]]
     checkpoint_count: int
+    active_task: dict[str, Any] | None = None
 
 
 async def _get_owned_session(db: AsyncSession, thread_id: str, user_id: int) -> ChatSession:
@@ -101,7 +144,11 @@ async def list_sessions(
     return sessions
 
 
-async def _load_session_detail(thread_id: str) -> SessionDetail:
+async def _load_session_detail(
+    thread_id: str,
+    db: AsyncSession | None = None,
+    user_id: int | None = None,
+) -> SessionDetail:
     """从 Postgres checkpoint 还原某个 thread_id 的完整消息列表，供普通用户和管理员接口共用。"""
     checkpointer = await get_checkpointer()
 
@@ -134,9 +181,10 @@ async def _load_session_detail(thread_id: str) -> SessionDetail:
             message_types,
         )
         if messages and not any(message_type == "ai" for message_type in message_types):
-            logger.error(
-                "[session] checkpoint has no AIMessage; frontend will only show "
-                "user messages: thread_id=%s checkpoint_id=%s",
+            logger.warning(
+                "[session] checkpoint has no AIMessage yet; task state will determine "
+                "whether frontend should create a pending assistant: "
+                "thread_id=%s checkpoint_id=%s",
                 thread_id,
                 checkpoint_id,
             )
@@ -248,6 +296,56 @@ async def _load_session_detail(thread_id: str) -> SessionDetail:
             if assistant_indexes:
                 formatted_messages[assistant_indexes[-1]]["trace_events"] = trace_runs[turn_index]
 
+        active_task = None
+        if db is not None and user_id is not None:
+            task = await get_active_task_run(
+                db,
+                session_id=thread_id,
+                user_id=user_id,
+            )
+            if task is not None:
+                active_task = {
+                    "run_id": task.run_id,
+                    "task_id": task.celery_task_id,
+                    "status": task.status,
+                    "attempt": task.attempt,
+                }
+                replay_trace = await _load_replay_trace(task.run_id)
+                if replay_trace:
+                    if trace_runs:
+                        trace_runs[-1] = replay_trace
+                    else:
+                        trace_runs = [replay_trace]
+
+                    last_assistant = next(
+                        (
+                            message
+                            for message in reversed(formatted_messages)
+                            if message["role"] == "assistant"
+                        ),
+                        None,
+                    )
+                    if last_assistant is not None:
+                        last_assistant["trace_events"] = replay_trace
+
+        # The checkpoint can contain the user message before the first AI
+        # message or trace event is persisted. Create the pending assistant
+        # from the durable task state so a reconnect always has an event sink.
+        if (
+            (active_task is not None or trace_runs)
+            and formatted_messages
+            and formatted_messages[-1]["role"] == "user"
+        ):
+            formatted_messages.append({
+                "role": "assistant",
+                "content": "",
+                "tools": [],
+                "trace_events": trace_runs[-1] if trace_runs else [],
+                "agents": [],
+                "plan": [],
+                "pending": True,
+            })
+
         if formatted_messages and current_plan:
             plan_summary = []
             agent_summary = []
@@ -284,6 +382,7 @@ async def _load_session_detail(thread_id: str) -> SessionDetail:
             thread_id=thread_id,
             messages=formatted_messages,
             checkpoint_count=len(messages),
+            active_task=active_task,
         )
     except HTTPException:
         raise
@@ -300,7 +399,7 @@ async def get_session(
 ):
     """获取某个会话的所有历史消息（仅当前用户拥有的会话）。"""
     await _get_owned_session(db, thread_id, user.id)
-    return await _load_session_detail(thread_id)
+    return await _load_session_detail(thread_id, db, user.id)
 
 
 @router.delete("/sessions/{thread_id}")

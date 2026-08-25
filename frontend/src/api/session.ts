@@ -45,8 +45,15 @@ export interface SessionDetail {
       assigned_agent: string
       fund_codes: string[]
     }>
+    pending?: boolean
   }>
   checkpoint_count: number
+  active_task?: {
+    run_id: string
+    task_id: string | null
+    status: string
+    attempt: number
+  } | null
 }
 
 export async function listSessions(): Promise<SessionItem[]> {

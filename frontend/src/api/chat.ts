@@ -12,6 +12,11 @@ import { authFetch } from './http'
 
 export interface StreamHandlers {
   onStarted?: (runId: string, taskId: string) => void
+  onAttemptStart?: (
+    attempt: number,
+    workerRecovery: boolean,
+    checkpointTrace?: any[],
+  ) => void
   onMessageStart?: () => void
   onToken?: (delta: string) => void
   onRetryNotice?: (reason: string) => void
@@ -54,19 +59,28 @@ export interface SendOptions {
   session_id: string  // 必需，会话 ID
   history?: ChatHistoryItem[]
   signal?: AbortSignal
+  resume_run_id?: string
 }
 
 export async function sendChatStream(opts: SendOptions, handlers: StreamHandlers) {
-  const resp = await authFetch('/api/chat/stream', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
-    body: JSON.stringify({
-      message: opts.message,
-      session_id: opts.session_id,
-      history: opts.history ?? [],
-    }),
-    signal: opts.signal,
-  })
+  const resuming = Boolean(opts.resume_run_id)
+  const resp = await authFetch(
+    resuming
+      ? `/api/chat/tasks/${encodeURIComponent(opts.resume_run_id!)}/stream`
+      : '/api/chat/stream',
+    resuming
+      ? { method: 'GET', headers: { Accept: 'text/event-stream' }, signal: opts.signal }
+      : {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+          body: JSON.stringify({
+            message: opts.message,
+            session_id: opts.session_id,
+            history: opts.history ?? [],
+          }),
+          signal: opts.signal,
+        },
+  )
 
   if (!resp.ok || !resp.body) {
     handlers.onError?.(`HTTP ${resp.status}`)
@@ -101,6 +115,13 @@ export async function sendChatStream(opts: SendOptions, handlers: StreamHandlers
     switch (event) {
       case 'started':
         handlers.onStarted?.(payload.run_id ?? '', payload.task_id ?? '')
+        break
+      case 'attempt_start':
+        handlers.onAttemptStart?.(
+          Number(payload.attempt ?? 1),
+          Boolean(payload.worker_recovery),
+          Array.isArray(payload.checkpoint_trace) ? payload.checkpoint_trace : undefined,
+        )
         break
       case 'message_start':
         handlers.onMessageStart?.()
@@ -188,6 +209,22 @@ export async function sendChatStream(opts: SendOptions, handlers: StreamHandlers
   } catch (e: any) {
     if (e?.name !== 'AbortError') handlers.onError?.(String(e?.message ?? e))
   }
+}
+
+export function resumeChatStream(
+  runId: string,
+  handlers: StreamHandlers,
+  signal?: AbortSignal,
+) {
+  return sendChatStream(
+    {
+      message: '',
+      session_id: '',
+      resume_run_id: runId,
+      signal,
+    },
+    handlers,
+  )
 }
 
 export async function cancelChatTask(runId: string) {
