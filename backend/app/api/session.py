@@ -115,6 +115,31 @@ async def _load_session_detail(thread_id: str) -> SessionDetail:
         checkpoint = checkpoint_tuple.checkpoint
         channel_values = checkpoint.get("channel_values", {})
         messages = channel_values.get("messages", [])
+        checkpoint_id = checkpoint.get("id")
+        message_types = [
+            (
+                getattr(message, "type", None)
+                or message.get("type")
+                if isinstance(message, dict)
+                else getattr(message, "type", type(message).__name__)
+            )
+            for message in messages
+        ]
+        logger.info(
+            "[session] loaded checkpoint: thread_id=%s checkpoint_id=%s "
+            "message_count=%s message_types=%s",
+            thread_id,
+            checkpoint_id,
+            len(messages),
+            message_types,
+        )
+        if messages and not any(message_type == "ai" for message_type in message_types):
+            logger.error(
+                "[session] checkpoint has no AIMessage; frontend will only show "
+                "user messages: thread_id=%s checkpoint_id=%s",
+                thread_id,
+                checkpoint_id,
+            )
         tool_call_log = channel_values.get("tool_call_log", []) or []
         trace_events_by_run = channel_values.get("trace_events", {}) or {}
         current_plan = channel_values.get("plan", []) or []
@@ -312,7 +337,134 @@ class RewindRequest(BaseModel):
     message_index: int = Field(..., description="要回溯到的消息索引（保留到该索引之前的消息）")
 
 
+def _checkpoint_message_type(message: Any) -> str | None:
+    if hasattr(message, "type"):
+        return message.type
+    if isinstance(message, dict):
+        return message.get("type")
+    return None
+
+
+def _checkpoint_messages(checkpoint: dict[str, Any]) -> list[Any]:
+    return checkpoint.get("channel_values", {}).get("messages", []) or []
+
+
+async def _list_checkpoint_history(checkpointer: Any, thread_id: str) -> list[Any]:
+    config = {"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}}
+    return [item async for item in checkpointer.alist(config)]
+
+
+async def _clear_thread_checkpoints(checkpointer: Any, thread_id: str) -> int:
+    pool = checkpointer.conn
+    async with pool.connection() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute("DELETE FROM checkpoints WHERE thread_id = %s", (thread_id,))
+            deleted_count = cur.rowcount
+            await cur.execute("DELETE FROM checkpoint_blobs WHERE thread_id = %s", (thread_id,))
+            await cur.execute("DELETE FROM checkpoint_writes WHERE thread_id = %s", (thread_id,))
+    return deleted_count
+
+
+def _select_rewind_checkpoint(
+    history: list[Any],
+    target_user_count: int,
+) -> Any | None:
+    """Return the newest state before the selected user turn."""
+    for item in history:
+        checkpoint = getattr(item, "checkpoint", None)
+        if not checkpoint:
+            continue
+        messages = _checkpoint_messages(checkpoint)
+        user_count = sum(
+            _checkpoint_message_type(message) == "human"
+            for message in messages
+        )
+        has_assistant = any(
+            _checkpoint_message_type(message) == "ai"
+            for message in messages
+        )
+        if user_count == target_user_count and (
+            target_user_count == 0 or has_assistant
+        ):
+            return item
+    return None
+
+
 @router.post("/sessions/{thread_id}/rewind")
+async def rewind_session(
+    thread_id: str,
+    req: RewindRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Rewind from the LangGraph checkpoint history, without trusting frontend history."""
+    await _get_owned_session(db, thread_id, user.id)
+    checkpointer = await get_checkpointer()
+
+    try:
+        if req.message_index < 0:
+            raise HTTPException(status_code=400, detail="Invalid message index")
+
+        history = await _list_checkpoint_history(checkpointer, thread_id)
+        latest_checkpoint = next(
+            (item.checkpoint for item in history if getattr(item, "checkpoint", None)),
+            None,
+        )
+        if latest_checkpoint is None:
+            raise HTTPException(status_code=404, detail="Session checkpoint not found")
+
+        latest_messages = _checkpoint_messages(latest_checkpoint)
+        user_positions = [
+            index
+            for index, message in enumerate(latest_messages)
+            if _checkpoint_message_type(message) == "human"
+        ]
+        if req.message_index >= len(user_positions):
+            raise HTTPException(status_code=400, detail="Message index is not a user message")
+
+        target_position = user_positions[req.message_index]
+        target_user_count = sum(
+            _checkpoint_message_type(message) == "human"
+            for message in latest_messages[:target_position]
+        )
+        selected_item = _select_rewind_checkpoint(history, target_user_count)
+
+        deleted_count = await _clear_thread_checkpoints(checkpointer, thread_id)
+        if selected_item is not None:
+            restore_config = {
+                "configurable": {
+                    "thread_id": thread_id,
+                    "checkpoint_ns": "",
+                }
+            }
+            await checkpointer.aput(
+                restore_config,
+                selected_item.checkpoint,
+                selected_item.metadata,
+                selected_item.checkpoint.get("channel_versions", {}),
+            )
+
+        logger.info(
+            "Rewound session %s: deleted=%s target_message_index=%s restored=%s",
+            thread_id,
+            deleted_count,
+            req.message_index,
+            selected_item is not None,
+        )
+        return {
+            "thread_id": thread_id,
+            "message_index": req.message_index,
+            "deleted_checkpoints": deleted_count,
+            "restored": selected_item is not None,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("rewind session failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/sessions/{thread_id}/rewind/legacy")
 async def rewind_session(
     thread_id: str,
     req: RewindRequest,

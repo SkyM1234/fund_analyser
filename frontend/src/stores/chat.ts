@@ -96,8 +96,10 @@ const uid = () => {
   })
 }
 
+const CURRENT_SESSION_KEY = 'fund_analyser_current_session_id'
+
 export const useChatStore = defineStore('chat', () => {
-  const initialSessionId = uid()
+  const initialSessionId = localStorage.getItem(CURRENT_SESSION_KEY) || uid()
   const sessionId = ref(initialSessionId)
   const sessionsVersion = ref(0)
   const conversations = reactive(new Map<string, ConversationState>())
@@ -123,7 +125,7 @@ export const useChatStore = defineStore('chat', () => {
     return conversation
   }
 
-  conversations.set(initialSessionId, createConversation())
+  conversations.set(initialSessionId, createConversation(false))
 
   const currentConversation = computed(() => getConversation(sessionId.value))
   const messages = computed(() => currentConversation.value.messages)
@@ -149,6 +151,7 @@ export const useChatStore = defineStore('chat', () => {
   async function send(text: string) {
     const trimmedText = text.trim()
     const targetSessionId = sessionId.value
+    localStorage.setItem(CURRENT_SESSION_KEY, targetSessionId)
     const conversation = getConversation(targetSessionId)
     if (!trimmedText || conversation.streaming || conversation.loading) return
 
@@ -347,6 +350,7 @@ export const useChatStore = defineStore('chat', () => {
     const newSessionId = uid()
     conversations.set(newSessionId, createConversation())
     sessionId.value = newSessionId
+    localStorage.setItem(CURRENT_SESSION_KEY, newSessionId)
     sessionsVersion.value++
   }
 
@@ -359,9 +363,10 @@ export const useChatStore = defineStore('chat', () => {
     const newSessionId = uid()
     conversations.set(newSessionId, createConversation())
     sessionId.value = newSessionId
+    localStorage.setItem(CURRENT_SESSION_KEY, newSessionId)
   }
 
-  async function loadSession(threadId: string) {
+  async function loadSession(threadId: string, force = false) {
     let conversation = conversations.get(threadId)
     if (!conversation) {
       conversation = createConversation(false)
@@ -369,7 +374,8 @@ export const useChatStore = defineStore('chat', () => {
     }
 
     sessionId.value = threadId
-    if (conversation.loaded || conversation.loading) return
+    localStorage.setItem(CURRENT_SESSION_KEY, threadId)
+    if ((conversation.loaded && !force) || conversation.loading) return
 
     conversation.loading = true
     const { getSession } = await import('../api/session')
@@ -417,6 +423,27 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  async function restoreCurrentSession() {
+    const threadId = sessionId.value
+    const conversation = getConversation(threadId, false)
+    if (conversation.loaded || conversation.loading) return
+
+    try {
+      const { listSessions } = await import('../api/session')
+      const sessions = await listSessions()
+      const currentExists = sessions.some((session) => session.thread_id === threadId)
+      const target = currentExists ? threadId : sessions[0]?.thread_id
+
+      if (target) {
+        await loadSession(target)
+      } else {
+        conversation.loaded = true
+      }
+    } catch (error: any) {
+      console.error('恢复会话失败', error)
+    }
+  }
+
   async function rewindAndResend(msgId: string, newContent: string) {
     const conversation = getConversation(sessionId.value)
     if (conversation.streaming || conversation.loading) return
@@ -424,9 +451,13 @@ export const useChatStore = defineStore('chat', () => {
     const msgIndex = conversation.messages.findIndex((message) => message.id === msgId)
     if (msgIndex === -1) return
 
+    const messageIndex = conversation.messages
+      .slice(0, msgIndex + 1)
+      .filter((message) => message.role === 'user')
+      .length - 1
     const { rewindSession } = await import('../api/session')
-    await rewindSession(sessionId.value, msgIndex)
-    conversation.messages.splice(msgIndex)
+    await rewindSession(sessionId.value, messageIndex)
+    await loadSession(sessionId.value, true)
     await send(newContent)
   }
 
@@ -446,6 +477,7 @@ export const useChatStore = defineStore('chat', () => {
     clear,
     reset,
     loadSession,
+    restoreCurrentSession,
     rewindAndResend,
     isSessionStreaming,
   }

@@ -12,6 +12,7 @@ from app.services.task_runs import (
     mark_task_finished,
     request_task_cancel,
     renew_task_lease,
+    set_task_checkpoint_id,
 )
 
 
@@ -329,4 +330,61 @@ class TaskRunServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(candidates), 1)
         self.assertEqual(candidates[0].run_id, "run-1")
         self.assertEqual(candidates[0].request_payload, payload)
+        self.assertIsNone(candidates[0].checkpoint_id)
         db.commit.assert_awaited_once()
+
+    async def test_current_lease_can_persist_checkpoint_id(self) -> None:
+        from datetime import datetime, timedelta
+
+        task = TaskRun(
+            run_id="run-1",
+            idempotency_key="request-1",
+            user_id=1,
+            session_id="session-1",
+            status="RUNNING",
+            lease_token="current-token",
+        )
+        task.lease_expires_at = datetime.now() + timedelta(seconds=30)
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=_Result(task))
+        db.commit = AsyncMock()
+
+        updated = await set_task_checkpoint_id(
+            db,
+            run_id="run-1",
+            lease_token="current-token",
+            checkpoint_id="checkpoint-1",
+        )
+
+        self.assertTrue(updated)
+        self.assertEqual(task.checkpoint_id, "checkpoint-1")
+        db.commit.assert_awaited_once()
+
+    async def test_stale_lease_cannot_persist_checkpoint_id(self) -> None:
+        from datetime import datetime, timedelta
+
+        task = TaskRun(
+            run_id="run-1",
+            idempotency_key="request-1",
+            user_id=1,
+            session_id="session-1",
+            status="RUNNING",
+            lease_token="current-token",
+        )
+        task.lease_expires_at = datetime.now() + timedelta(seconds=30)
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=_Result(task))
+        db.commit = AsyncMock()
+        db.rollback = AsyncMock()
+
+        updated = await set_task_checkpoint_id(
+            db,
+            run_id="run-1",
+            lease_token="stale-token",
+            checkpoint_id="checkpoint-1",
+        )
+
+        self.assertFalse(updated)
+        self.assertIsNone(task.checkpoint_id)
+        db.commit.assert_not_awaited()
+        db.rollback.assert_awaited_once()

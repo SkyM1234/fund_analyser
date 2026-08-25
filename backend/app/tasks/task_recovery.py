@@ -59,8 +59,18 @@ def recover_expired_task_runs() -> int:
             continue
 
         try:
+            if not candidate.checkpoint_id:
+                logger.warning(
+                    "[task_recovery] checkpoint_id missing; falling back to legacy "
+                    "replay from request input: run_id=%s",
+                    candidate.run_id,
+                )
             run_chat_turn.apply_async(
-                args=(candidate.run_id, candidate.request_payload, candidate.user_id),
+                args=(
+                    candidate.run_id,
+                    candidate.request_payload,
+                    candidate.user_id,
+                ),
                 task_id=celery_task_id,
                 queue="agent_queue",
             )
@@ -83,8 +93,12 @@ def recover_expired_task_runs() -> int:
             },
         )
         logger.warning(
-            "[task_recovery] redelivered lost task: run_id=%s attempt=%s/%s",
+            "[task_recovery] redelivered lost task: run_id=%s session_id=%s "
+            "checkpoint_id=%s celery_task_id=%s attempt=%s/%s",
             candidate.run_id,
+            candidate.request_payload.get("session_id"),
+            candidate.checkpoint_id,
+            celery_task_id,
             candidate.attempt + 1,
             candidate.max_attempts,
         )

@@ -33,6 +33,7 @@ alembic upgrade head
 | `d4e5f6a7b8c9` | 允许删除 session，保留 task_runs|
 | `e5f6a7b8c9d0` | 增加任务运行租约|
 | `f6a7b8c9d0e1` | 增加任务请求 payload|
+| `a7b8c9d0e1f2` | 增加 checkpoint id|
 
 ## 注意事项
 

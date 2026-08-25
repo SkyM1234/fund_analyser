@@ -18,6 +18,7 @@ class TaskRecoveryCandidate:
     run_id: str
     user_id: int
     request_payload: dict[str, Any]
+    checkpoint_id: str | None
     attempt: int
     max_attempts: int
 
@@ -80,6 +81,35 @@ async def set_celery_task_id(
     task.celery_task_id = celery_task_id
     await db.commit()
     return task
+
+
+async def set_task_checkpoint_id(
+    db: AsyncSession,
+    *,
+    run_id: str,
+    lease_token: str,
+    checkpoint_id: str,
+) -> bool:
+    """Persist the latest checkpoint only for the current lease owner."""
+    task = (
+        await db.execute(
+            select(TaskRun).where(TaskRun.run_id == run_id).with_for_update()
+        )
+    ).scalar_one_or_none()
+    now = datetime.now()
+    if (
+        task is None
+        or task.status != "RUNNING"
+        or task.lease_token != lease_token
+        or task.lease_expires_at is None
+        or task.lease_expires_at <= now
+    ):
+        await db.rollback()
+        return False
+
+    task.checkpoint_id = checkpoint_id
+    await db.commit()
+    return True
 
 
 async def request_task_cancel(
@@ -394,6 +424,7 @@ async def mark_expired_task_runs_lost(
                     run_id=task.run_id,
                     user_id=task.user_id,
                     request_payload=task.request_payload,
+                    checkpoint_id=task.checkpoint_id,
                     attempt=task.attempt,
                     max_attempts=task.max_attempts,
                 )
@@ -450,6 +481,7 @@ async def list_recoverable_lost_task_runs(
             run_id=task.run_id,
             user_id=task.user_id,
             request_payload=task.request_payload,
+            checkpoint_id=task.checkpoint_id,
             attempt=task.attempt,
             max_attempts=task.max_attempts,
         )

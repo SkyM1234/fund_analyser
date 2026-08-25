@@ -82,6 +82,7 @@ class TaskRun(Base):
         String(255), unique=True, index=True, nullable=True
     )
     request_payload: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    checkpoint_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False, index=True)
     session_id: Mapped[str | None] = mapped_column(
         String(64),

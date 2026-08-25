@@ -29,6 +29,7 @@ from app.services.task_runs import (
     mark_task_finished,
     mark_task_retrying,
     renew_task_lease,
+    set_task_checkpoint_id,
 )
 
 # 锁自动过期时间必须大于 AGENT_TIMEOUT，确保即使任务超时，finally 块也有机会
@@ -152,6 +153,20 @@ async def _mark_cancelled(run_id: str, lease_token: str) -> bool:
             db,
             run_id=run_id,
             lease_token=lease_token,
+        )
+
+
+async def _persist_checkpoint_id(
+    run_id: str,
+    lease_token: str,
+    checkpoint_id: str,
+) -> bool:
+    async with get_session_factory()() as db:
+        return await set_task_checkpoint_id(
+            db,
+            run_id=run_id,
+            lease_token=lease_token,
+            checkpoint_id=checkpoint_id,
         )
 
 
@@ -297,6 +312,8 @@ async def _run_chat_turn(
     run_id: str,
     req: ChatRequest,
     user_id: int,
+    lease_token: str,
+    checkpoint_id: str | None = None,
     lease_lost_event: asyncio.Event | None = None,
     cancel_requested_event: asyncio.Event | None = None,
 ) -> None:
@@ -350,11 +367,27 @@ async def _run_chat_turn(
         scope_node_name = "fund_scope"
 
         config = {"configurable": {"thread_id": req.session_id, "user_id": str(user_id)}}
+        if checkpoint_id is not None:
+            if not checkpoint_id:
+                raise RuntimeError(
+                    f"Task checkpoint is unavailable for recovery: {run_id}"
+                )
+            config["configurable"]["checkpoint_id"] = checkpoint_id
+            logger.info(
+                "[chat_task] resuming from checkpoint: run_id=%s checkpoint_id=%s",
+                run_id,
+                checkpoint_id,
+            )
 
         checkpoint_tuple = await checkpointer.aget_tuple(config)
         has_checkpoint = checkpoint_tuple is not None and checkpoint_tuple.checkpoint is not None
 
-        if not has_checkpoint and req.history:
+        if checkpoint_id is not None and not has_checkpoint:
+            raise RuntimeError(
+                f"Task checkpoint no longer exists for recovery: {run_id}"
+            )
+
+        if checkpoint_id is None and not has_checkpoint and req.history:
             logger.info(f"[chat_task] 从前端 history 初始化，共 {len(req.history)} 条消息")
             init_messages = []
             for h in req.history:
@@ -364,10 +397,45 @@ async def _run_chat_turn(
                     init_messages.append(AIMessage(content=h.content))
 
             if init_messages:
-                await app.aupdate_state(config=config, values={"messages": init_messages})
+                await app.aupdate_state(
+                    config=config,
+                    values={"messages": init_messages},
+                    as_node="__start__",
+                )
                 logger.info(f"[chat_task] 已初始化 {len(init_messages)} 条历史消息到 checkpoint")
 
-        input_state = {"messages": [HumanMessage(content=req.message)]}
+        if checkpoint_id is not None:
+            input_state = None
+        else:
+            await app.aupdate_state(
+                config=config,
+                values={"messages": [HumanMessage(content=req.message)]},
+                as_node="__start__",
+            )
+            latest_config = {
+                "configurable": {
+                    key: value
+                    for key, value in config["configurable"].items()
+                    if key != "checkpoint_id"
+                }
+            }
+            initial_checkpoint = await checkpointer.aget_tuple(latest_config)
+            checkpoint_id = (
+                initial_checkpoint.checkpoint.get("id")
+                if initial_checkpoint and initial_checkpoint.checkpoint
+                else None
+            )
+            if not checkpoint_id:
+                raise RuntimeError(
+                    f"Failed to create task checkpoint before execution: {run_id}"
+                )
+            if not await _persist_checkpoint_id(
+                run_id,
+                lease_token,
+                checkpoint_id,
+            ):
+                raise LeaseLostError(f"Task lease lost before execution: {run_id}")
+            input_state = None
 
         retry_events: asyncio.Queue = asyncio.Queue()
 
@@ -400,6 +468,7 @@ async def _run_chat_turn(
             task_context_by_run_id: dict[str, dict[str, str]] = {}
             trace_events: list[dict] = []
             trace_sequence = 0
+            streamed_answer = ""
             decision_by_task: dict[str, str] = {}
             decision_tools: dict[str, list[str]] = {}
             decision_trace_event: dict[str, dict] = {}
@@ -433,6 +502,29 @@ async def _run_chat_turn(
 
                 kind = event["event"]
                 event_count += 1
+
+                if kind == "on_chain_end":
+                    latest_config = {
+                        "configurable": {
+                            key: value
+                            for key, value in config["configurable"].items()
+                            if key != "checkpoint_id"
+                        }
+                    }
+                    latest_checkpoint = await checkpointer.aget_tuple(latest_config)
+                    checkpoint_id = (
+                        latest_checkpoint.checkpoint.get("id")
+                        if latest_checkpoint and latest_checkpoint.checkpoint
+                        else None
+                    )
+                    if checkpoint_id and not await _persist_checkpoint_id(
+                        run_id,
+                        lease_token,
+                        checkpoint_id,
+                    ):
+                        raise LeaseLostError(
+                            f"Task lease lost while saving checkpoint: {run_id}"
+                        )
 
                 if kind == "on_chain_start":
                     name = event["name"]
@@ -479,10 +571,12 @@ async def _run_chat_turn(
                         evt_run_id = event.get("run_id")
                         if evt_run_id not in seen_run_ids:
                             seen_run_ids.add(evt_run_id)
+                            streamed_answer = ""
                             publish_event(run_id, "message_start", {})
 
                         chunk: AIMessageChunk = event["data"]["chunk"]
                         if chunk.content:
+                            streamed_answer += str(chunk.content)
                             publish_event(run_id, "token", {"delta": chunk.content})
 
                 elif kind == "on_chat_model_end":
@@ -612,6 +706,7 @@ async def _run_chat_turn(
                         if isinstance(output, dict) and node_name == "direct_answer":
                             content = output.get("draft_answer", "")
                             if content:
+                                streamed_answer = str(content)
                                 publish_event(run_id, "message_start", {})
                                 for char in content:
                                     publish_event(run_id, "token", {"delta": char})
@@ -621,6 +716,7 @@ async def _run_chat_turn(
                                 logger.info(f"[chat_task] event: {node_name}节点返回预设回复")
                                 publish_event(run_id, "message_start", {})
                                 content = last_msg.content
+                                streamed_answer = str(content)
                                 for char in content:
                                     publish_event(run_id, "token", {"delta": char})
 
@@ -707,10 +803,79 @@ async def _run_chat_turn(
             ):
                 raise TaskCancelledError()
 
+            latest_config = {
+                "configurable": {
+                    key: value
+                    for key, value in config["configurable"].items()
+                    if key != "checkpoint_id"
+                }
+            }
             await app.aupdate_state(
-                config=config,
+                config=latest_config,
                 values={"trace_events": {run_id: trace_events}},
+                as_node="__start__",
             )
+            final_state = await app.aget_state(latest_config)
+            final_messages = (
+                final_state.values.get("messages", [])
+                if final_state
+                else []
+            )
+            final_message_types = [
+                (
+                    getattr(message, "type", None)
+                    or message.get("type")
+                    if isinstance(message, dict)
+                    else getattr(message, "type", type(message).__name__)
+                )
+                for message in final_messages
+            ]
+            final_has_ai_message = any(
+                message_type == "ai" for message_type in final_message_types
+            )
+            final_checkpoint = await checkpointer.aget_tuple(latest_config)
+            final_checkpoint_id = (
+                final_checkpoint.checkpoint.get("id")
+                if final_checkpoint and final_checkpoint.checkpoint
+                else None
+            )
+            logger.info(
+                "[chat_task] final checkpoint saved: run_id=%s session_id=%s "
+                "thread_id=%s checkpoint_id=%s streamed_answer=%s "
+                "message_count=%s message_types=%s",
+                run_id,
+                req.session_id,
+                latest_config["configurable"].get("thread_id"),
+                final_checkpoint_id,
+                bool(streamed_answer.strip()),
+                len(final_messages),
+                final_message_types,
+            )
+            if streamed_answer.strip() and not final_has_ai_message:
+                logger.error(
+                    "[chat_task] checkpoint missing AIMessage; "
+                    "realtime answer was not persisted: run_id=%s session_id=%s "
+                    "thread_id=%s checkpoint_id=%s",
+                    run_id,
+                    req.session_id,
+                    latest_config["configurable"].get("thread_id"),
+                    final_checkpoint_id,
+                )
+            if final_checkpoint_id and not await _persist_checkpoint_id(
+                run_id,
+                lease_token,
+                final_checkpoint_id,
+            ):
+                raise LeaseLostError(
+                    f"Task lease lost while saving final checkpoint: {run_id}"
+                )
+            if streamed_answer.strip() and not final_has_ai_message:
+                raise RuntimeError(
+                    "Agent produced a realtime answer, but the final LangGraph "
+                    f"checkpoint has no AIMessage: run_id={run_id}, "
+                    f"session_id={req.session_id}, "
+                    f"checkpoint_id={final_checkpoint_id}"
+                )
 
             logger.info(f"[chat_task] 流式处理完成，共 {event_count} 个事件")
             if lease_lost_event is not None and lease_lost_event.is_set():
@@ -786,6 +951,7 @@ async def _run_chat_turn_with_lease(
     req: ChatRequest,
     user_id: int,
     lease_token: str,
+    checkpoint_id: str | None,
     lease_seconds: int,
     heartbeat_interval_seconds: int,
 ) -> None:
@@ -804,11 +970,13 @@ async def _run_chat_turn_with_lease(
     )
     chat_task = asyncio.create_task(
         _run_chat_turn(
-            run_id,
-            req,
-            user_id,
-            lease_lost_event,
-            cancel_requested_event,
+            run_id=run_id,
+            req=req,
+            user_id=user_id,
+            lease_token=lease_token,
+            checkpoint_id=checkpoint_id,
+            lease_lost_event=lease_lost_event,
+            cancel_requested_event=cancel_requested_event,
         )
     )
     lease_lost_waiter = asyncio.create_task(lease_lost_event.wait())
@@ -876,7 +1044,12 @@ async def _run_chat_turn_with_lease(
 
 
 @celery_app.task(bind=True, name="app.tasks.chat_tasks.run_chat_turn")
-def run_chat_turn(self, run_id: str, req_payload: dict, user_id: int) -> None:
+def run_chat_turn(
+    self,
+    run_id: str,
+    req_payload: dict,
+    user_id: int,
+) -> None:
     """Celery 任务入口（同步）：把请求还原为 ChatRequest，在 worker 的后台事件
     循环上跑完整的 agent 流程，逐事件通过 Redis 发布给 FastAPI 侧转发。
 
@@ -909,6 +1082,17 @@ def run_chat_turn(self, run_id: str, req_payload: dict, user_id: int) -> None:
     if lease_token is None:
         raise RuntimeError(f"Claimed task has no lease token: {run_id}")
     max_attempts = max(1, task_run.max_attempts)
+    logger.info(
+        "[chat_task] claimed task: celery_task_id=%s run_id=%s session_id=%s "
+        "thread_id=%s checkpoint_id=%s recovery_from_checkpoint=%s attempt=%s",
+        self.request.id,
+        run_id,
+        req.session_id,
+        req.session_id,
+        task_run.checkpoint_id,
+        task_run.checkpoint_id is not None,
+        task_run.attempt,
+    )
     try:
         run_coro(
             _run_chat_turn_with_lease(
@@ -916,6 +1100,7 @@ def run_chat_turn(self, run_id: str, req_payload: dict, user_id: int) -> None:
                 req,
                 user_id,
                 lease_token,
+                task_run.checkpoint_id,
                 settings.TASK_LEASE_SECONDS,
                 settings.TASK_HEARTBEAT_INTERVAL_SECONDS,
             ),

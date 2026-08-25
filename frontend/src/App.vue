@@ -19,9 +19,13 @@ async function onLogout() {
   chat.reset()
 }
 
-onMounted(() => {
+onMounted(async () => {
   if (window.matchMedia('(max-width: 720px)').matches) {
     showSidebar.value = false
+  }
+  await auth.initialize()
+  if (auth.user) {
+    await chat.restoreCurrentSession()
   }
 })
 </script>

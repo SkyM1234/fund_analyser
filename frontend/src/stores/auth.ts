@@ -21,6 +21,7 @@ export const useAuthStore = defineStore('auth', () => {
   const accessToken = ref<string | null>(localStorage.getItem(ACCESS_KEY))
   const refreshToken = ref<string | null>(localStorage.getItem(REFRESH_KEY))
   const user = ref<UserInfo | null>(null)
+  const initialized = ref(false)
   const isAuthenticated = computed(() => !!accessToken.value)
 
   // 并发请求同时触发 401 时，共享同一次刷新，避免刷新令牌被重复使用（旋转机制下第二次会被拒绝）
@@ -63,6 +64,15 @@ export const useAuthStore = defineStore('auth', () => {
     }
 
     if (resp.ok) user.value = await resp.json()
+  }
+
+  async function initialize() {
+    if (initialized.value) return
+    try {
+      if (accessToken.value) await fetchMe()
+    } finally {
+      initialized.value = true
+    }
   }
 
   async function login(username: string, password: string) {
@@ -139,13 +149,15 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  if (accessToken.value) fetchMe()
+  void initialize()
 
   return {
     accessToken,
     refreshToken,
     user,
+    initialized,
     isAuthenticated,
+    initialize,
     login,
     register,
     logout,
