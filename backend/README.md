@@ -253,6 +253,30 @@ docker compose logs -f worker
 
 ## 常见问题
 
+### 路由与范围确认
+
+路由保持单级意图分类：`fund_query` 表示能通过 `fund_scope` 确认具体基金或板块候选集合；
+`fund_screening` 表示没有明确基金或板块范围，需要按持仓、规模等事实条件反查基金。
+例如“新能源板块中规模超过 10 亿的基金”属于 `fund_query`，“哪些基金规模超过 10 亿”属于 `fund_screening`。
+
+`route_result` 除 `intent` 外还携带 `scope_basis`（`kind/value/source`）、`resolved_query` 和
+`needs_clarification`，并通过同名 SSE 事件返回。范围依据是原文线索，不等于已确认基金；
+代码、名称和板块的类型分别为 `fund_code`、`fund_name`、`sector`，来源为 `current` 或 `history`。
+缺少对象或名称歧义进入澄清分支；板块候选覆盖不全仍可继续查询，并保留覆盖状态。
+分类失败最多尝试两次，每次上限 30 秒，耗尽后进入任务错误及重试流程，不回退为通用知识回答。
+新问题清理旧执行范围和计划，保留消息与历史归档；checkpoint 恢复继续本轮执行。
+
+Docker 验证：
+
+```powershell
+docker exec fund-backend python -m unittest discover -s tests -q
+docker exec fund-backend python -m scripts.verify_routing
+docker exec fund-backend python -m scripts.verify_phase_one --clarification
+```
+
+`verify_routing` 使用 `eval/datasets/routing.jsonl` 调用实际模型，检查分类、范围依据、
+澄清标志和问题补全；`--clarification` 检查实际 API、Celery、SSE 回放与落盘，并清理临时账号和会话。
+
 ### SSE 一直等待，没有事件
 
 确认 Worker 已运行，且它消费 `agent_queue`：

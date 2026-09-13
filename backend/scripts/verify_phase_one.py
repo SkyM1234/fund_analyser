@@ -18,7 +18,7 @@ from app.services.checkpoint import close_checkpointer, get_checkpointer
 from app.services.router import route_query
 
 
-async def main():
+async def main(clarification: bool = False):
     queries = [
         ("你好，请查询159103的持仓", "fund_query"),
         ("不要推荐，只比较159103和159104的费率", "fund_query"),
@@ -26,9 +26,10 @@ async def main():
         ("推荐一只基金", "sensitive"),
         ("今天天气如何", "out_of_scope"),
     ]
-    routes = await asyncio.gather(*(route_query(query) for query, _ in queries))
-    assert [route.intent for route in routes] == [expected for _, expected in queries], "Live intent classification mismatch"
-    print("Live routing: five regression queries classified correctly", flush=True)
+    if not clarification:
+        routes = await asyncio.gather(*(route_query(query) for query, _ in queries))
+        assert [route.intent for route in routes] == [expected for _, expected in queries], "Live intent classification mismatch"
+        print("Live routing: five regression queries classified correctly", flush=True)
     username = "phase_one_" + uuid.uuid4().hex
     session_id = uuid.uuid4().hex
     password = uuid.uuid4().hex
@@ -50,7 +51,7 @@ async def main():
             events = []
             async with aconnect_sse(
                 client, "POST", "/api/chat/stream", headers=headers,
-                json={"session_id": session_id, "message": "你好！"},
+                json={"session_id": session_id, "message": "它的费率呢" if clarification else "你好！"},
             ) as source:
                 async for event in source.aiter_sse():
                     payload = json.loads(event.data)
@@ -60,6 +61,13 @@ async def main():
             assert events and events[-1][0] == "done", "Chat did not complete successfully"
             answer = "".join(data["delta"] for name, data in events if name == "token")
             assert answer.strip(), "Chat returned no answer"
+            if clarification:
+                route = next(data for name, data in events if name == "route_result")
+                assert route["intent"] == "fund_query" and route["needs_clarification"] is True
+                assert route["scope_basis"] == [] and route["resolved_query"]
+                assert "基金代码" in answer, "Missing clarification question"
+                assert not any(name in {"plan", "agent_start"} for name, _ in events), "Clarification must not start agents"
+                print("Clarification: structured route event, follow-up question, no agents started", flush=True)
             async with get_session_factory()() as db:
                 task = (await db.execute(select(TaskRun).where(TaskRun.session_id == session_id))).scalar_one()
                 assert task.status == "SUCCESS", "done arrived before persistent SUCCESS"
@@ -114,4 +122,8 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--clarification", action="store_true")
+    asyncio.run(main(clarification=parser.parse_args().clarification))

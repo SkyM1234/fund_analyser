@@ -299,6 +299,10 @@ def _failure_code(exc: Exception) -> str:
 
 
 def _is_retryable_failure(exc: Exception) -> bool:
+    from app.services.router import RouteClassificationError
+
+    if isinstance(exc, RouteClassificationError):
+        return True
     return isinstance(exc, (ConnectionError, OSError, SessionBusyError)) or type(exc).__name__ in {
         "APIConnectionError",
         "APITimeoutError",
@@ -732,7 +736,11 @@ async def _run_chat_turn(
                         if intent:
                             _route_emitted = True
                             logger.info(f"[chat_task] event: route_result -> intent={intent}")
-                            publish_event(run_id, "route_result", {"intent": intent})
+                            payload = (
+                                route_result if isinstance(route_result, dict)
+                                else route_result.model_dump(mode="json")
+                            )
+                            publish_event(run_id, "route_result", payload)
 
                     if node_name == "supervisor" and is_node_level_event and not _plan_emitted:
                         output = event.get("data", {}).get("output")

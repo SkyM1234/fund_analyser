@@ -14,7 +14,7 @@ from app.agent.multi_agent_state import MultiAgentState, SubTask
 from app.agent.plan_validation import PlanValidationError, validate_supervisor_plan
 from app.agent.state_reducers import CLEARED, NewPlan
 from app.services.router import RouteResult
-from app.tools.conversation_utils import format_history_for_prompt
+from app.tools.conversation_utils import request_history_for_prompt
 from app.tools.llm_json import extract_json_block
 
 logger = logging.getLogger(__name__)
@@ -131,23 +131,10 @@ async def supervisor_node(state: MultiAgentState) -> dict[str, Any]:
     existing_plan = state.get("plan", [])
     synthesis_complete = state.get("synthesis_complete", False)
 
-    # 如果上一轮已完成，清空状态，准备新一轮
+    # 新问题在 route 节点重置状态；保留对旧 checkpoint 的兼容。
     if synthesis_complete and existing_plan:
         logger.info("[Supervisor] Previous round completed, starting new planning")
-        result = await _generate_new_plan(user_query, route_result, messages, fund_scope)
-
-        # 方案B：若 LLM 规划出空任务列表，且当前消息是追问/信息不足，
-        # 用历史消息里的原始问题重新规划一次
-        if not result.get("plan"):
-            fallback_query = _find_last_substantive_query(messages)
-            if fallback_query and fallback_query != user_query:
-                logger.info(
-                    f"[Supervisor] Empty plan on followup, retrying with history query: "
-                    f"{fallback_query[:60]}"
-                )
-                result = await _generate_new_plan(fallback_query, route_result, messages, fund_scope)
-
-        return result
+        return await _generate_new_plan(user_query, route_result, messages, fund_scope)
 
     # 如果已有未完成的计划，跳过（避免重复规划）
     if existing_plan and not synthesis_complete:
@@ -159,40 +146,10 @@ async def supervisor_node(state: MultiAgentState) -> dict[str, Any]:
     return await _generate_new_plan(user_query, route_result, messages, fund_scope)
 
 
-def _find_last_substantive_query(messages: list) -> str | None:
-    """从历史消息中找到最近一条信息量足够的用户问题（排除当前消息和追问类短消息）。"""
-    followup_patterns = [
-        r'^(再|重新|重试|再试|继续)',
-        r'^(好的|ok|嗯|那|那么|然后)',
-        r'.{0,10}(试一下|试试|试一试|重来)',
-        r'^(现在|这次|这回)',
-    ]
-
-    found_current = False
-    for msg in reversed(messages):
-        if not isinstance(msg, HumanMessage):
-            continue
-        if not found_current:
-            found_current = True
-            continue  # 跳过当前消息
-        text = msg.content.strip()
-        # 长度足够且不是追问特征词
-        if len(text) < 5:
-            continue
-        is_followup = any(re.search(p, text, re.IGNORECASE) for p in followup_patterns)
-        if not is_followup:
-            return text
-    return None
-
-
 def _explicit_fund_codes(messages: list) -> set[str]:
-    """只允许计划使用用户消息中明确出现过的 6 位基金代码。"""
-    return {
-        code
-        for message in messages
-        if isinstance(message, HumanMessage)
-        for code in re.findall(r"(?<!\d)\d{6}(?!\d)", str(message.content))
-    }
+    """当前轮明确代码；历史指代必须先经过 fund_scope 确认。"""
+    query = next((str(m.content) for m in reversed(messages) if isinstance(m, HumanMessage)), "")
+    return set(re.findall(r"(?<!\d)\d{6}(?!\d)", query))
 
 
 def _new_plan_update(validated_plan: list[dict]) -> dict[str, Any]:
@@ -231,7 +188,7 @@ def _scope_planning_context(
     if route_result and route_result.intent == "fund_screening":
         return (
             "模式：基金筛选（未执行 fund_scope_agent，且没有预确认的基金范围）。\n"
-            "这是从条件反查基金集合的问题，例如按持仓、行业、主题或指标筛选基金。\n"
+            "这是从持仓或指标等事实条件反查基金集合的问题，没有明确基金或板块范围。\n"
             "必须创建至少一个面向 rag_agent 的任务，并将 fund_codes 设为 []；"
             "具体使用哪些工具由 rag_agent 根据任务自主决定。不得在计划阶段猜测、补全或写入"
             "检索尚未返回的基金代码。\n"
@@ -286,12 +243,18 @@ async def _generate_new_plan(
     )
 
     # 使用共用函数格式化对话历史
-    history_text = format_history_for_prompt(messages, rounds=3, exclude_last=True)
+    history_text = request_history_for_prompt(user_query, messages)
+    original_query = user_query
+    if route_result and route_result.resolved_query:
+        user_query = route_result.resolved_query
+    if route_result and route_result.intent == "fund_screening":
+        fund_scope = None
     scope_text = json.dumps(fund_scope, ensure_ascii=False) if fund_scope else "None"
 
     prompt = f"""请为以下问题生成执行计划：
 {history_text}
 当前用户问题：{user_query}
+当前用户原文（补全问题不得丢失其中的条件）：{original_query}
 
 路由信息：
 - 意图类型：{route_result.intent if route_result else "unknown"}
@@ -304,6 +267,8 @@ async def _generate_new_plan(
         f"\nCONFIRMED_FUND_SCOPE:\n{scope_text}\n"
     )
     explicit_fund_codes = _explicit_fund_codes(messages)
+    if route_result and route_result.intent == "fund_screening":
+        explicit_fund_codes = set()
     validation_feedback = ""
 
     for attempt in range(MAX_PLAN_VALIDATION_RETRIES + 1):
@@ -338,8 +303,8 @@ async def _generate_new_plan(
                 "\n\n上一版计划未通过硬校验，错误如下：\n"
                 f"{exc}\n"
                 "请重新输出完整 JSON。不得省略字段；不得使用不存在或循环依赖；"
-                "task_type 与 assigned_agent 必须匹配；fund_codes 只能使用用户消息中"
-                "明确出现的 6 位数字代码。"
+                "task_type 与 assigned_agent 必须匹配；fund_codes 必须遵守 SCOPE_PLANNING_CONTEXT，"
+                "有确认范围时仅使用 CONFIRMED_FUND_SCOPE 中的代码。"
             )
         except Exception as exc:
             logger.exception("[Supervisor] Plan generation failed on attempt %s", attempt + 1)

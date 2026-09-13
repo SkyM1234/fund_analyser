@@ -89,7 +89,7 @@ def validate_supervisor_plan(
         for fund in (fund_scope or {}).get("funds", [])
         if isinstance(fund, dict) and fund.get("fund_code")
     }
-    allowed_fund_codes = explicit_fund_codes | scoped_fund_codes
+    allowed_fund_codes = scoped_fund_codes if fund_scope is not None else explicit_fund_codes
     task_ids = [task.task_id for task in tasks]
 
     if len(task_ids) != len(set(task_ids)):

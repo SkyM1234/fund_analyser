@@ -18,8 +18,8 @@ from app.agent.multi_agent_state import (
     get_ready_tasks,
     is_plan_complete,
 )
-from app.agent.state_reducers import PlanPatches, TaskPatch
-from app.agent.supervisor import supervisor_node
+from app.agent.state_reducers import CLEARED, PlanPatches, TaskPatch
+from app.agent.supervisor import _new_plan_update, supervisor_node
 from app.agent.fund_scope_agent import fund_scope_node
 from app.agent.rag_agent import rag_agent_node
 from app.agent.market_agent import market_agent_node
@@ -28,7 +28,7 @@ from app.agent.analysis_agent import analysis_agent_node
 from app.agent.compliance_agent import compliance_agent_node
 from app.agent.synthesizer import synthesizer_node
 from app.agent.reflection_agent import global_reflection_node
-from app.services.router import route_query
+from app.services.router import RouteClassificationError, route_query
 from app.core.config import get_settings
 from app.core.llm_concurrency import llm_ainvoke
 
@@ -39,18 +39,11 @@ MAX_COMPLIANCE_RETRIES = 1  # 合规不通过后最多允许 synthesizer 重新�
 
 # ===== 路由节点 =====
 async def route_node(state: MultiAgentState):
-    """前置路由节点：识别意图和基金代码，写入 route_result。
-
-    基金识别改为两级RAG方案：
-    - 快速路径：正则匹配6位数字代码（在 router.py 内完成）
-    - 语义路径：调用 rag_identify_funds MCP 工具（在 router.py 内完成）
-    - 历史回填：当前消息识别不到基金时，从近几轮历史消息补充
-    不再需要拉取全量基金注册表。
-    """
+    """新一轮入口：识别意图和范围线索，清理上一轮执行状态。"""
     messages = state["messages"]
 
     if not messages:
-        return {"route_result": None}
+        raise RouteClassificationError("未找到用户问题")
 
     # 获取最新用户消息
     user_msg = None
@@ -60,12 +53,20 @@ async def route_node(state: MultiAgentState):
             break
 
     if not user_msg:
-        return {"route_result": None}
+        raise RouteClassificationError("未找到用户问题")
 
     # 传入完整历史，让路由器在追问场景下能结合上下文识别基金和意图
     route_result = await route_query(user_msg, history_messages=messages)
     logger.info(f"[Route] intent={route_result.intent}")
-    return {"route_result": route_result}
+    # checkpoint 恢复从待执行节点继续，不重新经过 START；仅新问题在此重置。
+    return {
+        **_new_plan_update([]),
+        "route_result": route_result,
+        "fund_scope": None,
+        "fund_scope_error": None,
+        "token_usage": CLEARED,
+        "tool_call_log": CLEARED,
+    }
 
 
 # ===== 路由后置分支：敏感问题硬拦截 =====
@@ -77,6 +78,7 @@ def route_after_intent(
     "direct_answer",
     "out_of_scope_refusal",
     "sensitive_refusal",
+    "clarification",
 ]:
     """route 节点之后的硬性分支：intent == sensitive or out_of_scope 时直接拒绝，不进入 supervisor 规划。
     """
@@ -89,19 +91,22 @@ def route_after_intent(
     if intent == "out_of_scope":
         logger.info("[Router] intent=out_of_scope, short-circuit to out_of_scope_refusal")
         return "out_of_scope_refusal"
+    if route_result is not None and route_result.needs_clarification:
+        return "clarification"
     if intent == "fund_screening":
         logger.info("[Router] intent=fund_screening, using complete fresh retrieval")
         return "supervisor"
     if intent in ("chitchat", "general_finance"):
         logger.info("[Router] intent=%s, short-circuit to direct_answer", intent)
         return "direct_answer"
-    logger.info("[Router] intent=%s, entering fund workflow", intent or "unknown")
-    return "fund_scope"
+    if intent == "fund_query":
+        return "fund_scope"
+    raise RouteClassificationError("缺少有效路由结果")
 
 
 def after_fund_scope(
     state: MultiAgentState,
-) -> Literal["supervisor", "planning_failure"]:
+) -> Literal["supervisor", "planning_failure", "clarification"]:
     """只让已确认范围的具体基金问题进入任务规划。"""
     route_result = state.get("route_result")
     intent = route_result.intent if route_result is not None else None
@@ -110,6 +115,16 @@ def after_fund_scope(
     # 条件筛选允许没有预先枚举出的固定基金集合，由后续全局检索处理。
     if intent == "fund_screening":
         return "supervisor"
+    if state.get("fund_scope_error"):
+        return "planning_failure"
+    if scope and scope.get("needs_clarification"):
+        return "clarification"
+    if scope is not None and not scope.get("funds"):
+        return "clarification"
+    if scope and scope.get("missing_or_uncertain") and not any(
+        basis.kind == "sector" for basis in (route_result.scope_basis if route_result else [])
+    ):
+        return "clarification"
     if scope and scope.get("funds"):
         return "supervisor"
     logger.warning(
@@ -118,6 +133,25 @@ def after_fund_scope(
         state.get("fund_scope_error"),
     )
     return "planning_failure"
+
+
+def clarification_node(state: MultiAgentState):
+    """仅请求补充用户信息，不把模型或工具异常伪装成对象缺失。"""
+    from langchain_core.messages import AIMessage
+
+    route = state.get("route_result")
+    scope = state.get("fund_scope")
+    if scope is not None:
+        answer = "暂时无法唯一确认你要查询的基金范围，请补充基金代码、完整名称或更具体的板块名称。"
+    elif route and route.intent == "fund_query":
+        answer = "请明确你指的是哪只或哪些基金，可以提供基金代码、完整名称或板块名称。"
+    else:
+        answer = "请补充你要查询的具体内容或筛选条件。"
+    return {
+        "final_answer": answer,
+        "messages": [AIMessage(content=answer)],
+        "synthesis_complete": True,
+    }
 
 
 # ===== 敏感问题拒绝处理 =====
@@ -196,14 +230,12 @@ async def direct_answer_node(state: MultiAgentState):
 
 def _direct_answer_prompt(user_query: str, state: MultiAgentState) -> str:
     """为通用金融追问补充最近几轮对话上下文。"""
-    from app.tools.conversation_utils import format_history_for_prompt
+    from app.tools.conversation_utils import request_history_for_prompt
 
-    history_text = format_history_for_prompt(
-        state.get("messages", []),
-        rounds=3,
-        max_response_length=500,
-        exclude_last=True,
-    )
+    history_text = request_history_for_prompt(user_query, state.get("messages", []))
+    route = state.get("route_result")
+    if route and route.resolved_query:
+        user_query = f"当前用户原文：{user_query}\n补全后的问题：{route.resolved_query}"
     if not history_text:
         return user_query
     return (
@@ -564,6 +596,7 @@ def build_multi_agent_graph(checkpointer: BaseCheckpointSaver):
     graph.add_node("sensitive_refusal", handle_sensitive_refusal)
     graph.add_node("out_of_scope_refusal", handle_out_of_scope_refusal)
     graph.add_node("direct_answer", direct_answer_node)
+    graph.add_node("clarification", clarification_node)
     graph.add_node("agent_error_handler", handle_agent_error)
 
     # 构建流程
@@ -577,6 +610,7 @@ def build_multi_agent_graph(checkpointer: BaseCheckpointSaver):
             "direct_answer": "direct_answer",
             "out_of_scope_refusal": "out_of_scope_refusal",
             "sensitive_refusal": "sensitive_refusal",
+            "clarification": "clarification",
         }
     )
     graph.add_conditional_edges(
@@ -585,6 +619,7 @@ def build_multi_agent_graph(checkpointer: BaseCheckpointSaver):
         {
             "supervisor": "supervisor",
             "planning_failure": "planning_failure_handler",
+            "clarification": "clarification",
         },
     )
 
@@ -671,6 +706,7 @@ def build_multi_agent_graph(checkpointer: BaseCheckpointSaver):
     graph.add_edge("planning_failure_handler", END)
     graph.add_edge("sensitive_refusal", END)
     graph.add_edge("out_of_scope_refusal", END)
+    graph.add_edge("clarification", END)
 
     # 编译
     compiled = graph.compile(checkpointer=checkpointer)

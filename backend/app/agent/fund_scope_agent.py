@@ -5,15 +5,15 @@
 import json
 import logging
 import re
-from typing import Any
+from typing import Any, Literal
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, ValidationError
 
 from app.agent.multi_agent_state import MultiAgentState
 from app.core.deepseek_llm import create_chat_llm
 from app.core.llm_concurrency import llm_ainvoke
-from app.tools.conversation_utils import format_history_for_prompt
+from app.tools.conversation_utils import request_history_for_prompt
 from app.tools.llm_json import extract_json_block
 
 logger = logging.getLogger(__name__)
@@ -36,8 +36,9 @@ class FundScope(BaseModel):
     query: str = ""
     funds: list[FundTarget] = Field(default_factory=list)
     total_count: int = 0
-    coverage_status: str = "candidate"
+    coverage_status: Literal["confirmed", "candidate", "incomplete"] = "candidate"
     missing_or_uncertain: list[str] = Field(default_factory=list)
+    needs_clarification: StrictBool = False
 
 
 FUND_SCOPE_SYSTEM_PROMPT = """你是基金范围确认 Agent。你的唯一职责是确认用户问题涉及哪些基金。
@@ -50,6 +51,11 @@ FUND_SCOPE_SYSTEM_PROMPT = """你是基金范围确认 Agent。你的唯一职�
 5. 只能把工具返回或用户明确给出的基金写入 funds。无法确认的名称写入 missing_or_uncertain。
 6. 最终只输出 JSON，不要 Markdown。原始问题由系统节点自动写入状态。
 7. funds 输出 requested_name、fund_name、fund_code 和 confidence。
+8. ROUTE_SCOPE_BASIS 是分类器提取的范围线索，不是基金名称匹配的确认结果。以当前问题为准，仅解析其中实际引用的范围。
+9. 板块加规模、费率或持仓条件时，先确认板块候选基金；条件由后续 Agent 检索，不在本节点筛选。
+10. 名称有多个无法区分的匹配，或明确点名的基金有未确认项时，needs_clarification=true，不可擅自挑选或忽略。
+    板块候选集合覆盖不全仅标记 candidate/incomplete，不因 top_k 限制自动请求用户澄清。
+11. 工具报错不是名称不存在或歧义，不得据此请求用户澄清。
 
 JSON 输出示例：
 {
@@ -58,7 +64,8 @@ JSON 输出示例：
   ],
   "total_count": 4,
   "coverage_status": "confirmed|candidate|incomplete",
-  "missing_or_uncertain": []
+  "missing_or_uncertain": [],
+  "needs_clarification": false
 }
 """
 
@@ -117,7 +124,9 @@ def _parse_scope_response(
 
 
 async def fund_scope_node(state: MultiAgentState) -> dict[str, Any]:
-    query = _latest_user_query(state)
+    original_query = _latest_user_query(state)
+    route = state.get("route_result")
+    query = (route.resolved_query if route else "") or original_query
     if not query:
         return {"fund_scope": None, "fund_scope_error": "未找到用户问题"}
 
@@ -131,13 +140,13 @@ async def fund_scope_node(state: MultiAgentState) -> dict[str, Any]:
     llm_base = create_chat_llm(temperature=0)
     llm = llm_base.bind_tools(tools)
     tools_by_name = {tool.name: tool for tool in tools}
-    history_text = format_history_for_prompt(
-        state.get("messages", []),
-        rounds=3,
-        max_response_length=500,
-        exclude_last=True,
-    )
+    history_text = request_history_for_prompt(original_query, state.get("messages", []))
     scope_prompt = FUND_SCOPE_SYSTEM_PROMPT
+    if route:
+        scope_prompt += "\n\nROUTE_SCOPE_BASIS:\n" + json.dumps(
+            [basis.model_dump() for basis in route.scope_basis], ensure_ascii=False,
+        )
+    scope_prompt += "\n\n当前用户原文（补全问题不得丢失其中的条件）：\n" + original_query
     if history_text:
         scope_prompt += (
             "\n\n以下是最近几轮对话历史，仅用于理解当前问题中的省略、指代和基金范围。"
@@ -181,10 +190,13 @@ async def fund_scope_node(state: MultiAgentState) -> dict[str, Any]:
                 call_id = call.get("id") or f"scope_call_{index}"
                 tool_log.append({"agent": "fund_scope_agent", "name": name, "args": args})
                 if name not in tools_by_name:
-                    content = f"工具不可用: {name}"
+                    raise ValueError(f"工具不可用: {name}")
                 else:
                     result = await tools_by_name[name].ainvoke(args)
                     content = result if isinstance(result, str) else str(result)
+                    # 现有 MCP 适配器和 rag-mcp 将异常转换成这两种文本前缀。
+                    if content.lstrip().startswith(("工具调用失败:", "工具执行失败:")):
+                        raise RuntimeError(content)
                     allowed_codes.update(_codes_from_text(content))
                 from langchain_core.messages import ToolMessage
                 messages.append(ToolMessage(

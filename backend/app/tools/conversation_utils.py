@@ -3,6 +3,16 @@ from typing import List
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
 
 
+def request_history_for_prompt(query: str, messages: List[BaseMessage]) -> str:
+    """统一路由、范围确认和规划所用历史，兼容含/不含当前问题的输入。"""
+    source = list(messages)
+    if source and isinstance(source[-1], HumanMessage) and str(source[-1].content).strip() == query.strip():
+        source = source[:-1]
+    return format_history_for_prompt(
+        source, rounds=3, max_response_length=1500, exclude_last=False,
+    )
+
+
 def extract_recent_history(messages: List[BaseMessage], rounds: int = 3) -> List[BaseMessage]:
     """提取最近N轮对话历史
     
@@ -24,6 +34,9 @@ def extract_recent_history(messages: List[BaseMessage], rounds: int = 3) -> List
                 break
         recent_history.insert(0, msg)
     
+    # 丢弃窗口起点之前一轮的孤立回复。
+    while recent_history and not isinstance(recent_history[0], HumanMessage):
+        recent_history.pop(0)
     return recent_history
 
 

@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 _serializer = JsonPlusSerializer(
     allowed_msgpack_modules=[
         ("app.services.router", "RouteResult"),
+        ("app.services.router", "ScopeBasis"),
         ("app.agent.state_reducers", "_Sentinel"),
         ("app.agent.state_reducers", "NewPlan"),
         ("app.agent.state_reducers", "TaskPatch"),
