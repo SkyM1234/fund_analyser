@@ -1,7 +1,8 @@
 """Compliance Agent - 合规检查"""
 import logging
-from typing import Any
-import re
+from typing import Any, Literal
+
+from pydantic import BaseModel, StrictBool
 
 from langchain_openai import ChatOpenAI
 
@@ -12,6 +13,12 @@ from app.tools.llm_json import extract_json_block
 from app.tools.token_usage import record_usage
 
 logger = logging.getLogger(__name__)
+
+
+class ComplianceResult(BaseModel):
+    passed: StrictBool
+    reason: str = "LLM审查完成"
+    risk_level: Literal["none", "low", "high"] = "none"
 
 
 COMPLIANCE_SYSTEM_PROMPT = """你是基金分析系统的合规审查专家。
@@ -86,14 +93,11 @@ async def compliance_agent_node(state: MultiAgentState) -> dict[str, Any]:
         token_usage = record_usage("compliance", response)
 
         # 解析 JSON
-        import json
         content = extract_json_block(content)
-
-        result = json.loads(content)
-
-        passed = result.get("passed", True)
-        reason = result.get("reason", "LLM审查完成")
-        risk_level = result.get("risk_level", "none")
+        result = ComplianceResult.model_validate_json(content)
+        passed = result.passed
+        reason = result.reason
+        risk_level = result.risk_level
 
         logger.info(f"[Compliance] LLM check - passed={passed}, risk={risk_level}")
 

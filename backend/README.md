@@ -223,8 +223,8 @@ Authorization: Bearer <access_token>
 
 | SSE 事件 | 说明 |
 | --- | --- |
-| `message_start` | 新的助手消息开始；合规重试后也会重新发送，客户端应重置当前回答内容。 |
-| `token` | 增量文本，数据格式为 `{"delta": "..."}`。 |
+| `message_start` | 已归档的助手答案开始发布，客户端应重置当前回答内容。 |
+| `token` | 审查并归档后的答案片段，数据格式为 `{"delta": "..."}`；草稿不对客户端发布。 |
 | `route_result` | 路由识别结果。 |
 | `plan_created` | Supervisor 生成的任务计划。 |
 | `agent_start` / `agent_end` | 子 Agent 的执行状态。 |

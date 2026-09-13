@@ -13,7 +13,8 @@ class SupervisorScopeContextTests(unittest.TestCase):
 
         self.assertIn("未执行 fund_scope_agent", context)
         self.assertIn("fund_codes 设为 []", context)
-        self.assertIn("全局检索", context)
+        self.assertIn("不得在计划阶段猜测", context)
+        self.assertIn("不得声称已预先覆盖全部基金", context)
 
     def test_confirmed_scope_uses_authoritative_scope_context(self) -> None:
         context = _scope_planning_context(

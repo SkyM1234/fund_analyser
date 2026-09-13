@@ -14,7 +14,7 @@ import logging
 import random
 from collections.abc import Iterable
 
-from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage
 
 from app.core.celery_app import celery_app
 from app.core.config import get_settings
@@ -49,6 +49,26 @@ class SessionBusyError(RuntimeError):
 
 class TaskCancelledError(asyncio.CancelledError):
     """当任务观察到用户取消请求时抛出。"""
+
+
+def _committed_answer(snapshot) -> str:
+    """Read only a completed, archived answer, never an intermediate draft."""
+    if snapshot is None or snapshot.next:
+        raise RuntimeError("Agent graph has not completed")
+    answer = snapshot.values.get("final_answer")
+    messages = snapshot.values.get("messages", [])
+    last_message = messages[-1] if messages else None
+    message_type = (
+        last_message.get("type") if isinstance(last_message, dict)
+        else getattr(last_message, "type", None)
+    )
+    content = (
+        last_message.get("content") if isinstance(last_message, dict)
+        else getattr(last_message, "content", None)
+    )
+    if not isinstance(answer, str) or not answer.strip() or message_type != "ai" or content != answer:
+        raise RuntimeError("Final answer is missing from the committed conversation")
+    return answer
 
 
 async def _session_lock_heartbeat(
@@ -381,10 +401,8 @@ async def _run_chat_turn(
     )
     acquired = await lock.acquire()
     if not acquired:
-        raise SessionBusyError(f"Session is busy: {req.session_id}")
         logger.warning(f"[chat_task] 会话正在处理中，拒绝并发请求: session_id={req.session_id}")
-        publish_event(run_id, "error", {"message": "该会话正在处理中，请稍候再试"})
-        return
+        raise SessionBusyError(f"Session is busy: {req.session_id}")
 
     lock_stop_event = asyncio.Event()
     lock_heartbeat = asyncio.create_task(
@@ -404,7 +422,6 @@ async def _run_chat_turn(
 
         logger.info("[chat_task] 使用多Agent架构")
         app = build_multi_agent_graph(checkpointer)
-        agent_node_names = ["synthesizer", "direct_answer"]
         worker_agent_names = {
             "rag_agent",
             "market_agent",
@@ -525,7 +542,6 @@ async def _run_chat_turn(
         try:
             logger.info("[chat_task] 开始流式处理...")
             event_count = 0
-            seen_run_ids: set[str] = set()
             task_context_by_run_id: dict[str, dict[str, str]] = {}
             replayed_trace_events = await _load_replayed_trace(run_id)
             trace_events_by_id = {}
@@ -670,22 +686,6 @@ async def _run_chat_turn(
                             "sequence": event_count,
                         })
 
-                elif kind == "on_chat_model_stream":
-                    metadata = event.get("metadata", {})
-                    node_name = metadata.get("langgraph_node")
-
-                    if node_name in agent_node_names:
-                        evt_run_id = event.get("run_id")
-                        if evt_run_id not in seen_run_ids:
-                            seen_run_ids.add(evt_run_id)
-                            streamed_answer = ""
-                            publish_event(run_id, "message_start", {})
-
-                        chunk: AIMessageChunk = event["data"]["chunk"]
-                        if chunk.content:
-                            streamed_answer += str(chunk.content)
-                            publish_event(run_id, "token", {"delta": chunk.content})
-
                 elif kind == "on_chat_model_end":
                     metadata = event.get("metadata", {})
                     node_name = metadata.get("langgraph_node")
@@ -803,30 +803,6 @@ async def _run_chat_turn(
                             logger.warning(f"[chat_task] event: compliance未通过，reason={reason}")
                             publish_event(run_id, "retry_notice", {"reason": reason})
 
-                    if node_name in (
-                        "compliance_failure_handler",
-                        "sensitive_refusal",
-                        "out_of_scope_refusal",
-                        "direct_answer",
-                    ) and is_node_level_event:
-                        output = event.get("data", {}).get("output")
-                        if isinstance(output, dict) and node_name == "direct_answer":
-                            content = output.get("draft_answer", "")
-                            if content:
-                                streamed_answer = str(content)
-                                publish_event(run_id, "message_start", {})
-                                for char in content:
-                                    publish_event(run_id, "token", {"delta": char})
-                        elif isinstance(output, dict) and "messages" in output:
-                            last_msg = output["messages"][-1]
-                            if hasattr(last_msg, "content") and last_msg.content:
-                                logger.info(f"[chat_task] event: {node_name}节点返回预设回复")
-                                publish_event(run_id, "message_start", {})
-                                content = last_msg.content
-                                streamed_answer = str(content)
-                                for char in content:
-                                    publish_event(run_id, "token", {"delta": char})
-
                 elif kind == "on_tool_start":
                     tool_name = event["name"]
                     tool_args = event["data"].get("input", {})
@@ -918,6 +894,8 @@ async def _run_chat_turn(
                 }
             }
             final_state = await app.aget_state(latest_config)
+            # Only terminal graph output may reach the browser; drafts stay internal.
+            streamed_answer = _committed_answer(final_state)
             final_messages = (
                 final_state.values.get("messages", [])
                 if final_state
@@ -991,7 +969,9 @@ async def _run_chat_turn(
                 and cancel_requested_event.is_set()
             ):
                 raise TaskCancelledError()
-            publish_event(run_id, "done", {"finish_reason": "stop"})
+            publish_event(run_id, "message_start", {})
+            for offset in range(0, len(streamed_answer), 128):
+                publish_event(run_id, "token", {"delta": streamed_answer[offset:offset + 128]})
 
         except TaskCancelledError:
             raise
@@ -1004,13 +984,11 @@ async def _run_chat_turn(
             ):
                 raise TaskCancelledError()
             logger.error(f"[chat_task] 超时: run_id={run_id}, session_id={req.session_id}")
-            publish_event(run_id, "error", {"message": "处理超时，请稍后重试"})
             raise
         except LeaseLostError:
             raise
         except Exception as e:
             logger.exception(f"[chat_task] 处理异常: session_id={req.session_id}")
-            publish_event(run_id, "error", {"message": str(e)})
             raise
 
         try:
@@ -1311,7 +1289,9 @@ def run_chat_turn(
             _mark_finished(run_id, lease_token, "SUCCESS"),
             timeout=30,
         )
-        if not updated:
+        if updated:
+            publish_event(run_id, "done", {"finish_reason": "stop"})
+        else:
             cancelled = run_coro(
                 _mark_cancelled(run_id, lease_token),
                 timeout=30,

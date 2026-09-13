@@ -92,18 +92,17 @@ async def refresh(req: RefreshRequest, db: AsyncSession = Depends(get_db)):
     token_hash = _hash_token(req.refresh_token)
 
     redis_client = get_redis_client()
-    valid = await redis_client.exists(f"{_REFRESH_TOKEN_KEY_PREFIX}{token_hash}")
+    # GETDEL consumes the token atomically across requests and API workers.
+    valid = await redis_client.getdel(f"{_REFRESH_TOKEN_KEY_PREFIX}{token_hash}")
     if not valid:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="刷新令牌无效或已过期")
 
     # 检查账号是否仍为活跃状态（停用/删除后 refresh 也应失效）
     user = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
     if user is None or not user.is_active:
-        await redis_client.delete(f"{_REFRESH_TOKEN_KEY_PREFIX}{token_hash}")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="账号已停用或不存在")
 
     # 旋转：撤销旧的刷新令牌（Redis 热路径 + MySQL 审计留痕），签发新的一对（防止刷新令牌被重放）
-    await redis_client.delete(f"{_REFRESH_TOKEN_KEY_PREFIX}{token_hash}")
     stored = (await db.execute(
         select(RefreshToken).where(RefreshToken.token_hash == token_hash)
     )).scalar_one_or_none()

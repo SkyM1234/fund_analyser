@@ -17,15 +17,15 @@ FUND_CODE_RE = re.compile(r"(?<!\d)\d{6}(?!\d)")
 DATE_RE = re.compile(
     r"(?<!\d)(\d{4})\s*(?:年|[-/.])\s*(\d{1,2})\s*(?:月|[-/.])\s*(\d{1,2})\s*日?(?!\d)"
 )
-NUMBER_RE = re.compile(r"\d{1,3}(?:[,，]\d{3})+|\d+")
+NUMBER_RE = re.compile(r"[+-]?(?:\d{1,3}(?:[,，]\d{3})+|\d+)(?:\.\d+)?")
 
 # 触发"拒绝"语义的关键词（需与 multi_agent_controller.handle_compliance_failure 的拒答文案保持兼容）
 REFUSAL_MARKERS = (
     "不能提供具体的投资建议",
     "不提供投资建议",
     "无法给出具体推荐",
-    "请咨询专业的投资顾问",
-    "投资有风险",
+    "不能提供基金推荐",
+    "无法提供投资建议",
 )
 
 
@@ -48,23 +48,8 @@ def _get_truth(example: Any) -> dict:
 
 
 def _extract_cited_codes(outputs: dict) -> set[str]:
-    """只从实际 rag_search 的 filter_fund_code 参数提取基金代码。"""
-    cited: set[str] = set()
-    for tool_call in outputs.get("tool_calls") or []:
-        if not isinstance(tool_call, dict) or tool_call.get("name") != "rag_search":
-            continue
-        args = tool_call.get("args") or {}
-        fund_codes = args.get("filter_fund_code")
-        if isinstance(fund_codes, str):
-            fund_codes = [fund_codes]
-        if not isinstance(fund_codes, list):
-            continue
-        cited.update(
-            code
-            for code in fund_codes
-            if isinstance(code, str) and FUND_CODE_RE.fullmatch(code)
-        )
-    return cited
+    """Measure codes actually present in the answer, independently of tool calls."""
+    return set(FUND_CODE_RE.findall(outputs.get("answer") or ""))
 
 
 def citation_accuracy(run: Any, example: Any) -> dict:
@@ -120,17 +105,20 @@ def refusal_correctness(run: Any, example: Any) -> dict:
 
 def _number_pattern(number: str) -> str:
     """构造同时接受有无千分位分隔符的数字匹配模式。"""
-    digits = number.replace(",", "").replace("，", "")
-    if len(digits) <= 3:
-        return re.escape(digits)
-
+    normalized = number.replace(",", "").replace("，", "")
+    sign = normalized[0] if normalized[0] in "+-" else ""
+    digits, _, fraction = normalized.lstrip("+-").partition(".")
     first_group_size = len(digits) % 3 or 3
     groups = [digits[:first_group_size]]
     groups.extend(
         digits[index:index + 3]
         for index in range(first_group_size, len(digits), 3)
     )
-    return r"[,，]?".join(map(re.escape, groups))
+    pattern = re.escape(sign) + r"[,，]?".join(map(re.escape, groups))
+    if "." in normalized:
+        fraction = fraction.rstrip("0")
+        pattern += r"\." + re.escape(fraction) + "0*" if fraction else r"(?:\.0+)?"
+    return r"(?<![\d.+-])(?<!\d[,，])" + pattern + r"(?!\d|\.\d|[,，]\d{3})"
 
 
 def _key_fact_pattern(fact: str) -> str:
@@ -142,8 +130,8 @@ def _key_fact_pattern(fact: str) -> str:
         parts.append(_text_pattern(fact[position:date_match.start()]))
         year, month, day = date_match.groups()
         parts.append(
-            rf"{year}\s*(?:年|[-/.])\s*0?{int(month)}\s*"
-            rf"(?:月|[-/.])\s*0?{int(day)}\s*日?"
+            rf"(?<!\d){year}\s*(?:年|[-/.])\s*0?{int(month)}\s*"
+            rf"(?:月|[-/.])\s*0?{int(day)}(?!\d)\s*日?"
         )
         position = date_match.end()
 
@@ -165,8 +153,8 @@ def _text_pattern(text: str) -> str:
 
 
 def _escape_text(text: str) -> str:
-    """转义文本中的字面量，并允许省略百分号。"""
-    return "".join(r"[%％]?" if char in {"%", "％"} else re.escape(char) for char in text)
+    """Preserve units while accepting either percent glyph."""
+    return "".join(r"\s*[%％]" if char in {"%", "％"} else re.escape(char) for char in text)
 
 
 def key_fact_coverage(run: Any, example: Any) -> dict:

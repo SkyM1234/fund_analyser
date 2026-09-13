@@ -3,9 +3,8 @@
 事件类型（SSE event 字段），采用带消息生命周期的标准协议：
 - message_start  新的一条助手消息开始（含首次生成与合规重试后的重新生成）；
                  前端收到后应重置当前正在渲染的消息内容，而不是追加
-- token          LLM 生成的增量文本 {"delta": "..."}，追加到当前消息
-- retry_notice   合规检查未通过，即将重新生成 {"reason": "..."}；
-                 随后必然紧跟一个新的 message_start
+- token          审查并归档后的答案片段 {"delta": "..."}，追加到当前消息
+- retry_notice   合规改写或临时依赖失败后的重试通知 {"reason": "..."}，不是终态
 - route_result   路由识别完成 {"intent": "..."}
 - plan_created   Supervisor 完成规划 {"plan": [...], "reasoning": "..."}
 - agent_start    子 Agent 节点开始执行 {"agent_name": "...", "task_id": "...", "description": "..."}
@@ -18,11 +17,8 @@
 - done           结束 {"finish_reason": "stop"}
 - error          异常 {"message": "..."}
 
-背景：Compliance 节点判定不通过时会回到 synthesizer 重新生成答案（见
-multi_agent_controller.check_compliance）。synthesizer 每次执行都会产出一段完整的
-LLM 流，若不加区分地转发，前端会把重试前后的两段内容都渲染出来。这里通过
-message_start / retry_notice 显式标记消息边界，交由前端在收到 message_start 时
-清空当前消息缓冲区。
+任务进度实时转发；答案草稿不对客户端发布。图执行完成并保存最终答案后，
+Worker 发布 message_start 和正文片段；任务成功状态落库后才发布 done。
 """
 import json
 import logging

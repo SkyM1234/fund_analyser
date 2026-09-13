@@ -1,6 +1,6 @@
 """查询路由器：两层路由。
 
-第1层：快速规则过滤（闲聊、越界、敏感）
+第1层：完整闲聊短句快速匹配
 第2层：LLM意图分类，直接传入近几轮对话历史，由 LLM 结合上下文判断意图
 """
 import json
@@ -36,15 +36,6 @@ CHITCHAT_PATTERNS = [
     r'^(你是谁|你叫什么|你会什么)',
 ]
 
-OUT_OF_SCOPE_KEYWORDS = ['天气', '新闻', '娱乐', '股票代码', '个股', '期货', '外汇', '加密货币']
-
-SENSITIVE_KEYWORDS = [
-    '推荐', '建议买', '该买', '应该买', '值得买', '买哪个', '买哪只', '买什么',
-    '会涨', '会跌', '能涨', '能赚', '收益率预测', '未来收益', '预期收益',
-    '保证收益', '稳赚', '必涨', '帮我选', '给我推荐',
-]
-
-
 # ===== 第2层：LLM分类 Prompt =====
 LLM_CLASSIFIER_SYSTEM = """你是基金问答系统的意图分类器。根据对话历史和当前问题，判断用户意图。
 
@@ -69,10 +60,13 @@ LLM_CLASSIFIER_SYSTEM = """你是基金问答系统的意图分类器。根据�
 
 ⚠️ 注意：
 - 若当前消息是追问或模糊指令（如"再试一下"、"换一个"），结合对话历史判断实际意图
+- 问候后的实际问题按问题分类；"不要推荐，只比较费率"属于客观查询。
+- 基金的外汇风险、期货持仓等属于基金问题，不能仅按关键词判为越界。
+- 与基金或金融知识无关的天气、娱乐等问题归为 out_of_scope。
 - sensitive 和 fund_query/fund_screening 的区别：前者要求推荐/预测，后者是客观查询
 
 输出 JSON（不要解释）：
-{"intent": "sensitive|fund_query|fund_screening|general_finance"}"""
+{"intent": "sensitive|fund_query|fund_screening|general_finance|out_of_scope"}"""
 
 
 async def route_query(
@@ -81,21 +75,15 @@ async def route_query(
 ) -> RouteResult:
     """两层路由。
 
-    [第1层] 快速规则过滤（闲聊、越界、敏感）
+    [第1层] 完整闲聊短句快速匹配
     [第2层] LLM意图分类，传入近几轮对话让 LLM 结合上下文判断
     """
     query_clean = query.strip()
 
     # ===== 第1层：快速规则过滤 =====
     for pattern in CHITCHAT_PATTERNS:
-        if re.search(pattern, query_clean, re.IGNORECASE):
+        if re.fullmatch(pattern + r"[\s!！。.?？,，~～]*", query_clean, re.IGNORECASE):
             return RouteResult(intent="chitchat")
-
-    if any(kw in query_clean for kw in OUT_OF_SCOPE_KEYWORDS):
-        return RouteResult(intent="out_of_scope")
-
-    if any(kw in query_clean for kw in SENSITIVE_KEYWORDS):
-        return RouteResult(intent="sensitive")
 
     # ===== 第2层：LLM意图分类 =====
     return await _llm_classify(query_clean, history_messages)
@@ -158,6 +146,7 @@ async def _llm_classify(
             "fund_query",
             "fund_screening",
             "general_finance",
+            "out_of_scope",
         ):
             return RouteResult(intent=intent)
     except Exception:

@@ -28,7 +28,8 @@
 **回答质量指标**：
 
 | Key | 类型 | 含义 |
-|---|---|---|\n| `citation_accuracy` | 规则 | 引用基金代码 F1 |
+|---|---|---|
+| `citation_accuracy` | 规则 | 最终答案中基金代码的 F1，不使用工具参数代替引用 |
 | `refusal_correctness` | 规则 | 敏感问题拒绝准确率 |
 | `key_fact_coverage` | 规则 | 关键事实子串命中率 |
 | `intent_accuracy` | 规则 | 路由意图准确率 |
@@ -50,6 +51,10 @@
 - 检索评测（`run_retrieval_eval`）测的是"直接 RAG"（GPU `/fund_reports/search`）
 - 回答评测（`run_answer_eval`）测的是"Agent 驱动的 RAG"（可能会改写 query、多轮检索）
 - 对比两者的 `context_relevance` / `hit_rate` 可以量化 Agent 层的增益
+
+`citation_accuracy` 只衡量答案中基金代码与标注的匹配程度，不证明具体结论获得证据支持；
+证据支持程度应结合 `faithfulness` 评估。`key_fact_coverage` 校验完整数值边界，并保留
+标注中的百分号单位；`15.3%` 不匹配 `115.30%` 或缺少百分号的 `15.3`。
 
 ## 数据集格式
 

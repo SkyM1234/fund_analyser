@@ -7,6 +7,8 @@ services:
       - "8001:8001"
     volumes:
       - ${EMBEDDING_MODEL_DIR:-../embedding_model}:/app/embedding_model:ro
+      - ../milvus-docker/embedding_service.py:/app/embedding_service.py:ro
+      - ../milvus-docker/hybrid_search.py:/app/hybrid_search.py:ro
       - ./wait-for-milvus.py:/opt/wait-for-milvus.py:ro
     environment:
       MILVUS_URL: ${MILVUS_URL:-http://milvus-standalone:19530}

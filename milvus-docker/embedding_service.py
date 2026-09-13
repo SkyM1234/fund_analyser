@@ -41,6 +41,8 @@ class BatchEncoder:
     """
 
     def __init__(self, model, max_wait_ms: float = 50, max_batch: int = 16):
+        if max_batch <= 0:
+            raise ValueError("max_batch must be greater than 0")
         self.model = model
         self.max_wait = max_wait_ms / 1000
         self.max_batch = max_batch
@@ -79,25 +81,29 @@ class BatchEncoder:
             self._task = None
             self._flush_event.clear()
 
-        queries = [q for q, _ in batch]
-        # fast tokenizer 和模型实例不是线程安全的，同一实例只允许一次推理。
-        async with self._inference_lock:
-            async with GPU_SEMAPHORE:
-                result = await asyncio.to_thread(
-                    self.model.encode,
-                    queries,
-                    return_dense=True,
-                    return_sparse=True,
-                    return_colbert_vecs=False,
-                )
-        # 分发结果到各自的 future
-        dense_list = result["dense_vecs"]
-        sparse_list = result.get("lexical_weights", [])
-        for i, (_, future) in enumerate(batch):
-            future.set_result({
-                "dense": dense_list[i].tolist() if i < len(dense_list) else None,
-                "sparse": sparse_list[i] if i < len(sparse_list) else None,
-            })
+        batch = [(query, future) for query, future in batch if not future.done()]
+        try:
+            for start in range(0, len(batch), self.max_batch):
+                chunk = batch[start:start + self.max_batch]
+                async with self._inference_lock:
+                    async with GPU_SEMAPHORE:
+                        result = await asyncio.to_thread(
+                            self.model.encode, [query for query, _ in chunk],
+                            return_dense=True, return_sparse=True, return_colbert_vecs=False,
+                        )
+                dense_list = result["dense_vecs"]
+                sparse_list = result["lexical_weights"]
+                if len(dense_list) != len(chunk) or len(sparse_list) != len(chunk):
+                    raise RuntimeError("Encoder result count mismatch")
+                for i, (_, future) in enumerate(chunk):
+                    if not future.done():
+                        future.set_result({
+                            "dense": dense_list[i].tolist(), "sparse": sparse_list[i],
+                        })
+        except Exception as exc:
+            for _, future in batch:
+                if not future.done():
+                    future.set_exception(exc)
 
 
 class BatchReranker:
@@ -150,6 +156,7 @@ class BatchReranker:
             self._task = None
             self._flush_event.clear()
 
+        batch = [(pairs, future) for pairs, future in batch if not future.done()]
         # 合并所有请求的 pairs 为一个大的 pairs 列表
         all_pairs = []
         split_points = []  # 记录每个请求的 pairs 数量，用于拆分结果
@@ -188,7 +195,8 @@ class BatchReranker:
         offset = 0
         for i, (_, future) in enumerate(batch):
             n = split_points[i]
-            future.set_result([float(s) for s in scores[offset:offset + n]])
+            if not future.done():
+                future.set_result([float(s) for s in scores[offset:offset + n]])
             offset += n
 
 

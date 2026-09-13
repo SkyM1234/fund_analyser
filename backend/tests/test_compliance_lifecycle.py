@@ -1,4 +1,5 @@
 import unittest
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from langchain_core.messages import HumanMessage
@@ -9,6 +10,16 @@ from app.agent.supervisor import _new_plan_update
 
 
 class ComplianceLifecycleTests(unittest.IsolatedAsyncioTestCase):
+    async def test_invalid_or_missing_boolean_fails_closed(self) -> None:
+        for content in ('{}', '{"passed":"false"}', '{"passed":1}', '{"passed":null}', '[]'):
+            with self.subTest(content=content), patch("app.agent.compliance_agent.ChatOpenAI"), patch(
+                "app.agent.compliance_agent.llm_ainvoke",
+                new=AsyncMock(return_value=SimpleNamespace(content=content, usage_metadata={})),
+            ):
+                result = await compliance_agent_node({"draft_answer": "Draft", "compliance_retry_count": 0})
+                self.assertFalse(result["compliance_passed"])
+                self.assertEqual(result["compliance_retry_count"], 1)
+
     def test_new_plan_resets_compliance_retry_budget(self) -> None:
         update = _new_plan_update([])
 
