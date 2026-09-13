@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",
+    "test:chat-progress": "node tests/chat-progress.cjs",
     "preview": "vite preview"
   },
   "dependencies": {

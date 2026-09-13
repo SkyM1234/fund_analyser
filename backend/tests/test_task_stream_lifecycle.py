@@ -12,7 +12,7 @@ from app.tasks import chat_tasks as tasks
 
 
 class AnswerPublicationTests(unittest.IsolatedAsyncioTestCase):
-    async def exercise_stream(self, fail=False):
+    async def exercise_stream(self, fail=False, extra_events=()):
         graph = MagicMock()
         graph.aupdate_state = AsyncMock()
         graph.aget_state = AsyncMock(return_value=SimpleNamespace(
@@ -22,6 +22,12 @@ class AnswerPublicationTests(unittest.IsolatedAsyncioTestCase):
         async def events(*args, **kwargs):
             yield {"event": "on_chat_model_stream", "run_id": "draft", "metadata": {"langgraph_node": "synthesizer"}, "data": {"chunk": SimpleNamespace(content="UNAPPROVED")}}
             yield {"event": "on_chain_end", "name": "direct_answer", "metadata": {"langgraph_node": "direct_answer"}, "data": {"output": {"draft_answer": "UNAPPROVED"}}}
+            for event in extra_events:
+                yield event
+                self.assertFalse(any(
+                    call.args[1] in {"message_start", "token"}
+                    for call in published.call_args_list
+                ), "Answer content must remain private while the graph is running")
             if fail:
                 raise ConnectionError("temporary dependency failure")
 
@@ -51,6 +57,64 @@ class AnswerPublicationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_temporary_failure_does_not_publish_terminal_error(self):
         self.assertEqual(await self.exercise_stream(fail=True), [])
+
+    @staticmethod
+    def node_start(name, retry_count=0):
+        return {
+            "event": "on_chain_start",
+            "name": name,
+            "metadata": {"langgraph_node": name},
+            "data": {"input": {"compliance_retry_count": retry_count}},
+        }
+
+    async def test_progress_precedes_approved_answer_for_both_answer_paths(self):
+        for answer_node in ("direct_answer", "synthesizer"):
+            with self.subTest(answer_node=answer_node):
+                events = await self.exercise_stream(extra_events=[
+                    self.node_start(answer_node),
+                    self.node_start("compliance"),
+                    self.node_start("commit_answer"),
+                ])
+                self.assertEqual(
+                    [(event[1], event[2]) for event in events],
+                    [
+                        ("answer_progress", {"phase": "synthesizing"}),
+                        ("answer_progress", {"phase": "reviewing"}),
+                        ("answer_progress", {"phase": "finalizing"}),
+                        ("message_start", {}),
+                        ("token", {"delta": "Approved answer"}),
+                    ],
+                )
+
+    async def test_revision_is_reviewed_again_before_publication(self):
+        events = await self.exercise_stream(extra_events=[
+            self.node_start("compliance"),
+            {
+                "event": "on_chain_end", "name": "compliance",
+                "metadata": {"langgraph_node": "compliance"},
+                "data": {"output": {"compliance_passed": False, "compliance_reason": "Rejected"}},
+            },
+            self.node_start("synthesizer", retry_count=1),
+            self.node_start("compliance", retry_count=1),
+            self.node_start("commit_answer"),
+        ])
+        self.assertEqual(
+            [event[2]["phase"] for event in events if event[1] == "answer_progress"],
+            ["reviewing", "revising", "reviewing", "finalizing"],
+        )
+        self.assertEqual([event[1] for event in events].count("retry_notice"), 1)
+
+    async def test_progress_does_not_publish_answer_on_failure(self):
+        events = await self.exercise_stream(fail=True, extra_events=[
+            self.node_start("compliance"),
+        ])
+        self.assertEqual(events, [("run", "answer_progress", {"phase": "reviewing"})])
+
+    async def test_nested_runnables_do_not_emit_duplicate_progress(self):
+        nested = self.node_start("compliance")
+        nested["name"] = "RunnableSequence"
+        events = await self.exercise_stream(extra_events=[nested])
+        self.assertEqual([event[1] for event in events], ["message_start", "token"])
 
     def test_incomplete_or_unarchived_answer_is_rejected(self):
         for snapshot in (

@@ -1,6 +1,6 @@
 /**
  * SSE 流式聊天客户端：兼容 POST 的手动 SSE 解析。
- * 后端事件：message_start / token / retry_notice / tool_call / tool_result / done / error
+ * 后端事件：answer_progress / message_start / token / retry_notice / tool_call / tool_result / done / error
  */
 
 export interface ChatHistoryItem {
@@ -10,6 +10,15 @@ export interface ChatHistoryItem {
 
 import { authFetch } from './http'
 
+export type AnswerPhase =
+  | 'preparing'
+  | 'analyzing'
+  | 'synthesizing'
+  | 'reviewing'
+  | 'revising'
+  | 'finalizing'
+  | 'recovering'
+
 export interface StreamHandlers {
   onStarted?: (runId: string, taskId: string) => void
   onAttemptStart?: (
@@ -18,6 +27,7 @@ export interface StreamHandlers {
     checkpointTrace?: any[],
   ) => void
   onMessageStart?: () => void
+  onAnswerProgress?: (phase: AnswerPhase) => void
   onToken?: (delta: string) => void
   onRetryNotice?: (reason: string) => void
   onToolCall?: (
@@ -125,6 +135,11 @@ export async function sendChatStream(opts: SendOptions, handlers: StreamHandlers
         break
       case 'message_start':
         handlers.onMessageStart?.()
+        break
+      case 'answer_progress':
+        if (['preparing', 'analyzing', 'synthesizing', 'reviewing', 'revising', 'finalizing', 'recovering'].includes(payload.phase)) {
+          handlers.onAnswerProgress?.(payload.phase)
+        }
         break
       case 'token':
         handlers.onToken?.(payload.delta ?? '')

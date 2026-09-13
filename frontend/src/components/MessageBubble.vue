@@ -7,6 +7,7 @@ import { ArrowRight, Check, DataAnalysis, DocumentCopy, EditPen, List, User } fr
 import ToolCallCard from './ToolCallCard.vue'
 import AgentBadge from './AgentBadge.vue'
 import type { Message, TraceEvent } from '../stores/chat'
+import type { AnswerPhase } from '../api/chat'
 
 const props = defineProps<{
   msg: Message
@@ -31,6 +32,18 @@ const md = new MarkdownIt({
 })
 
 const rendered = computed(() => md.render(props.msg.content || ''))
+const progressLabels: Record<AnswerPhase, string> = {
+  preparing: '正在理解问题',
+  analyzing: '正在查询与分析资料',
+  synthesizing: '正在整理回答',
+  reviewing: '正在审核回答',
+  revising: '正在修订回答',
+  finalizing: '正在完成回答',
+  recovering: '正在恢复处理',
+}
+const progressLabel = computed(() =>
+  progressLabels[props.msg.answerPhase || 'preparing'],
+)
 
 interface ExecutionGroup {
   task_id: string
@@ -417,8 +430,14 @@ const copyContent = async () => {
 
     <div v-else-if="msg.role === 'assistant' && (msg.content || msg.error)" class="content md" v-html="rendered" />
 
-    <div v-if="msg.pending && !msg.retryNotice" class="pending">正在生成</div>
-    <div v-if="msg.retryNotice" class="retry-notice">内容未通过合规审核，正在重新生成</div>
+    <div
+      v-if="msg.pending && !msg.content && !msg.error"
+      class="pending"
+      :class="{ 'retry-notice': msg.answerPhase === 'revising' || msg.answerPhase === 'recovering' }"
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+    >{{ progressLabel }}</div>
     <div v-if="msg.error" class="err">出错：{{ msg.error }}</div>
   </div>
 </template>
@@ -563,6 +582,9 @@ const copyContent = async () => {
   font-size: 12px;
 }
 .pending {
+  min-height: 20px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
   color: var(--muted);
 }
 .pending::after {

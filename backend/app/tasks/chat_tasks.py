@@ -656,6 +656,26 @@ async def _run_chat_turn(
                 if kind == "on_chain_start":
                     name = event["name"]
                     meta_node = event.get("metadata", {}).get("langgraph_node")
+                    if name == meta_node:
+                        phase = {
+                            "route": "preparing",
+                            "supervisor": "analyzing",
+                            "fund_scope": "analyzing",
+                            "batch_reflection": "analyzing",
+                            "synthesizer": "synthesizing",
+                            "direct_answer": "synthesizing",
+                            "compliance": "reviewing",
+                            "commit_answer": "finalizing",
+                            "compliance_failure_handler": "finalizing",
+                        }.get(name)
+                        if name in worker_agent_names:
+                            phase = "analyzing"
+                        if phase == "synthesizing":
+                            node_input = event.get("data", {}).get("input", {})
+                            if isinstance(node_input, dict) and node_input.get("compliance_retry_count", 0):
+                                phase = "revising"
+                        if phase:
+                            publish_event(run_id, "answer_progress", {"phase": phase})
                     if name in worker_agent_names and name == meta_node:
                         node_input = event.get("data", {}).get("input", {})
                         task_id = node_input.get("current_task_id", "")

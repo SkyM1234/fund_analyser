@@ -4,6 +4,7 @@ import {
   cancelChatTask,
   resumeChatStream,
   sendChatStream,
+  type AnswerPhase,
   type ChatHistoryItem,
 } from '../api/chat'
 
@@ -78,6 +79,7 @@ export interface Message {
   pending?: boolean
   error?: string
   retryNotice?: string
+  answerPhase?: AnswerPhase
 }
 
 export interface RunningSession {
@@ -239,6 +241,7 @@ export const useChatStore = defineStore('chat', () => {
           },
           onAttemptStart: (_attempt, workerRecovery, checkpointTrace) => {
             if (!workerRecovery) return
+            assistant.answerPhase = 'recovering'
             assistant.trace_events = mergeTraceEvents(
               assistant.trace_events,
               checkpointTrace || [],
@@ -249,6 +252,11 @@ export const useChatStore = defineStore('chat', () => {
           onMessageStart: () => {
             assistant.content = ''
             assistant.retryNotice = undefined
+            assistant.answerPhase = 'finalizing'
+          },
+          onAnswerProgress: (phase) => {
+            assistant.answerPhase = phase
+            assistant.retryNotice = undefined
           },
           onToken: (delta) => {
             assistant.content += delta
@@ -256,6 +264,7 @@ export const useChatStore = defineStore('chat', () => {
           onRetryNotice: (reason) => {
             assistant.content = ''
             assistant.retryNotice = reason
+            assistant.answerPhase = 'recovering'
           },
           onToolCall: (name, args, agentName, taskId, toolCallId) => {
             const step: ToolStep = { name, args }
@@ -363,6 +372,7 @@ export const useChatStore = defineStore('chat', () => {
       taskRunIds.delete(targetSessionId)
       cancellingSessions.delete(targetSessionId)
       assistant.pending = false
+      assistant.answerPhase = undefined
     }
   }
 
@@ -489,6 +499,7 @@ export const useChatStore = defineStore('chat', () => {
       await resumeChatStream(runId, {
         onAttemptStart: (_attempt, workerRecovery, checkpointTrace) => {
           if (!workerRecovery) return
+          assistant.answerPhase = 'recovering'
           assistant.trace_events = mergeTraceEvents(
             assistant.trace_events,
             checkpointTrace || [],
@@ -499,11 +510,17 @@ export const useChatStore = defineStore('chat', () => {
         onMessageStart: () => {
           assistant.content = ''
           assistant.retryNotice = undefined
+          assistant.answerPhase = 'finalizing'
+        },
+        onAnswerProgress: (phase) => {
+          assistant.answerPhase = phase
+          assistant.retryNotice = undefined
         },
         onToken: (delta) => { assistant.content += delta },
         onRetryNotice: (reason) => {
           assistant.content = ''
           assistant.retryNotice = reason
+          assistant.answerPhase = 'recovering'
         },
         onToolCall: (name, args, agentName, taskId, toolCallId) => {
           if (toolCallId && assistant.tools.some((tool) => tool.tool_call_id === toolCallId)) {
@@ -579,6 +596,7 @@ export const useChatStore = defineStore('chat', () => {
       taskRunIds.delete(threadId)
       conversation.streaming = false
       assistant.pending = false
+      assistant.answerPhase = undefined
     }
   }
 
