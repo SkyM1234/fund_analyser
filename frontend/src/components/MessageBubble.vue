@@ -393,10 +393,10 @@ const copyContent = async () => {
 
       <div v-if="canEdit" class="action-buttons">
         <el-tooltip :content="copySuccess ? '已复制' : '复制'" placement="bottom">
-          <el-button class="action-btn" text :icon="copySuccess ? Check : DocumentCopy" @click="copyContent" />
+        <el-button class="action-btn" text :icon="copySuccess ? Check : DocumentCopy" :aria-label="copySuccess ? '已复制' : '复制'" @click="copyContent" />
         </el-tooltip>
         <el-tooltip content="编辑并回溯" placement="bottom">
-          <el-button class="action-btn" text :icon="EditPen" @click="startEdit" />
+        <el-button class="action-btn" text :icon="EditPen" aria-label="编辑并回溯" @click="startEdit" />
         </el-tooltip>
       </div>
     </div>
@@ -425,7 +425,8 @@ const copyContent = async () => {
 
 <style scoped>
 .bubble {
-  margin-bottom: 26px;
+  min-width: 0;
+  margin-bottom: 28px;
   animation: fade-in 0.25s ease;
 }
 .role {
@@ -449,18 +450,25 @@ const copyContent = async () => {
   color: var(--text-secondary);
   font-size: 13px;
 }
+.bubble.assistant .role-icon {
+  border-color: #cce5d9;
+  background: var(--success-soft);
+  color: var(--success);
+}
 .content {
   border-radius: var(--radius-md);
   line-height: 1.75;
 }
 .user-content {
-  display: inline-block;
-  max-width: min(680px, 88%);
-  padding: 10px 14px;
+  width: 100%;
+  padding: 11px 16px;
+  border: 1px solid #d8e6f0;
   background: var(--user-bg);
   color: var(--user-fg);
+  font-size: 15px;
   text-align: left;
-  overflow-wrap: break-word;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .bubble.user {
   text-align: right;
@@ -476,7 +484,12 @@ const copyContent = async () => {
 .md {
   padding: 0;
   color: var(--text);
-  font-size: 14px;
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+.md :deep(img) {
+  max-width: 100%;
+  height: auto;
 }
 .md :deep(p) {
   margin: 0 0 12px;
@@ -748,24 +761,31 @@ const copyContent = async () => {
 }
 
 .user-message-wrapper {
-  display: inline-block;
+  display: flex;
+  flex-direction: column;
   position: relative;
-  max-width: 100%;
+  /* Constrain the wrapper once; percentage widths inside shrink-to-fit wrap short text. */
+  width: fit-content;
+  max-width: min(680px, 88%);
+  margin-left: auto;
 }
 .action-buttons {
   display: flex;
   justify-content: flex-end;
+  gap: 2px;
   margin-top: 4px;
   opacity: 0;
   transition: opacity 0.2s;
 }
-.user-message-wrapper:hover .action-buttons {
+.user-message-wrapper:hover .action-buttons,
+.user-message-wrapper:focus-within .action-buttons {
   opacity: 1;
 }
 .action-btn {
   width: 28px;
   height: 28px;
   padding: 0;
+  margin: 0;
   color: var(--muted);
 }
 .action-btn:hover {
@@ -807,10 +827,11 @@ const copyContent = async () => {
   .trace-retry {
     margin-left: 0;
   }
-  .user-content,
-  .edit-area {
-    width: auto;
+  .user-message-wrapper {
     max-width: 92%;
+  }
+  .edit-area {
+    width: 92%;
   }
 }
 </style>

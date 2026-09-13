@@ -159,7 +159,7 @@ onMounted(() => {
 .sidebar {
   width: 272px;
   height: 100%;
-  background: var(--surface);
+  background: var(--surface-subtle);
   display: flex;
   flex-direction: column;
 }
@@ -201,7 +201,7 @@ onMounted(() => {
   height: 38px;
   justify-content: flex-start;
   padding-left: 15px;
-  box-shadow: 0 2px 6px rgba(23, 105, 170, 0.16);
+  box-shadow: none;
 }
 .loading {
   padding: 12px 16px;

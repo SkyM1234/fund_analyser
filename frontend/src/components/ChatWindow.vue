@@ -16,6 +16,7 @@ const onSubmit = async () => {
 }
 
 const onKeydown = (e: KeyboardEvent) => {
+  if (e.isComposing || e.keyCode === 229) return
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault()
     onSubmit()
@@ -38,29 +39,30 @@ watch(
 <template>
   <div class="chat">
     <div class="msgs" ref="scroller">
+      <div class="message-list">
       <div v-if="!store.messages.length" class="hint">
         <div class="hint-icon"><el-icon><DataLine /></el-icon></div>
         <h2>开始分析基金</h2>
-        <p>输入基金名称、基金代码或比较需求，获取基于数据的回答。</p>
         <div class="hint-examples" aria-label="示例问题">
           <button class="example" @click="input = '金融科技ETF汇添富的基金经理是谁？'">
-            <span>查询基金经理与基本信息</span>
+            <span>金融科技ETF汇添富的基金经理是谁？</span>
             <el-icon><ArrowRight /></el-icon>
           </button>
           <button class="example" @click="input = '159103 和 159299 哪个规模更大？'">
-            <span>比较 159103 与 159299 的基金规模</span>
+            <span>159103 和 159299 哪个规模更大？</span>
             <el-icon><ArrowRight /></el-icon>
           </button>
         </div>
       </div>
       <div v-if="store.loadingSession" class="session-loading">正在载入会话...</div>
       <MessageBubble
-        v-for="(m, idx) in store.messages"
+        v-for="m in store.messages"
         :key="m.id"
         :msg="m"
         :canEdit="m.role === 'user' && !store.streaming && !store.loadingSession"
         @edit="onEdit"
       />
+      </div>
     </div>
     <div class="composer">
       <div class="composer-shell">
@@ -68,14 +70,14 @@ watch(
           v-model="input"
           class="question-input"
           type="textarea"
-          :rows="2"
+          :autosize="{ minRows: 2, maxRows: 6 }"
           resize="none"
           placeholder="输入基金问题..."
+          aria-label="基金问题"
           :disabled="store.streaming || store.loadingSession"
           @keydown="onKeydown"
         />
         <div class="composer-footer">
-          <span class="keyboard-hint">Enter 发送 · Shift + Enter 换行</span>
           <div class="actions">
             <el-button
               v-if="store.streaming"
@@ -86,15 +88,19 @@ watch(
             >
               中断
             </el-button>
-            <el-button
-              type="primary"
-              :icon="Promotion"
-              :loading="store.streaming"
-              :disabled="store.streaming || store.loadingSession || !input.trim()"
-              @click="onSubmit"
-            >
-              {{ store.streaming ? '生成中' : '发送' }}
-            </el-button>
+            <el-tooltip :content="store.streaming ? '生成中' : '发送'" placement="top">
+              <span class="send-control">
+                <el-button
+                  class="send-btn"
+                  type="primary"
+                  :icon="Promotion"
+                  :loading="store.streaming"
+                  :disabled="store.streaming || store.loadingSession || !input.trim()"
+                  :aria-label="store.streaming ? '生成中' : '发送'"
+                  @click="onSubmit"
+                />
+              </span>
+            </el-tooltip>
           </div>
         </div>
       </div>
@@ -114,11 +120,16 @@ watch(
 }
 .msgs {
   flex: 1;
+  min-height: 0;
   width: 100%;
-  max-width: 940px;
-  margin: 0 auto;
   overflow-y: auto;
-  padding: 32px 34px 24px;
+  scrollbar-gutter: stable;
+}
+.message-list {
+  width: 100%;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 32px 40px 8px;
 }
 .hint {
   display: flex;
@@ -151,14 +162,10 @@ watch(
   font-size: 20px;
   font-weight: 650;
 }
-.hint p {
-  margin: 8px 0 26px;
-  color: var(--text-secondary);
-  font-size: 13px;
-}
 .hint-examples {
   display: grid;
   width: 100%;
+  margin-top: 26px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
@@ -193,19 +200,20 @@ watch(
   text-align: center;
 }
 .composer {
+  flex-shrink: 0;
   width: 100%;
-  padding: 12px 24px 18px;
-  background: linear-gradient(to bottom, rgba(255, 255, 255, 0), var(--surface) 16px);
+  padding: 12px 40px max(20px, env(safe-area-inset-bottom));
+  background: var(--surface);
 }
 .composer-shell {
   width: 100%;
-  max-width: 872px;
+  max-width: 880px;
   margin: 0 auto;
   overflow: hidden;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
   background: var(--surface);
-  box-shadow: 0 4px 18px rgba(23, 33, 43, 0.08);
+  box-shadow: 0 3px 14px rgba(23, 33, 43, 0.05);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 .composer-shell:focus-within {
@@ -220,6 +228,7 @@ watch(
   background: transparent;
   box-shadow: none;
   color: var(--text);
+  font-size: 15px;
   line-height: 1.55;
 }
 .question-input :deep(.el-textarea__inner:hover),
@@ -229,23 +238,30 @@ watch(
 .composer-footer {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
   min-height: 46px;
   padding: 6px 8px 8px 14px;
-}
-.keyboard-hint {
-  color: var(--muted);
-  font-size: 11px;
 }
 .actions {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
+  align-items: center;
+}
+.send-control {
+  display: inline-flex;
+}
+.send-btn {
+  width: 34px;
+  height: 34px;
+  margin: 0;
+  padding: 0;
+  font-size: 17px;
 }
 
 @media (max-width: 720px) {
-  .msgs {
+  .message-list {
     padding: 22px 16px 16px;
   }
   .hint {
@@ -255,13 +271,7 @@ watch(
     grid-template-columns: 1fr;
   }
   .composer {
-    padding: 8px 10px 10px;
-  }
-  .keyboard-hint {
-    display: none;
-  }
-  .composer-footer {
-    justify-content: flex-end;
+    padding: 8px 12px max(12px, env(safe-area-inset-bottom));
   }
 }
 </style>

@@ -17,8 +17,8 @@
   --warning-soft: #fff5e5;
   --danger: #c43d3d;
   --danger-soft: #fceeee;
-  --user-bg: #1769aa;
-  --user-fg: #ffffff;
+  --user-bg: #edf4fa;
+  --user-fg: #213b50;
   --tool-bg: #f3f7fa;
   --tool-border: #d8e4ec;
   --code-bg: #f2f4f6;
@@ -72,8 +72,16 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--el-font-family);
+  font-size: 14px;
+  letter-spacing: 0;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+}
+
+@supports (height: 100dvh) {
+  #app {
+    height: 100dvh;
+  }
 }
 
 button,
