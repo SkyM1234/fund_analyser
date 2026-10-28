@@ -27,7 +27,7 @@ intent_classifier/
 │       ├── data/               # 分类模型训练/测试数据与来源
 │       └── README.md           # 分类模型训练和评测说明
 ├── validation/
-│   ├── queries.jsonl           # 所有路由组合共用的 22 条验证问题
+│   ├── queries.jsonl           # 所有路由组合共用的 100 条验证问题
 │   └── reporting.py            # 汇总指标
 ├── reports/                    # 验证结果：cascade/ 与 classifier/
 └── tests/
@@ -111,6 +111,7 @@ Markdown 报告将分类模型概率显示为百分比，向量相似度保留�
 延迟按 batch=1 测量，排除初始化与预热；初始化时间单列。`--warmup-steps` 默认 3。
 比较效果时同时查看覆盖率和已接受样本准确率。
 演示问题与训练/例句可能重叠，报告记录与向量例句相同的 query 数量。
+验证问题的类别分布、年报参考和标注边界见 [validation/README.md](validation/README.md)。
 正式评估需使用独立数据集；当前分类权重曾使用部分带历史样本训练，本线路始终以空历史编码。
 
 分类模型的训练数据、来源、训练和评测命令见 [routers/classifier/README.md](routers/classifier/README.md)。
