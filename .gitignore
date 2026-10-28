@@ -27,6 +27,7 @@ frontend/dist/
 # Generated outputs and runtime data
 *.log
 /backend/eval/reports/
+/intent_classifier/reports/
 /backend/logs/
 /milvus-docker/volumes/
 /backend/scripts/chunk.txt
@@ -34,6 +35,7 @@ frontend/dist/
 
 # Large local datasets, models, and archives
 /embedding_model/
+/models/
 /annual_reports_2025_funds/
 /markdown_mineru/
 /annual_reports_2025_funds.zip

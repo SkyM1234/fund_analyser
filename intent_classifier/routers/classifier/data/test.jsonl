@@ -1,0 +1,20 @@
+{"id":"intent-test-001","query":"嗨，回来啦，和你打个招呼。","intent":"chitchat","group_id":"test-social-return","tags":["single_turn","greeting"]}
+{"id":"intent-test-002","history":[["human","159227的托管人是哪家"],["ai","已整理该基金的托管人信息。"]],"query":"这次不用再查了，谢谢你，改天再聊。","intent":"chitchat","group_id":"test-social-close","tags":["multi_turn","social_after_finance"]}
+{"id":"intent-test-003","query":"你这个助手主要能回答哪些类型的问题？","intent":"chitchat","group_id":"test-social-functions","tags":["single_turn","assistant_identity"]}
+{"id":"intent-test-004","query":"帮我给学校的机器人比赛取一个队名。","intent":"out_of_scope","group_id":"test-outside-keyword","tags":["single_turn","misleading_sector_word"]}
+{"id":"intent-test-005","history":[["human","159227跟踪哪个指数"],["ai","已查到该基金跟踪的指数。"]],"query":"不聊基金了，去南京玩两天住哪里方便？","intent":"out_of_scope","group_id":"test-outside-switch","tags":["multi_turn","topic_switch"]}
+{"id":"intent-test-006","query":"深圳明天去机场会不会遇到大雨？","intent":"out_of_scope","group_id":"test-outside-weather","tags":["single_turn","weather"]}
+{"id":"intent-test-007","query":"我每个月能攒三千块，直接告诉我该定投哪只ETF。","intent":"sensitive","group_id":"test-advice-personal","tags":["single_turn","personal_recommendation"]}
+{"id":"intent-test-008","history":[["human","159366年报里披露了什么风险"],["ai","已整理该基金在年报中的风险披露。"]],"query":"按我的情况，你建议继续持有还是清仓？","intent":"sensitive","group_id":"test-advice-hold-or-sell","tags":["multi_turn","facts_to_advice"]}
+{"id":"intent-test-009","query":"不要给我投资建议，只说159125下周大概能涨几个点。","intent":"sensitive","group_id":"test-advice-negation","tags":["single_turn","negation","return_forecast"],"note":"口头否定投资建议不改变实际收益预测请求。"}
+{"id":"intent-test-010","history":[["human","对比159110和159115的托管人"],["ai","已分别列出两只基金的托管人。"]],"query":"只留一只的话，你替我决定买哪只吧。","intent":"sensitive","group_id":"test-advice-delegated-choice","tags":["multi_turn","comparison_to_advice"]}
+{"id":"intent-test-011","query":"麻烦核对港股通科技ETF招商的基金合同生效日与交易代码。","intent":"fund_query","group_id":"test-fund-identity","tags":["single_turn","fund_name","report_field"]}
+{"id":"intent-test-012","query":"在通用航空主题基金里面筛选期末规模至少两亿元的，按托管费从低到高列出。","intent":"fund_query","group_id":"test-fund-sector-filter","tags":["single_turn","sector_scope","objective_ranking"],"note":"存在明确主题范围，附带筛选与排序仍属于 fund_query。"}
+{"id":"intent-test-013","history":[["human","请介绍159125年报中的风险收益特征"],["ai","目前讨论的是159125这只基金的风险披露。"]],"query":"还有哪些风险？","intent":"fund_query","group_id":"test-context-risk-pair","tags":["multi_turn","fund_reference","context_contrast"]}
+{"id":"intent-test-014","history":[["human","对照159101和159125的跟踪偏离情况"],["ai","已按159101、159125的顺序列出相关信息。"]],"query":"只补充后一只的基金经理信息，前一只不用了。","intent":"fund_query","group_id":"test-fund-order-reference","tags":["multi_turn","ordered_reference","negation"]}
+{"id":"intent-test-015","query":"不限定任何板块，找出2025年末持有中信证券、且机构持有比例超过六成的基金。","intent":"fund_screening","group_id":"test-screen-multiple-conditions","tags":["single_turn","company_not_sector","combined_filters"]}
+{"id":"intent-test-016","history":[["human","港股医疗主题有哪些候选基金"],["ai","已找到港股医疗主题的候选范围。"]],"query":"取消板块限制，重新查全部基金里托管费不高于0.08%的。","intent":"fund_screening","group_id":"test-screen-drop-sector","tags":["multi_turn","topic_switch","drop_scope"]}
+{"id":"intent-test-017","history":[["human","找出成立以来净值增长超过5%的基金"],["ai","目前只有历史收益筛选条件，尚未确定具体基金。"]],"query":"再限制年末份额超过两亿份，别给购买建议。","intent":"fund_screening","group_id":"test-screen-continue-conditions","tags":["multi_turn","inherit_conditions","objective_not_advice"],"note":"继承的是事实条件，没有新增代码、名称或主题范围。"}
+{"id":"intent-test-018","query":"年报中的本期已实现收益与本期利润是同一个指标吗？","intent":"general_finance","group_id":"test-concept-report-indicators","tags":["single_turn","financial_concept"]}
+{"id":"intent-test-019","history":[["human","159256的业绩比较基准是什么"],["ai","已提供这只基金的业绩比较基准。"]],"query":"先不看这只产品了，解释一下为什么跟踪指数不等于保证盈利。","intent":"general_finance","group_id":"test-concept-switch","tags":["multi_turn","fund_to_concept"]}
+{"id":"intent-test-020","history":[["human","证券投资基金的流动性风险是什么意思"],["ai","这里讨论的是基金运作的一般风险，流动性风险涉及资产变现与支付需求。"]],"query":"还有哪些风险？","intent":"general_finance","group_id":"test-context-risk-pair","tags":["multi_turn","concept_reference","context_contrast"]}

@@ -1,0 +1,9 @@
+# Install in the training environment, separately from the backend service.
+# Select the CUDA build of torch for your machine before installing this file.
+torch>=2.6,<3
+transformers>=4.51,<5
+accelerate>=1,<2
+scikit-learn>=1.3,<2
+numpy>=1.24,<3
+safetensors>=0.4,<1
+sentence-transformers>=5,<6
