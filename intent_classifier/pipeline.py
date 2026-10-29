@@ -1,4 +1,4 @@
-"""Compose router decisions in a fixed order, stopping at the first acceptance."""
+"""Accept the first local decision or hand the query back for LLM routing."""
 from time import perf_counter
 
 STAGES = ("rules", "vector", "classifier")
@@ -34,9 +34,10 @@ class CascadeRouter:
                     "needs_clarification": False, "clarification_question": None,
                     "trace": trace, "latency_ms": (perf_counter() - start) * 1000,
                 }
+        # Keep historical field names; the caller should invoke its LLM, not ask the user.
         return {
             "query": query, "intent": None, "stage": "clarification",
             "needs_clarification": True,
-            "clarification_question": "请补充你的问题：是查询具体基金、按条件筛选基金，还是了解金融知识？",
+            "clarification_question": None,
             "trace": trace, "latency_ms": (perf_counter() - start) * 1000,
         }

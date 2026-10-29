@@ -12,13 +12,13 @@ from time import perf_counter
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from intent_classifier.common import ROOT, REPORTS_ROOT, read_queries
+from intent_classifier.common import DEFAULT_CLASSIFIER_MODEL, ROOT, REPORTS_ROOT, read_queries
 from intent_classifier.pipeline import CascadeRouter, STAGES
 from intent_classifier.validation.reporting import summarize, write_reports
 
 DEFAULT_THRESHOLDS = {
     "vector_threshold": 0.85, "vector_margin": 0.06,
-    "classifier_threshold": 0.75, "classifier_margin": 0.15,
+    "classifier_threshold": 0.85, "classifier_margin": 0.15,
 }
 
 
@@ -54,9 +54,9 @@ def main():
     source.add_argument("--query")
     source.add_argument("--input-file", type=Path)
     parser.add_argument("--routes", nargs="+", choices=[*STAGES, "none"], default=list(STAGES),
-                        help="启用的层；始终按 rules → vector → classifier 执行。none 表示全部关闭")
+                        help="启用的层；始终按 rules → vector → classifier 执行。none 表示直接回退 LLM")
     parser.add_argument("--embedding-model", type=Path, default=ROOT / "embedding_model/bge-base-zh-v1.5")
-    parser.add_argument("--classifier-model", type=Path, default=ROOT / "models/intent-macbert-200-v1/best")
+    parser.add_argument("--classifier-model", type=Path, default=DEFAULT_CLASSIFIER_MODEL)
     parser.add_argument("--routes-file", type=Path, default=ROOT / "intent_classifier/routers/vector/data/examples.jsonl")
     parser.add_argument("--rules-file", type=Path, default=ROOT / "intent_classifier/routers/rules/data/rules.json")
     parser.add_argument("--output-dir", type=Path)

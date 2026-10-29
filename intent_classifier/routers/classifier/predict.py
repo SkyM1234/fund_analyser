@@ -3,12 +3,13 @@ import argparse
 import json
 from pathlib import Path
 
-from .common import LABELS, LABEL2ID, ROOT, encode_sample, normalize_history
+from intent_classifier.common import DEFAULT_CLASSIFIER_MODEL
+from .common import LABELS, LABEL2ID, encode_sample, normalize_history
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--model-path", type=Path, default=ROOT / "models/intent-macbert/best")
+    parser.add_argument("--model-path", type=Path, default=DEFAULT_CLASSIFIER_MODEL)
     parser.add_argument("--query", required=True)
     parser.add_argument("--history-file", type=Path, help="JSON 历史消息列表，格式与训练数据一致")
     parser.add_argument("--cpu", action="store_true")

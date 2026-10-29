@@ -74,6 +74,18 @@ class ReportingTests(unittest.TestCase):
             self.assertEqual(json.loads((path / "metrics.json").read_text(encoding="utf-8")), metrics)
             self.assertIn("70.00%", (path / "report.md").read_text(encoding="utf-8"))
 
+    def test_unaccepted_result_is_reported_as_llm_handoff(self):
+        prediction = self.prediction()
+        prediction.update(intent=None, stage="clarification", needs_clarification=True)
+        prediction["trace"][-1].update(status="rejected", accepted=False)
+        metrics = self.metrics(prediction, ["rules", "vector", "classifier"])
+        report = render_report(metrics, [prediction])
+        self.assertEqual(metrics["clarification_count"], 1)
+        self.assertEqual(metrics["coverage"], 0)
+        self.assertIn("LLM 回退：1", report)
+        self.assertIn("交给 LLM 识别意图", report)
+        self.assertNotIn("需要澄清", report)
+
 
 if __name__ == "__main__":
     unittest.main()

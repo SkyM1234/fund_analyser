@@ -1,8 +1,8 @@
-# 意图分类起步数据：200 条
+# 分类模型数据与标注约定
 
-`demo.jsonl` 保留原文件名以兼容训练命令，目前总计 200 条，并非额外新增 200 条。
-原有 36 条扩充至 200 条，原有 4 条与路由回归集完全相同的输入已调整问法。
-标签由助手按项目 `backend/app/services/router.py` 的规则编写，尚未经过独立人工审核。
+`demo.jsonl` 包含 200 条起步数据，`test.jsonl` 包含额外的 20 条独立测试数据。
+标签由助手按项目 `backend/app/services/router.py` 的约定编写，尚未经过独立人工审核。
+训练与评测命令统一见 [分类模型说明](../README.md)。
 
 | 类别 | 数量 |
 | --- | ---: |
@@ -49,13 +49,8 @@
 分组和完全去重不能保证语义上的完全独立，验证分数仍需用真实测试集确认。
 统计和分布记录在 `sources.json` 的 `validation` 中。
 
-在项目根目录运行：
-
-```powershell
-& E:\python_envs\llm\python.exe -m intent_classifier.routers.classifier.train --train-file intent_classifier/routers/classifier/data/demo.jsonl --output-dir models/intent-macbert-200-v1
-```
-
-训练输出在 models 目录，不会修改这 200 条源数据。若输出目录已存在内容，请换用新目录。
+训练输出在 `models/` 目录，实际划分会保存为 `train_split.jsonl` 和 `validation_split.jsonl`，
+源数据不随训练改写。新训练与模型比较应复用明确的数据划分，并指定新的输出目录。
 
 ## 额外的 20 条测试数据
 

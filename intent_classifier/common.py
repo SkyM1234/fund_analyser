@@ -10,6 +10,7 @@ LABELS = [
 LABEL2ID = {label: index for index, label in enumerate(LABELS)}
 ROOT = Path(__file__).resolve().parents[1]
 REPORTS_ROOT = Path(__file__).resolve().parent / "reports"
+DEFAULT_CLASSIFIER_MODEL = ROOT / "models/intent-macbert-200-v2-epoch6/best"
 
 
 def read_queries(path):

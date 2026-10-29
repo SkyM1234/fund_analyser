@@ -18,10 +18,15 @@ def parse_args():
     parser.add_argument("--history-rounds", type=int, default=3)
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--gradient-accumulation-steps", type=int, default=4)
-    parser.add_argument("--epochs", type=float, default=5)
+    parser.add_argument("--epochs", type=float, default=15)
     parser.add_argument("--learning-rate", type=float, default=2e-5)
+    parser.add_argument("--lr-scheduler-type", choices=("constant_with_warmup", "linear", "cosine"),
+                        default="constant_with_warmup", help="默认预热后保持学习率，避免小数据训练过早衰减")
+    parser.add_argument("--warmup-ratio", type=float, default=0.1)
+    parser.add_argument("--selection-metric", choices=("loss", "macro_f1"), default="loss",
+                        help="最佳模型及早停依据；loss 同时衡量分类与概率质量")
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--patience", type=int, default=2)
+    parser.add_argument("--patience", type=int, default=4)
     parser.add_argument("--max-steps", type=int, default=-1, help="调试时限制优化步数")
     parser.add_argument("--cpu", action="store_true")
     parser.add_argument("--fp16", action=argparse.BooleanOptionalAction, default=True)
@@ -33,9 +38,32 @@ def parse_args():
         parser.error("batch-size、gradient-accumulation-steps、patience 必须为正整数")
     if args.epochs <= 0 or args.learning_rate <= 0 or args.max_steps == 0 or args.max_steps < -1:
         parser.error("epochs、learning-rate 必须大于零，max-steps 为 -1 或正整数")
+    if not 0 <= args.warmup_ratio < 1:
+        parser.error("warmup-ratio 必须在 [0, 1) 之间")
     if args.output_dir.exists() and any(args.output_dir.iterdir()):
         parser.error("output-dir 已有内容，请指定新的目录，避免覆盖已有训练结果")
     return args
+
+
+def compute_metrics(prediction):
+    """Monitor class ranking and probability quality separately."""
+    import numpy as np
+    from sklearn.metrics import accuracy_score, f1_score
+
+    logits = np.asarray(prediction.predictions, dtype=np.float64)
+    weights = np.exp(logits - logits.max(axis=-1, keepdims=True))
+    probabilities = weights / weights.sum(axis=-1, keepdims=True)
+    predictions = probabilities.argmax(axis=-1)
+    targets = np.eye(len(LABELS))[prediction.label_ids]
+    return {
+        "accuracy": accuracy_score(prediction.label_ids, predictions),
+        "macro_f1": f1_score(
+            prediction.label_ids, predictions, labels=list(range(len(LABELS))),
+            average="macro", zero_division=0,
+        ),
+        "mean_confidence": float(probabilities.max(axis=-1).mean()),
+        "brier_score": float(np.square(probabilities - targets).sum(axis=-1).mean()),
+    }
 
 
 def main():
@@ -49,7 +77,7 @@ def main():
 
     import numpy as np
     import torch
-    from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, f1_score
+    from sklearn.metrics import classification_report, confusion_matrix
     from transformers import (
         AutoModelForSequenceClassification, AutoTokenizer, DataCollatorWithPadding,
         EarlyStoppingCallback, Trainer, TrainingArguments, set_seed,
@@ -90,17 +118,10 @@ def main():
         "train_counts": dict(Counter(row["intent"] for row in train)),
         "validation_counts": dict(Counter(row["intent"] for row in validation)),
         "effective_batch_size": args.batch_size * args.gradient_accumulation_steps,
+        "epochs": args.epochs, "learning_rate": args.learning_rate,
+        "lr_scheduler_type": args.lr_scheduler_type, "warmup_ratio": args.warmup_ratio,
+        "selection_metric": args.selection_metric, "patience": args.patience,
     }, ensure_ascii=False), flush=True)
-
-    def metrics(prediction):
-        predictions = np.argmax(prediction.predictions, axis=-1)
-        return {
-            "accuracy": accuracy_score(prediction.label_ids, predictions),
-            "macro_f1": f1_score(
-                prediction.label_ids, predictions, labels=list(range(len(LABELS))),
-                average="macro", zero_division=0,
-            ),
-        }
 
     training_args = TrainingArguments(
         output_dir=str(args.output_dir),
@@ -108,12 +129,13 @@ def main():
         per_device_train_batch_size=args.batch_size,
         per_device_eval_batch_size=args.batch_size,
         gradient_accumulation_steps=args.gradient_accumulation_steps,
-        learning_rate=args.learning_rate, weight_decay=0.01, warmup_ratio=0.1,
+        learning_rate=args.learning_rate, weight_decay=0.01,
+        lr_scheduler_type=args.lr_scheduler_type, warmup_ratio=args.warmup_ratio,
         fp16=use_fp16, use_cpu=not use_cuda,
         gradient_checkpointing=args.gradient_checkpointing,
         eval_strategy="epoch", save_strategy="epoch", save_total_limit=1,
-        load_best_model_at_end=True, metric_for_best_model="macro_f1",
-        greater_is_better=True, save_safetensors=True,
+        load_best_model_at_end=True, metric_for_best_model=args.selection_metric,
+        greater_is_better=args.selection_metric != "loss", save_safetensors=True,
         logging_steps=10, logging_first_step=True,
         dataloader_num_workers=0, dataloader_pin_memory=use_cuda,
         report_to="none", seed=args.seed, data_seed=args.seed,
@@ -123,7 +145,7 @@ def main():
         train_dataset=train_dataset, eval_dataset=val_dataset,
         processing_class=tokenizer,
         data_collator=DataCollatorWithPadding(tokenizer, pad_to_multiple_of=8),
-        compute_metrics=metrics,
+        compute_metrics=compute_metrics,
         callbacks=[EarlyStoppingCallback(early_stopping_patience=args.patience)],
     )
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -153,11 +175,19 @@ def main():
             prediction.label_ids, predicted_ids, labels=list(range(len(LABELS))),
         ).tolist(),
         "best_checkpoint": trainer.state.best_model_checkpoint,
+        "model_selection": {
+            "metric": args.selection_metric,
+            "greater_is_better": training_args.greater_is_better,
+            "best_value": trainer.state.best_metric,
+        },
         "arguments": {key: str(value) if isinstance(value, Path) else value
                       for key, value in vars(args).items()},
     }
     (args.output_dir / "validation_metrics.json").write_text(
         json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8",
+    )
+    (args.output_dir / "training_history.json").write_text(
+        json.dumps(trainer.state.log_history, ensure_ascii=False, indent=2) + "\n", encoding="utf-8",
     )
     print(f"Best model saved to: {best_dir}", flush=True)
     print(json.dumps(prediction.metrics, ensure_ascii=False), flush=True)

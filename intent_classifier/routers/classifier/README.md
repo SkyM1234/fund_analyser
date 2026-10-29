@@ -1,17 +1,35 @@
 # 本地六分类模型
 
 使用本地 MacBERT 微调项目的六种意图，也可通过 `--model-path` 换成本地 RBT3。
-这里只预测 `intent`，不生成 `scope_basis`、`resolved_query` 或 `needs_clarification`。
-脚本独立于后端，暂未接入线上路由。
+`router.py` 由级联入口调用，`predict.py` 查看原始分类分数，`train.py` 和 `evaluate.py`
+分别负责训练和独立评测。这里不补全基金范围、指代或业务参数。
+级联接受条件与 LLM 回退约定见 [主说明](../../README.md)。
 
 ## 环境
 
-推荐 Python 3.11。当前 `E:\python_envs\llm` 已包含所需依赖。
-在其他环境安装时，先按显卡和驱动选择 PyTorch 的 CUDA 版本，再安装独立依赖：
+推荐 Python 3.11，本机解释器为 `E:\python_envs\llm\python.exe`。
+依赖安装统一见 [主说明](../../README.md#运行)。以下命令均在项目根目录执行。
+
+## 当前基线
+
+级联和原始预测默认使用 `models/intent-macbert-200-v2-epoch6/best`。
+该模型从基础 MacBERT 训练 6 轮，使用 v2 保存的 159 条训练、41 条验证划分，
+`warmup-ratio=0.25`，最佳检查点为 `checkpoint-60`。
+级联最高概率阈值为 0.85，类别分差为 0.15；原始预测脚本不执行接受或回退判断。
+
+当前基线的复现命令：
 
 ```powershell
-python -m pip install -r intent_classifier/requirements.txt
+& E:\python_envs\llm\python.exe -m intent_classifier.routers.classifier.train `
+  --model-path models/chinese-macbert-base `
+  --train-file models/intent-macbert-200-v2/train_split.jsonl `
+  --validation-file models/intent-macbert-200-v2/validation_split.jsonl `
+  --output-dir models/intent-macbert-epoch6-reproduced `
+  --epochs 6 --warmup-ratio 0.25
 ```
+
+当前数据每轮约 10 次参数更新，6 轮共约 60 步；预热比例 0.25 对应 15 步，
+与原 v2 的 15 轮、0.1 预热比例保持一致。复现依赖原 v2 的数据划分文件。
 
 ## 数据格式
 
@@ -30,37 +48,54 @@ UTF-8 JSONL，每行一个样本，必须有 `query`、`intent`，可以有 `his
 完全相同的 query/history 会被拒绝，独立训练与验证文件之间也会检查重复和分组泄漏。
 训练、验证均须覆盖六类。自动划分要求每类至少两个样本，且验证集样本数足够覆盖六类。
 
-`data/demo.jsonl` 已扩充为 200 条起步数据，其中 138 条参考 `markdown_mineru` 中的 17 份基金年报，
-另有 62 条用于问候、越界、推荐请求和分类边界。32 条包含历史对话。
-样本均包含 `id`、`group_id`、`source_refs` 和 `origin`；来源路径、行号和摘录见 `data/sources.json`。
-参考年报是为了生成真实的基金名称、字段和概念问法，意图标签按项目规则编写；
-问句不是年报原文，也不表示年报中一定有满足筛选条件的基金。
-这批合成数据可用于第一轮训练，不能作为上线效果依据。正式评估应补充审核过的真实数据和独立测试集。
-详细类别分布和标注边界见 `data/README.md`。
-已有 `backend/eval/datasets/routing.jsonl` 请保留做回归测试，避免加入训练集。
+`data/demo.jsonl` 为 200 条起步数据，`data/test.jsonl` 为额外的 20 条独立测试数据。
+类别数量、标注边界、分组和来源说明统一见 [数据说明](data/README.md)。
+级联回归集 `intent_classifier/validation/queries.jsonl` 保留用于回归，不加入训练集。
 
-## 开始训练
+## 新训练与继续微调
 
 在项目根目录运行，使用这 200 条数据训练（自动按 group_id 隔离训练集和验证集）：
 
 ```powershell
-& E:\python_envs\llm\python.exe -m intent_classifier.routers.classifier.train --train-file intent_classifier/routers/classifier/data/demo.jsonl
+& E:\python_envs\llm\python.exe -m intent_classifier.routers.classifier.train --train-file intent_classifier/routers/classifier/data/demo.jsonl --output-dir models/intent-macbert-next
 ```
 
 正式训练可显式提供训练集和验证集（将路径换成实际文件）：
 
 ```powershell
-& E:\python_envs\llm\python.exe -m intent_classifier.routers.classifier.train --train-file intent_classifier/routers/classifier/data/train.jsonl --validation-file intent_classifier/routers/classifier/data/validation.jsonl --output-dir models/intent-macbert-v1
+& E:\python_envs\llm\python.exe -m intent_classifier.routers.classifier.train --train-file path/to/train.jsonl --validation-file path/to/validation.jsonl --output-dir models/intent-macbert-next
 ```
 
 默认从 `models/chinese-macbert-base` 离线加载，输入上限 256 token，单卡 batch=4，梯度累积 4 步，
-有效 batch=16，学习率 2e-5，最多 5 个 epoch。CUDA 下自动使用 FP16 和梯度检查点，
-验证集 Macro-F1 连续两轮不改善则提前停止，最后保存验证分数最好的模型。
+有效 batch=16，学习率 2e-5，最多 15 个 epoch。默认 `constant_with_warmup` 调度：前 10% 的优化步数
+用于预热，此后保持学习率，给小数据集更充分的训练机会。CUDA 下自动使用 FP16 和梯度检查点。
+默认按验证交叉熵损失选最佳模型，连续 4 轮不下降则提前停止，并在训练结束后导出最佳模型。
+即使分类准确率或 Macro-F1 暂时不变，只要验证损失仍在下降，训练就可以继续。
 这是一组适合尝试的 6GB 显存配置，实际占用取决于其他 GPU 进程。
+这些是通用训练默认值；复现当前第 6 轮基线时使用上节的显式参数。
 
+- 训练预算：`--epochs 15 --patience 4`；这是起始配置，实际收敛情况以验证曲线为准。
+- 学习率调度：`--lr-scheduler-type constant_with_warmup --warmup-ratio 0.1`；也支持 `linear` 和 `cosine`。
+- 模型选优：默认 `--selection-metric loss`，越低越好；可用 `--selection-metric macro_f1` 按分类分数选优。
 - 显存不足：加 `--batch-size 2 --gradient-accumulation-steps 8`，必要时将 `--max-length` 降为 128。
 - GPU 不支持 FP16 或出现数值问题：加 `--no-fp16`；CPU 调试用 `--cpu`。
 - 每次训练使用新的 `--output-dir`；脚本拒绝覆盖非空输出目录。
+
+每轮同时记录验证损失、准确率、Macro-F1、`mean_confidence` 和 `brier_score`。
+`mean_confidence` 是平均最高 Softmax 概率，越高不一定越好；`brier_score` 是六类概率与真实
+one-hot 标签之间的平方误差之和再取样本平均，范围为 0 到 2，越低越好，错误的高置信预测会受到更大惩罚。
+选择模型时结合分类效果和概率误差判断，训练本身不会保证概率已经校准。
+最终模型确定后，使用独立校准数据选择路由接受阈值和分差。
+
+如果要从当前基线继续微调，同时保持原来的训练/验证划分，可运行：
+
+```powershell
+& E:\python_envs\llm\python.exe -m intent_classifier.routers.classifier.train --model-path models/intent-macbert-200-v2-epoch6/best --train-file models/intent-macbert-200-v2-epoch6/train_split.jsonl --validation-file models/intent-macbert-200-v2-epoch6/validation_split.jsonl --output-dir models/intent-macbert-next-continued
+```
+
+这会从旧模型权重开始，以新的优化器和学习率调度执行额外微调；`--epochs` 表示额外轮数，
+不恢复旧训练的优化器、调度器或步数。继续微调时，`--max-length`、`--history-rounds` 应与旧模型
+保存的输入配置一致；当前基线对应默认的 256 和 3。
 
 当前问题独立放在第一个文本段，保留完整 token；剩余预算保留最近历史的尾部。
 默认最多保留最近 6 条历史消息（3 轮）。当前问题本身超预算会报错，而不会静默丢弃条件。
@@ -68,10 +103,15 @@ UTF-8 JSONL，每行一个样本，必须有 `query`、`intent`，可以有 `his
 
 输出包括：
 
-- `models/intent-macbert/best/`：训练后模型、分词器、标签映射、输入配置。
-- `validation_metrics.json`：准确率、Macro-F1、各类别精确率/召回率/F1、混淆矩阵。
+- `<output-dir>/best/`：最佳模型、分词器、标签映射、输入配置。
+- `validation_metrics.json`：最佳模型的验证损失、准确率、Macro-F1、概率指标、各类别精确率/召回率/F1、混淆矩阵，以及模型选优依据。
+- `training_history.json`：完整训练日志，包含每轮验证指标和训练过程的损失、学习率。
 - `train_split.jsonl`、`validation_split.jsonl`：本次实际数据划分。
-- Trainer 自动保存的检查点：包含优化器等训练状态。
+- Trainer 检查点：包含优化器等训练状态；`save_total_limit=1`，训练完成后只保留最佳检查点，不能依赖它回看任意历史轮次。
+
+`best/` 是前述选优指标最佳的模型，不一定来自最后一轮。查看 `validation_metrics.json`
+中的 `best_checkpoint` 确认实际步数。推理和级联应使用带 `intent_classifier_config.json` 的
+`best/` 目录，原始 Trainer 检查点不包含这个自定义输入配置。
 
 ## 分类预测
 
@@ -82,7 +122,7 @@ UTF-8 JSONL，每行一个样本，必须有 `query`、`intent`，可以有 `his
 指定其他训练输出时：
 
 ```powershell
-& E:\python_envs\llm\python.exe -m intent_classifier.routers.classifier.predict --model-path models/intent-macbert-v1/best --query "不要推荐，只比较159103和159104的费率"
+& E:\python_envs\llm\python.exe -m intent_classifier.routers.classifier.predict --model-path models/intent-macbert-next/best --query "不要推荐，只比较159103和159104的费率"
 ```
 
 有历史时，把消息列表保存为 JSON 文件，并通过 `--history-file path/to/history.json` 传入。
@@ -92,10 +132,7 @@ UTF-8 JSONL，每行一个样本，必须有 `query`、`intent`，可以有 `his
 ## 独立测试集评测
 
 `data/test.jsonl` 是额外的 20 条测试数据，不包含在训练用的 200 条中。
-六类数量依次为：chitchat 3、out_of_scope 3、sensitive 4、fund_query 4、
-fund_screening 3、general_finance 3；其中 10 条带历史，10 条不带历史。
-包含相同当前问题“还有哪些风险？”在不同历史下分别标为 fund_query 和 general_finance 的对照。
-测试数据由助手按项目规则编写，适合初步评测，尚未经过独立人工审核。
+类别分布、历史对照和来源见 [数据说明](data/README.md#额外的-20-条测试数据)。
 不要加入训练集，也不要使用其结果选择阈值或反复调参；阈值选择使用验证集。
 20 条数据中错一条会使准确率变化 5 个百分点，不足以代表真实线上分布。
 
@@ -108,7 +145,7 @@ fund_screening 3、general_finance 3；其中 10 条带历史，10 条不带历�
 评测已训练的模型，路径应指向带有 intent_classifier_config.json 的 best 目录：
 
 ```powershell
-& E:\python_envs\llm\python.exe -m intent_classifier.routers.classifier.evaluate --model-path models/intent-macbert-200-v1/best
+& E:\python_envs\llm\python.exe -m intent_classifier.routers.classifier.evaluate --model-path models/intent-macbert-200-v2-epoch6/best
 ```
 
 默认自动使用 GPU；CPU 评测加 `--cpu`。如训练输出目录不同，请修改 `--model-path`。

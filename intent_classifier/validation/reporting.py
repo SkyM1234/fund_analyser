@@ -5,7 +5,7 @@ from collections import Counter
 from intent_classifier.common import LABELS
 from intent_classifier.pipeline import STAGES
 
-STAGE_NAMES = {"rules": "规则", "vector": "向量", "classifier": "分类模型"}
+STAGE_NAMES = {"rules": "规则", "vector": "向量", "classifier": "分类模型", "clarification": "LLM 回退"}
 LABEL_NAMES = {
     "chitchat": "闲聊", "out_of_scope": "范围外", "sensitive": "敏感请求",
     "fund_query": "基金查询", "fund_screening": "基金筛选", "general_finance": "金融知识",
@@ -29,8 +29,9 @@ def render_report(metrics, predictions):
     lines = [
         "# 离线路由验证报告", "",
         f"样本数：{metrics['sample_count']}；接受：{metrics['accepted_count']}；"
-        f"澄清：{metrics['clarification_count']}；覆盖率：{metrics['coverage']:.2%}；"
+        f"LLM 回退：{metrics['clarification_count']}；覆盖率：{metrics['coverage']:.2%}；"
         f"已接受样本准确率：{accuracy_text}。", "",
+        "本报告仅统计本地路由；未接受的问题交给上层 LLM 识别意图，LLM 的调用与结果不计入本报告。", "",
         "规则的 0/1 表示未命中/命中；向量分数是余弦相似度；分类模型显示 Softmax 概率。"
         "相似度不代表概率，Softmax 概率未经校准，不等同于实际正确率。", "",
         "未启用或因前序命中而未执行的路由以 — 显示，不额外运行模型。", "",
@@ -39,8 +40,8 @@ def render_report(metrics, predictions):
         # Quote each line so multiline queries remain visibly part of the question.
         lines.extend([f"## {index}. {prediction.get('id', index)}", ""])
         lines.extend("> " + line for line in prediction["query"].splitlines())
-        final_intent = LABEL_NAMES.get(prediction["intent"], prediction["intent"]) if prediction["intent"] else "需要澄清"
-        lines.extend(["", f"最终结果：{final_intent}；命中层：{STAGE_NAMES.get(prediction['stage'], '澄清')}。", ""])
+        final_intent = LABEL_NAMES.get(prediction["intent"], prediction["intent"]) if prediction["intent"] else "交给 LLM 识别意图"
+        lines.extend(["", f"本地结果：{final_intent}；路由阶段：{STAGE_NAMES[prediction['stage']]}。", ""])
         if "expected_intent" in prediction:
             lines.extend([f"标注分类：{LABEL_NAMES[prediction['expected_intent']]}。", ""])
         lines.append("| 路由 | 状态 | 分数含义 | " + " | ".join(LABEL_NAMES[label] for label in LABELS) + " |")
@@ -79,6 +80,7 @@ def write_reports(output_dir, metrics, predictions):
 
 
 def summarize(predictions):
+    """Summarize local coverage and accuracy; clarification_count means LLM handoffs."""
     import numpy as np
     accepted = [row for row in predictions if not row["needs_clarification"]]
     labeled = [row for row in accepted if "expected_intent" in row]

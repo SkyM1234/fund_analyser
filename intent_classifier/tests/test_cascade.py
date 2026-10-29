@@ -69,11 +69,13 @@ class CascadeTests(unittest.TestCase):
         self.assertEqual(result["stage"], "clarification")
         self.assertIsNone(result["intent"])
 
-    def test_low_classifier_score_requests_clarification(self):
+    def test_low_classifier_score_hands_off_without_a_user_question(self):
         result = route_query("一个问题", classifier_predict=lambda _: scores("fund_query", 0.5),
                              enabled=["classifier"])
         self.assertTrue(result["needs_clarification"])
-        self.assertTrue(result["clarification_question"])
+        self.assertEqual(result["stage"], "clarification")
+        self.assertIsNone(result["intent"])
+        self.assertIsNone(result["clarification_question"])
 
     def test_similarity_margin_is_between_different_labels(self):
         refs = [{"intent": "fund_query"}, {"intent": "fund_query"}, {"intent": "fund_screening"}]
